@@ -1,8 +1,9 @@
 // src/main.cpp
-// MODIFIED FILE
+// COMPLETE FILE
 #include <Arduino.h>
 #include "DebugMacros.h"
 #include "boot/init_globals.h"
+#include "boot/init_i2c_devices.h"
 #include "boot/init_hals.h"
 #include "boot/init_managers.h"
 #include "boot/post.h"
@@ -22,7 +23,6 @@
 #include "hal/DHT_Driver.h"
 #include "hal/LDR_Driver.h"
 #include "hal/TCA9548_Manual_Driver.h"
-// <<< FIX: Corrected typo from .hh to .h
 #include "hal/PCF8563_Driver.h"
 #include "managers/storage/StorageManager.h"
 #include "managers/power/PowerManager.h"
@@ -92,7 +92,39 @@ void setup() {
     LOG_INIT();
     LOG_MAIN("--- SpHEC Meter v1.5.0 Booting ---\n");
 
+    // Instantiate ALL manager and HAL objects first.
+    ina219 = new INA219_Driver(INA219_I2C_ADDRESS);
+    tca9548 = new TCA9548_Manual_Driver(TCA_ADDRESS, &i2c);
+    pcf8563_driver = new PCF8563_Driver();
+    displayManager = new DisplayManager(*tca9548);
+    rtcManager = new RtcManager(*pcf8563_driver, *tca9548);
+    storageManager = new StorageManager(SD_CS_PIN, &spi, g_spi_bus_mutex, g_storage_diag_mutex);
+    powerManager = new PowerManager(*ina219, *storageManager);
+    #if (ENABLE_BLE_STACK)
+    bleManager = new BleManager();
+    #endif
+    wifiManager = new WifiManager(*storageManager, networkConfig);
+    mqttManager = new MqttManager();
+    rawSensorReader = new RawSensorReader(&g_raw_sensor_data, adc1, adc2, ina219, ldr, ds18b20, dht);
+    liquidTempManager = new LiquidTempManager(&g_raw_sensor_data, &g_processed_data, *storageManager);
+    ambientTempManager = new AmbientTempManager(&g_raw_sensor_data, &g_processed_data, *storageManager);
+    ambientHumidityManager = new AmbientHumidityManager(&g_raw_sensor_data, &g_processed_data, *storageManager);
+    ldrManager = new LDRManager(&g_raw_sensor_data, &g_processed_data, *storageManager);
+    sensorProcessor = new SensorProcessor(&g_raw_sensor_data, &g_processed_data, *storageManager);
+    telemetrySerializer = new TelemetrySerializer(&g_processed_data, *powerManager);
+    webService = new WebService(*storageManager, networkConfig, sensorProcessor, rawSensorReader);
+    uiManager = new UIManager(*displayManager);
+    stateManager = new StateManager();
+    buttonManager = new ButtonManager(BTN_TOP_PIN, BTN_MIDDLE_PIN, BTN_BOTTOM_PIN);
+    encoderManager = new EncoderManager(ENCODER_A_PIN, ENCODER_B_PIN);
+
     init_globals();
+
+    if (!init_i2c_devices()) {
+        LOG_MAIN("CRITICAL: I2C Device Initialization Failed. Halting.\n");
+        while(true) { delay(1000); }
+    }
+    
     init_hals();
     init_managers();
 

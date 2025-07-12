@@ -1,5 +1,5 @@
 // src/boot/init_managers.cpp
-// MODIFIED FILE
+// COMPLETE AND CORRECTED FILE
 #include "init_managers.h"
 #include "managers/storage/StorageManager.h"
 #include "managers/power/PowerManager.h"
@@ -14,8 +14,6 @@
 #include "managers/sensor/LDRManager.h"
 #include "managers/io/ButtonManager.h"
 #include "managers/io/EncoderManager.h"
-#include "managers/rtc/RtcManager.h"
-#include "presentation/DisplayManager.h"
 #include "presentation/UIManager.h"
 #include "app/StateManager.h"
 #include "app/TelemetrySerializer.h"
@@ -23,6 +21,10 @@
 #include "presentation/screens/HomeScreen.h"
 #include "config/DebugConfig.h"
 #include "DebugMacros.h"
+#include "managers/rtc/RtcManager.h"
+#include "presentation/DisplayManager.h"
+#include "hal/PCF8563_Driver.h"
+#include "hal/TCA9548_Manual_Driver.h"
 
 // External declarations for manager pointers and HAL driver pointers
 extern StorageManager* storageManager;
@@ -51,7 +53,6 @@ extern ADS1118_Driver* adc2;
 extern DS18B20_Driver* ds18b20;
 extern DHT_Driver* dht;
 extern LDR_Driver* ldr;
-// <<< FIX: Corrected extern declaration to use the new manual driver type
 extern TCA9548_Manual_Driver* tca9548;
 extern PCF8563_Driver* pcf8563_driver;
 
@@ -64,30 +65,7 @@ extern ProcessedSensorData g_processed_data;
 extern NetworkConfig networkConfig;
 
 void init_managers() {
-    storageManager = new StorageManager(SD_CS_PIN, &spi, g_spi_bus_mutex, g_storage_diag_mutex);
-    powerManager = new PowerManager(*ina219, *storageManager);
-    #if (ENABLE_BLE_STACK)
-     bleManager = new BleManager();
-    #endif
-    wifiManager = new WifiManager(*storageManager, networkConfig);
-    mqttManager = new MqttManager();
-    rawSensorReader = new RawSensorReader(&g_raw_sensor_data, adc1, adc2, ina219, ldr, ds18b20, dht);
-    liquidTempManager = new LiquidTempManager(&g_raw_sensor_data, &g_processed_data, *storageManager);
-    ambientTempManager = new AmbientTempManager(&g_raw_sensor_data, &g_processed_data, *storageManager);
-    ambientHumidityManager = new AmbientHumidityManager(&g_raw_sensor_data, &g_processed_data, *storageManager);
-    ldrManager = new LDRManager(&g_raw_sensor_data, &g_processed_data, *storageManager);
-    sensorProcessor = new SensorProcessor(&g_raw_sensor_data, &g_processed_data, *storageManager);
-    telemetrySerializer = new TelemetrySerializer(&g_processed_data, *powerManager);
-    webService = new WebService(*storageManager, networkConfig, sensorProcessor, rawSensorReader);
-    // <<< FIX: This will now compile as tca9548 is correctly typed
-    rtcManager = new RtcManager(*pcf8563_driver, *tca9548);
-    displayManager = new DisplayManager(*tca9548);
-    uiManager = new UIManager(*displayManager);
-    stateManager = new StateManager();
-    buttonManager = new ButtonManager(BTN_TOP_PIN, BTN_MIDDLE_PIN, BTN_BOTTOM_PIN);
-    encoderManager = new EncoderManager(ENCODER_A_PIN, ENCODER_B_PIN);
-
-    // Manager Initialization
+    // Manager Initialization (Non-I2C managers that are safe to init now)
     storageManager->begin();
     storageManager->recoverFromCrash();
 
@@ -103,14 +81,14 @@ void init_managers() {
     ldrManager->begin();
     sensorProcessor->begin();
     telemetrySerializer->begin();
+
     #if (ENABLE_BLE_STACK)
-    bleManager->begin(networkConfig.ble);
+    if (bleManager) bleManager->begin(networkConfig.ble);
     #endif
+
     wifiManager->begin();
     mqttManager->begin(networkConfig.mqtt);
     webService->begin();
-    rtcManager->begin(&i2c);
-    displayManager->begin(&i2c);
     uiManager->begin();
     stateManager->addScreen(ScreenState::SCREEN_HOME, new HomeScreen());
     stateManager->begin();

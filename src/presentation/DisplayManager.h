@@ -4,7 +4,7 @@
 
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
-#include "hal/TCA9548_Manual_Driver.h" // <<< MODIFIED
+#include "hal/TCA9548_Manual_Driver.h"
 #include "presentation/common/UI_types.h"
 #include "config/hardware_config.h"
 
@@ -13,10 +13,10 @@
 
 class DisplayManager {
 public:
-    DisplayManager(TCA9548_Manual_Driver& tca); // <<< MODIFIED
+    DisplayManager(TCA9548_Manual_Driver& tca);
     bool begin(TwoWire* wire);
 
-    void selectOLED(OLED_ID oled);
+    void selectOLED(OLED_ID oled); // This remains for application use
     void clearOLED(OLED_ID oled);
     void clearAll();
     void displayOLED(OLED_ID oled);
@@ -24,7 +24,10 @@ public:
     Adafruit_SSD1306* getDisplay(OLED_ID oled);
 
 private:
-    TCA9548_Manual_Driver& _tca; // <<< MODIFIED
+    // <<< NEW: Private helper for direct, raw channel selection during init.
+    void selectChannel_Direct(uint8_t channel);
+
+    TCA9548_Manual_Driver& _tca;
     Adafruit_SSD1306 _oled_top;
     Adafruit_SSD1306 _oled_middle;
     Adafruit_SSD1306 _oled_bottom;

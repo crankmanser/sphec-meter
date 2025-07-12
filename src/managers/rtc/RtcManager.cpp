@@ -4,19 +4,25 @@
 #include "config/hardware_config.h"
 #include "DebugMacros.h"
 
-RtcManager::RtcManager(PCF8563_Driver& rtc_driver, TCA9548_Manual_Driver& tca) : // <<< MODIFIED
+RtcManager::RtcManager(PCF8563_Driver& rtc_driver, TCA9548_Manual_Driver& tca) :
     _rtc_driver(rtc_driver),
     _tca(tca)
 {}
 
-void RtcManager::begin(TwoWire* wire) {
+// <<< FIX: The implementation now correctly returns the status.
+bool RtcManager::begin(TwoWire* wire) {
     LOG_MANAGER("Initializing RtcManager...\n");
     selectRtcChannel();
+    // The driver's begin() method returns the status of the RTC chip.
     if (!_rtc_driver.begin(wire)) {
-        LOG_MANAGER("Setting RTC to compile time.\n");
+        LOG_MANAGER("RTC is not running. Setting time to compile time.\n");
+        // Attempt to set the time.
         _rtc_driver.adjust(DateTime(F(__DATE__), F(__TIME__)));
+        // Even if we set it, we return false to indicate the initial state was bad.
+        return false;
     }
     update();
+    return true;
 }
 
 void RtcManager::update() {

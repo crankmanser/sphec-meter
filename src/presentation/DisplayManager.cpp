@@ -3,45 +3,60 @@
 #include "presentation/DisplayManager.h"
 #include "DebugMacros.h"
 
-DisplayManager::DisplayManager(TCA9548_Manual_Driver& tca) : // <<< MODIFIED
+DisplayManager::DisplayManager(TCA9548_Manual_Driver& tca) :
     _tca(tca),
     _oled_top(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1),
     _oled_middle(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1),
     _oled_bottom(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1)
 {}
 
+// <<< NEW: Implementation of the private helper function.
+// This function directly calls the manual driver.
+void DisplayManager::selectChannel_Direct(uint8_t channel) {
+    _tca.selectChannel(channel);
+}
+
+// <<< MODIFIED: The begin() method now uses the direct call pattern for initialization.
 bool DisplayManager::begin(TwoWire* wire) {
-    LOG_MANAGER("Initializing DisplayManager...\n");
+    LOG_MANAGER("Initializing DisplayManager with DIRECT CALL TEST...\n");
     bool success = true;
 
-    selectOLED(OLED_ID::OLED_TOP);
-    if (!_oled_top.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
-        LOG_MAIN("[DM_ERROR] Top OLED allocation failed.\n");
+    // Initialize Top OLED directly on Channel 7
+    selectChannel_Direct(OLED_TOP_TCA_CHANNEL);
+    if (!_oled_top.begin(SSD1306_SWITCHCAPVCC, 0x3C, false)) {
+        LOG_MAIN("[DM_ERROR] Top OLED allocation failed on channel %d.\n", OLED_TOP_TCA_CHANNEL);
         success = false;
+    } else {
+        LOG_MANAGER("Top OLED Initialized on Channel %d.", OLED_TOP_TCA_CHANNEL);
     }
 
-    selectOLED(OLED_ID::OLED_MIDDLE);
-    if (!_oled_middle.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
-        LOG_MAIN("[DM_ERROR] Middle OLED allocation failed.\n");
+    // Initialize Middle OLED directly on Channel 5
+    selectChannel_Direct(OLED_MIDDLE_TCA_CHANNEL);
+    if (!_oled_middle.begin(SSD1306_SWITCHCAPVCC, 0x3C, false)) {
+        LOG_MAIN("[DM_ERROR] Middle OLED allocation failed on channel %d.\n", OLED_MIDDLE_TCA_CHANNEL);
         success = false;
+    } else {
+        LOG_MANAGER("Middle OLED Initialized on Channel %d.", OLED_MIDDLE_TCA_CHANNEL);
     }
 
-    selectOLED(OLED_ID::OLED_BOTTOM);
-    if (!_oled_bottom.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
-        LOG_MAIN("[DM_ERROR] Bottom OLED allocation failed.\n");
+    // Initialize Bottom OLED directly on Channel 2
+    selectChannel_Direct(OLED_BOTTOM_TCA_CHANNEL);
+    if (!_oled_bottom.begin(SSD1306_SWITCHCAPVCC, 0x3C, false)) {
+        LOG_MAIN("[DM_ERROR] Bottom OLED allocation failed on channel %d.\n", OLED_BOTTOM_TCA_CHANNEL);
         success = false;
+    } else {
+        LOG_MANAGER("Bottom OLED Initialized on Channel %d.", OLED_BOTTOM_TCA_CHANNEL);
     }
 
     if (success) {
-        LOG_MANAGER("All OLEDs initialized successfully.\n");
-        clearAll();
-        displayAll();
+        LOG_MANAGER("All OLEDs initialized successfully.");
     }
-    
+
     _tca.deselectAllChannels();
     return success;
 }
 
+// The public-facing selectOLED method remains for normal application use.
 void DisplayManager::selectOLED(OLED_ID oled) {
     uint8_t channel = 0;
     switch (oled) {
@@ -49,7 +64,8 @@ void DisplayManager::selectOLED(OLED_ID oled) {
         case OLED_ID::OLED_MIDDLE: channel = OLED_MIDDLE_TCA_CHANNEL; break;
         case OLED_ID::OLED_BOTTOM: channel = OLED_BOTTOM_TCA_CHANNEL; break;
     }
-    _tca.selectChannel(channel);
+    // It now calls the same private helper, ensuring consistent behavior.
+    selectChannel_Direct(channel);
 }
 
 void DisplayManager::clearOLED(OLED_ID oled) {
