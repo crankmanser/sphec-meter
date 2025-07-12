@@ -11,7 +11,7 @@
 #include "managers/rtc/RtcManager.h"
 
 extern UIManager* uiManager;
-extern StateManager* stateManager; 
+extern StateManager* stateManager;
 extern RtcManager* rtcManager;
 
 const TickType_t UI_DELAY_MS = 500; // Slowed down to 2 FPS for easy visual checking
@@ -19,11 +19,10 @@ const TickType_t UI_DELAY_MS = 500; // Slowed down to 2 FPS for easy visual chec
 void uiTask(void* pvParameters) {
     LOG_TASK("UI Task started.\n");
 
-    if (!stateManager || !uiManager || !rtcManager) { // <<< MODIFIED
+    if (!stateManager || !uiManager || !rtcManager) {
         LOG_MAIN("[UI_ERROR] UI Task cannot run, manager pointers are null.\n");
         vTaskDelete(NULL);
         return;
-    
     }
     // Initialize random seed
     randomSeed(analogRead(0));

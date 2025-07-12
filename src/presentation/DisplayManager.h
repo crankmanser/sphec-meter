@@ -4,7 +4,8 @@
 
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
-#include "hal/TCA9548_Driver.h"
+#include "hal/TCA9548_Wrapper.h"
+// <<< FIX: Corrected typo from UI_types.hh to UI_types.h
 #include "presentation/common/UI_types.h"
 #include "config/hardware_config.h"
 
@@ -17,7 +18,7 @@
  */
 class DisplayManager {
 public:
-    DisplayManager(TCA9548_Driver& tca);
+    DisplayManager(TCA9548_Wrapper& tca);
     bool begin(TwoWire* wire);
 
     void selectOLED(OLED_ID oled);
@@ -28,13 +29,12 @@ public:
     Adafruit_SSD1306* getDisplay(OLED_ID oled);
 
 private:
-    TCA9548_Driver& _tca;
+    TCA9548_Wrapper& _tca;
     Adafruit_SSD1306 _oled_top;
     Adafruit_SSD1306 _oled_middle;
     Adafruit_SSD1306 _oled_bottom;
 
-    // <<< FIX: Correct I2C multiplexer channels based on user-provided hardware info.
-    static constexpr uint8_t OLED_TOP_TCA_CHANNEL    = 7; // Was 1
-    static constexpr uint8_t OLED_MIDDLE_TCA_CHANNEL = 5; // Was 2
-    static constexpr uint8_t OLED_BOTTOM_TCA_CHANNEL = 2; // Was 3
+    static constexpr uint8_t OLED_TOP_TCA_CHANNEL    = 7;
+    static constexpr uint8_t OLED_MIDDLE_TCA_CHANNEL = 5;
+    static constexpr uint8_t OLED_BOTTOM_TCA_CHANNEL = 2;
 };

@@ -1,14 +1,17 @@
 // src/presentation/DisplayManager.cpp
+// MODIFIED FILE
 #include "presentation/DisplayManager.h"
 #include "DebugMacros.h"
 
-DisplayManager::DisplayManager(TCA9548_Driver& tca) :
+// <<< FIX: Corrected constructor to use the new TCA9548_Wrapper class
+DisplayManager::DisplayManager(TCA9548_Wrapper& tca) :
     _tca(tca),
     _oled_top(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1),
     _oled_middle(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1),
     _oled_bottom(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1)
 {}
 
+// <<< FIX: Removed all duplicated function definitions that followed this block.
 bool DisplayManager::begin(TwoWire* wire) {
     LOG_MANAGER("Initializing DisplayManager...\n");
     bool success = true;

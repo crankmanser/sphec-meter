@@ -1,7 +1,6 @@
 // src/main.cpp
 // MODIFIED FILE
 
-// src/main.cpp
 #include <Arduino.h>
 #include <SPI.h>
 #include <Wire.h>
@@ -10,7 +9,7 @@
 #include "freertos/semphr.h"
 
 #include "DebugMacros.h"
-#include "config/hardware_config.h" 
+#include "config/hardware_config.h"
 #include "data_models/SensorData_types.h"
 
 // HAL Drivers
@@ -19,9 +18,8 @@
 #include "hal/DS18B20_Driver.h"
 #include "hal/DHT_Driver.h"
 #include "hal/LDR_Driver.h"
-#include "hal/TCA9548_Driver.h" 
-#include "hal/PCF8563_Driver.h" 
-
+#include "hal/TCA9548_Wrapper.h" // <<< MODIFIED: Use the new wrapper
+#include "hal/PCF8563_Driver.h"
 
 // Manager Cabinets
 #include "managers/storage/StorageManager.h"
@@ -37,24 +35,24 @@
 #include "managers/sensor/LDRManager.h"
 #include "managers/io/ButtonManager.h"
 #include "managers/io/EncoderManager.h"
-#include "managers/rtc/RtcManager.h" 
+#include "managers/rtc/RtcManager.h"
 
 // Application Layer Cabinets
 #include "app/SensorTask.h"
 #include "app/ConnectivityTask.h"
 #include "app/TelemetryTask.h"
 #include "app/TelemetrySerializer.h"
-#include "app/WebService.h" 
-#include "app/UiTask.h" 
+#include "app/WebService.h"
+#include "app/UiTask.h"
 #include "app/StateManager.h"
 
 // Presentation Layer Cabinets
-#include "presentation/DisplayManager.h" 
-#include "presentation/UIManager.h" 
+#include "presentation/DisplayManager.h"
+#include "presentation/UIManager.h"
 #include "presentation/screens/HomeScreen.h"
 
-// Debug 
-#include "config/DebugConfig.h" 
+// Debug
+#include "config/DebugConfig.h"
 #if (ENABLE_SENSOR_SIMULATION)
 #include "debug/simulation.h"
 #endif
@@ -63,27 +61,24 @@
 SPIClass& spi = SPI;
 TwoWire i2c = TwoWire(0);
 SemaphoreHandle_t g_spi_bus_mutex;
-SemaphoreHandle_t g_raw_data_mutex; 
-SemaphoreHandle_t g_processed_data_mutex; 
-SemaphoreHandle_t g_storage_diag_mutex; 
+SemaphoreHandle_t g_raw_data_mutex;
+SemaphoreHandle_t g_processed_data_mutex;
+SemaphoreHandle_t g_storage_diag_mutex;
 
 // --- Global Data Structures ---
 RawSensorData g_raw_sensor_data;
 ProcessedSensorData g_processed_data;
 
 // --- Manager Pointers ---
-// (existing manager pointers...)
-TCA9548_Driver* tca9548 = nullptr; 
-PCF8563_Driver* pcf8563_driver = nullptr; 
-RtcManager* rtcManager = nullptr; 
-DisplayManager* displayManager = nullptr; 
-UIManager* uiManager = nullptr; 
+TCA9548_Wrapper* tca9548 = nullptr; // <<< MODIFIED
+PCF8563_Driver* pcf8563_driver = nullptr;
+RtcManager* rtcManager = nullptr;
+DisplayManager* displayManager = nullptr;
+UIManager* uiManager = nullptr;
 ButtonManager* buttonManager = nullptr;
 EncoderManager* encoderManager = nullptr;
-// InputManager* inputManager = nullptr; // To be added
 StateManager* stateManager = nullptr;
 
-// (existing manager pointers...)
 INA219_Driver* ina219 = nullptr;
 ADS1118_Driver* adc1 = nullptr;
 ADS1118_Driver* adc2 = nullptr;
@@ -104,16 +99,16 @@ AmbientHumidityManager* ambientHumidityManager = nullptr;
 SensorProcessor* sensorProcessor = nullptr;
 LDRManager* ldrManager = nullptr;
 TelemetrySerializer* telemetrySerializer = nullptr;
-WebService* webService = nullptr; 
-
+WebService* webService = nullptr;
+NetworkConfig networkConfig;
 
 void setup() {
     LOG_INIT();
-    LOG_MAIN("--- SpHEC Meter v1.4.9 Booting ---\n"); 
+    LOG_MAIN("--- SpHEC Meter v1.5.0 Booting ---\n");
 
     g_spi_bus_mutex = xSemaphoreCreateMutex();
-    g_raw_data_mutex = xSemaphoreCreateMutex(); 
-    g_processed_data_mutex = xSemaphoreCreateMutex(); 
+    g_raw_data_mutex = xSemaphoreCreateMutex();
+    g_processed_data_mutex = xSemaphoreCreateMutex();
     g_storage_diag_mutex = xSemaphoreCreateMutex();
 
     pinMode(SD_CS_PIN, OUTPUT);
@@ -126,27 +121,43 @@ void setup() {
 
     spi.begin(SPI_SCK_PIN, SPI_MISO_PIN, SPI_MOSI_PIN);
     i2c.begin(I2C_SDA_PIN, I2C_SCL_PIN);
+    LOG_MAIN("Physical I2C and SPI buses initialized.\n");
 
-    // --- Dynamically allocate HAL drivers ---
+    // --- HAL Driver Instantiation ---
     ina219 = new INA219_Driver(INA219_I2C_ADDRESS);
     adc1 = new ADS1118_Driver(ADC1_CS_PIN, ADC2_CS_PIN, SD_CS_PIN, &spi, g_spi_bus_mutex);
     adc2 = new ADS1118_Driver(ADC2_CS_PIN, ADC1_CS_PIN, SD_CS_PIN, &spi, g_spi_bus_mutex);
     ds18b20 = new DS18B20_Driver(ONEWIRE_BUS_PIN);
     dht = new DHT_Driver(DHT_PIN, DHT_TYPE);
     ldr = new LDR_Driver(adc1);
-    tca9548 = new TCA9548_Driver(TCA_ADDRESS); 
+    tca9548 = new TCA9548_Wrapper(TCA_ADDRESS, &i2c); // <<< MODIFIED
     pcf8563_driver = new PCF8563_Driver();
 
-    // --- Dynamically allocate IO Managers ---
+    // --- HAL Driver Initialization ---
+    if (!tca9548->begin()) { // <<< MODIFIED
+        // If the mux fails, we can't continue.
+        LOG_MAIN("CRITICAL: I2C MUX FAILED TO INITIALIZE. HALTING.\n");
+        while(1) delay(1000);
+    }
+    LOG_MAIN("I2C Multiplexer (TCA9548) Initialized.\n");
+
+    ina219->begin(&i2c);
+    adc1->begin();
+    adc2->begin();
+    ds18b20->begin();
+    dht->begin();
+    LOG_MAIN("Priming SPI bus for SD card...\n");
+    adc1->readDifferential_0_1();
+
     buttonManager = new ButtonManager(BTN_TOP_PIN, BTN_MIDDLE_PIN, BTN_BOTTOM_PIN);
     encoderManager = new EncoderManager(ENCODER_A_PIN, ENCODER_B_PIN);
+    buttonManager->begin();
+    encoderManager->begin();
 
-    // --- Dynamically allocate Manager & App cabinets ---
     storageManager = new StorageManager(SD_CS_PIN, &spi, g_spi_bus_mutex, g_storage_diag_mutex);
     storageManager->begin();
     storageManager->recoverFromCrash();
 
-    NetworkConfig networkConfig;
     if (!storageManager->loadState(ConfigType::NETWORK_CONFIG, (uint8_t*)&networkConfig, sizeof(networkConfig))) {
         LOG_MAIN("No network config file found. Creating default.\n");
         storageManager->saveState(ConfigType::NETWORK_CONFIG, (const uint8_t*)&networkConfig, sizeof(networkConfig));
@@ -167,28 +178,13 @@ void setup() {
     telemetrySerializer = new TelemetrySerializer(&g_processed_data, *powerManager);
     webService = new WebService(*storageManager, networkConfig, sensorProcessor, rawSensorReader);
     rtcManager = new RtcManager(*pcf8563_driver, *tca9548);
-
-    // --- Dynamically allocate Presentation Layer & State cabinets --- 
     displayManager = new DisplayManager(*tca9548);
     uiManager = new UIManager(*displayManager);
     stateManager = new StateManager();
 
-    // --- Create and add screens to StateManager ---
-    stateManager->addScreen(ScreenState::SCREEN_HOME, new HomeScreen());
-
-
-    // --- Initialize HAL drivers ---
-    ina219->begin(&i2c);
-    adc1->begin();
-    adc2->begin();
-    ds18b20->begin();
-    dht->begin();
-    tca9548->begin(&i2c); 
-
-    LOG_MAIN("Priming SPI bus...\n");
-    adc1->readDifferential_0_1();
-
-    // --- Initialize Managers ---
+    rtcManager->begin(&i2c);
+    displayManager->begin(&i2c);
+    uiManager->begin();
     powerManager->begin();
     liquidTempManager->begin();
     ambientTempManager->begin();
@@ -201,19 +197,15 @@ void setup() {
     #endif
     wifiManager->begin();
     mqttManager->begin(networkConfig.mqtt);
-    webService->begin(); 
-    buttonManager->begin();
-    encoderManager->begin();
-    rtcManager->begin(&i2c);
-    displayManager->begin(&i2c); 
-    uiManager->begin(); 
+    webService->begin();
+
+    stateManager->addScreen(ScreenState::SCREEN_HOME, new HomeScreen());
     stateManager->begin();
 
-    // --- Create Application Tasks ---
     xTaskCreatePinnedToCore(telemetryTask, "TelemetryTask", 4096, NULL, 2, NULL, 0);
     xTaskCreatePinnedToCore(sensorTask, "SensorTask", 4096, NULL, 2, NULL, 1);
     xTaskCreatePinnedToCore(connectivityTask, "ConnectivityTask", 4096, NULL, 1, NULL, 1);
-    xTaskCreatePinnedToCore(uiTask, "UiTask", 4096, NULL, 3, NULL, 1); // <<< NEW: UI Task on Core 1 with higher priority
+    xTaskCreatePinnedToCore(uiTask, "UiTask", 4096, NULL, 3, NULL, 1);
 
     LOG_MAIN("Initialization complete. Entering main loop.\n");
 }
