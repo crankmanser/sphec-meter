@@ -1,16 +1,15 @@
+// src/DebugMacros.h
+// MODIFIED FILE
 #pragma once
+
 #include "config/DebugConfig.h"
 #include <cstdio>
-#include "freertos/FreeRTOS.h" // Required for xTaskGetTickCount
-#include "freertos/task.h"    // Required for pcTaskGetName
-
-// This macro system allows for conditional compilation of debug messages.
-// If a debug flag in DebugConfig.h is 0, the corresponding log messages
-// will be completely removed by the compiler, saving memory and CPU cycles.
+#include <Arduino.h> 
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 
 #if (MASTER_DEBUG_ENABLE)
     #define LOG_INIT() do { Serial.begin(115200); while(!Serial); } while(0)
-    // Helper macro to get current time and task name
     #define LOG_PREPEND() printf("[%lu][%s] ", millis(), pcTaskGetName(NULL))
 #else
     #define LOG_INIT()
