@@ -12,7 +12,6 @@
 #include "debug/simulation.h"
 #endif
 
-// <<< FIX: Add all necessary headers for global pointer type definitions.
 #include <SPI.h>
 #include <Wire.h>
 #include "data_models/SensorData_types.h"
@@ -22,7 +21,8 @@
 #include "hal/DS18B20_Driver.h"
 #include "hal/DHT_Driver.h"
 #include "hal/LDR_Driver.h"
-#include "hal/TCA9548_Wrapper.h"
+#include "hal/TCA9548_Manual_Driver.h"
+// <<< FIX: Corrected typo from .hh to .h
 #include "hal/PCF8563_Driver.h"
 #include "managers/storage/StorageManager.h"
 #include "managers/power/PowerManager.h"
@@ -65,7 +65,7 @@ ADS1118_Driver* adc2 = nullptr;
 DS18B20_Driver* ds18b20 = nullptr;
 DHT_Driver* dht = nullptr;
 LDR_Driver* ldr = nullptr;
-TCA9548_Wrapper* tca9548 = nullptr;
+TCA9548_Manual_Driver* tca9548 = nullptr;
 PCF8563_Driver* pcf8563_driver = nullptr;
 // Managers
 StorageManager* storageManager = nullptr;

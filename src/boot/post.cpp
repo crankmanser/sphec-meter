@@ -1,14 +1,17 @@
 // src/boot/post.cpp
+// MODIFIED FILE
 #include "post.h"
 #include "presentation/DisplayManager.h"
 #include "hal/INA219_Driver.h"
-#include "hal/TCA9548_Wrapper.h"
+// <<< FIX: Include the new manual driver header
+#include "hal/TCA9548_Manual_Driver.h"
 #include "DebugMacros.h"
 
 // External declarations for required manager/driver pointers
 extern DisplayManager* displayManager;
 extern INA219_Driver* ina219;
-extern TCA9548_Wrapper* tca9548;
+// <<< FIX: Corrected extern declaration to use the new manual driver type
+extern TCA9548_Manual_Driver* tca9548;
 
 bool run_post() {
     LOG_MAIN("--- Starting Power-On Self-Test (POST) ---\n");
@@ -16,7 +19,7 @@ bool run_post() {
 
     // Test 1: I2C Bus Devices
     LOG_MAIN("[POST] Checking I2C bus...");
-    // The wrapper's begin() checks for TCA connection.
+    // <<< FIX: This check will now work with the correct type
     if (!tca9548) {
         LOG_MAIN(" FAIL (TCA9548 object is null)\n");
         pass = false;

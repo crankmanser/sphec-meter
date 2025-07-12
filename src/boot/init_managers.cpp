@@ -1,4 +1,5 @@
 // src/boot/init_managers.cpp
+// MODIFIED FILE
 #include "init_managers.h"
 #include "managers/storage/StorageManager.h"
 #include "managers/power/PowerManager.h"
@@ -50,7 +51,8 @@ extern ADS1118_Driver* adc2;
 extern DS18B20_Driver* ds18b20;
 extern DHT_Driver* dht;
 extern LDR_Driver* ldr;
-extern TCA9548_Wrapper* tca9548;
+// <<< FIX: Corrected extern declaration to use the new manual driver type
+extern TCA9548_Manual_Driver* tca9548;
 extern PCF8563_Driver* pcf8563_driver;
 
 extern SPIClass& spi;
@@ -77,6 +79,7 @@ void init_managers() {
     sensorProcessor = new SensorProcessor(&g_raw_sensor_data, &g_processed_data, *storageManager);
     telemetrySerializer = new TelemetrySerializer(&g_processed_data, *powerManager);
     webService = new WebService(*storageManager, networkConfig, sensorProcessor, rawSensorReader);
+    // <<< FIX: This will now compile as tca9548 is correctly typed
     rtcManager = new RtcManager(*pcf8563_driver, *tca9548);
     displayManager = new DisplayManager(*tca9548);
     uiManager = new UIManager(*displayManager);

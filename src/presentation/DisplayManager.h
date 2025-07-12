@@ -4,21 +4,16 @@
 
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
-#include "hal/TCA9548_Wrapper.h"
-// <<< FIX: Corrected typo from UI_types.hh to UI_types.h
+#include "hal/TCA9548_Manual_Driver.h" // <<< MODIFIED
 #include "presentation/common/UI_types.h"
 #include "config/hardware_config.h"
 
 #define SCREEN_WIDTH 128
 #define SCREEN_HEIGHT 64
 
-/**
- * @class DisplayManager
- * @brief A pure Hardware Abstraction Layer (HAL) for the three OLED screens.
- */
 class DisplayManager {
 public:
-    DisplayManager(TCA9548_Wrapper& tca);
+    DisplayManager(TCA9548_Manual_Driver& tca); // <<< MODIFIED
     bool begin(TwoWire* wire);
 
     void selectOLED(OLED_ID oled);
@@ -29,7 +24,7 @@ public:
     Adafruit_SSD1306* getDisplay(OLED_ID oled);
 
 private:
-    TCA9548_Wrapper& _tca;
+    TCA9548_Manual_Driver& _tca; // <<< MODIFIED
     Adafruit_SSD1306 _oled_top;
     Adafruit_SSD1306 _oled_middle;
     Adafruit_SSD1306 _oled_bottom;

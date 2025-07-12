@@ -1,9 +1,10 @@
 // src/managers/rtc/RtcManager.cpp
+// MODIFIED FILE
 #include "managers/rtc/RtcManager.h"
 #include "config/hardware_config.h"
 #include "DebugMacros.h"
 
-RtcManager::RtcManager(PCF8563_Driver& rtc_driver, TCA9548_Wrapper& tca) : // <<< MODIFIED
+RtcManager::RtcManager(PCF8563_Driver& rtc_driver, TCA9548_Manual_Driver& tca) : // <<< MODIFIED
     _rtc_driver(rtc_driver),
     _tca(tca)
 {}

@@ -3,15 +3,13 @@
 #include "presentation/DisplayManager.h"
 #include "DebugMacros.h"
 
-// <<< FIX: Corrected constructor to use the new TCA9548_Wrapper class
-DisplayManager::DisplayManager(TCA9548_Wrapper& tca) :
+DisplayManager::DisplayManager(TCA9548_Manual_Driver& tca) : // <<< MODIFIED
     _tca(tca),
     _oled_top(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1),
     _oled_middle(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1),
     _oled_bottom(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1)
 {}
 
-// <<< FIX: Removed all duplicated function definitions that followed this block.
 bool DisplayManager::begin(TwoWire* wire) {
     LOG_MANAGER("Initializing DisplayManager...\n");
     bool success = true;
@@ -82,5 +80,5 @@ Adafruit_SSD1306* DisplayManager::getDisplay(OLED_ID oled) {
         case OLED_ID::OLED_MIDDLE: return &_oled_middle;
         case OLED_ID::OLED_BOTTOM: return &_oled_bottom;
     }
-    return nullptr; // Should not happen
+    return nullptr;
 }

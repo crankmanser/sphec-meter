@@ -1,11 +1,12 @@
 // src/boot/init_hals.cpp
+// MODIFIED FILE
 #include "init_hals.h"
 #include "hal/INA219_Driver.h"
 #include "hal/ADS1118_Driver.h"
 #include "hal/DS18B20_Driver.h"
 #include "hal/DHT_Driver.h"
 #include "hal/LDR_Driver.h"
-#include "hal/TCA9548_Wrapper.h"
+#include "hal/TCA9548_Manual_Driver.h" // <<< MODIFIED
 #include "hal/PCF8563_Driver.h"
 #include "config/hardware_config.h"
 #include "DebugMacros.h"
@@ -17,7 +18,7 @@ extern ADS1118_Driver* adc2;
 extern DS18B20_Driver* ds18b20;
 extern DHT_Driver* dht;
 extern LDR_Driver* ldr;
-extern TCA9548_Wrapper* tca9548;
+extern TCA9548_Manual_Driver* tca9548; // <<< MODIFIED
 extern PCF8563_Driver* pcf8563_driver;
 
 extern SPIClass& spi;
@@ -32,17 +33,17 @@ void init_hals() {
     ds18b20 = new DS18B20_Driver(ONEWIRE_BUS_PIN);
     dht = new DHT_Driver(DHT_PIN, DHT_TYPE);
     ldr = new LDR_Driver(adc1);
-    tca9548 = new TCA9548_Wrapper(TCA_ADDRESS, &i2c);
+    tca9548 = new TCA9548_Manual_Driver(TCA_ADDRESS, &i2c); // <<< MODIFIED
     pcf8563_driver = new PCF8563_Driver();
 
     // HAL Initialization
-    tca9548->begin();
+    tca9548->begin(); // <<< MODIFIED
     ina219->begin(&i2c);
     adc1->begin();
     adc2->begin();
     ds18b20->begin();
     dht->begin();
-    pcf8563_driver->begin(&i2c); // Initialize the RTC driver itself
+    pcf8563_driver->begin(&i2c);
 
     LOG_MAIN("All HAL drivers initialized.\n");
 }
