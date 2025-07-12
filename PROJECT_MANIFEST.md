@@ -212,3 +212,98 @@ This section provides a consolidated view of the entire software architecture, m
     * `resources/` (Bitmap icon assets)
     * `screens/` (Individual, modular screen logic)
     * `wizards/` (Reusable wizard and step classes)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## **Project Manifest: SpHEC Meter**
+
+**Version:** 1.5.1
+**Last Updated:** July 12, 2025
+
+This document is the **single source of truth** for the SpHEC Meter project. It supersedes all previous manifests and design documents. All development must adhere strictly to the rules and specifications outlined herein.
+
+### 1. The Golden Rules (Non-Negotiable)
+
+* **Firmware is the Source of Truth:** All core logic, state management, and functionality resides on the ESP32 firmware. The companion app is only a UI mirror.
+* **Verify Before Coding:** Before writing any code, you must read the relevant source file(s) to understand their established APIs and architecture.
+* **Prove Your Work:** Demonstrate understanding by quoting the exact, relevant class definitions or function signatures from the project files before producing new code.
+* **No Assumptions:** All reasoning must be based exclusively on the provided project source files. Do not use general programming knowledge that contradicts the project's established "ground truth."
+* **Stop if Blocked:** If a file is missing or a tool fails, all work must stop. Report the failure and request the specific information needed to proceed.
+
+---
+
+### 2. Hardware Truths & Constraints
+
+This section lists the non-negotiable hardware realities that all software must respect.
+
+* **Processors & Framework:**
+    * **Platform:** Espressif 32
+    * **Board:** esp32dev
+    * **Framework:** arduino
+* **Bus Configuration:**
+    * **I2C Pins:** `SDA` is on pin `21`, `SCL` is on pin `22`.
+    * **SPI Pins (VSPI):** `MOSI` is on pin `23`, `MISO` is on pin `19`, `SCK` is on pin `18`.
+* **I2C Device Topology & Initialization Sensitivity:**
+    * The **INA219 Power Monitor** sits directly on the primary I2C bus at address `0x40`.
+    * All other I2C devices (**RTC, OLEDs**) are behind a **TCA9548A Multiplexer** at address `0x70`.
+    * The **RTC** is on channel `0` of the multiplexer.
+    * **Software Mandate:** The I2C bus has proven to be extremely sensitive during the initial boot sequence. All I2C device initializations **must** be centralized. The working sequence from the legacy firmware (`DisplayManager` then `RtcManager`) must be precisely replicated to ensure bus stability.
+
+* **SPI Bus & Devices:**
+    * **Fundamental Instability:** The SPI bus is considered untrustworthy. All SPI transactions must be protected by a mutex.
+    * **SD Card:** CS is on pin `5`.
+    * **ADC1 (pH & 3.3V):** CS is on pin `4`.
+    * **ADC2 (EC & 5V):** CS is on pin `2`.
+
+---
+
+### 3. Software Architecture: The "Cabinet" & Modular Boot Model
+
+The firmware is divided into four distinct layers based on the "Cabinet" philosophy. This enforces a one-way flow of dependencies, ensuring stability and modularity.
+
+The `setup()` function has been refactored into a **modular boot sequence**. All initialization logic is delegated to functions within the `src/boot/` directory to improve clarity and maintainability. This sequence is:
+1.  `init_globals()`
+2.  `init_i2c_devices()`
+3.  `init_hals()`
+4.  `init_managers()`
+5.  `run_post()` (Power-On Self-Test)
+6.  `init_tasks()`
+
+---
+
+### 4. Current Status & Blocking Issue
+
+The project's architecture has been significantly improved by refactoring the boot sequence into a modular, multi-stage process. However, the project is currently **blocked** by a persistent runtime crash.
+
+* **Symptom:** A `NULL TX buffer pointer` error occurs during the `DisplayManager::begin()` call, preventing the OLED screens from initializing.
+* **Known Facts:**
+    * The hardware is confirmed to be functional, as the legacy firmware works correctly.
+    * The crash is not a compile-time error but a runtime I2C bus corruption.
+* **Current Strategy:** The focus is on a meticulous, step-by-step diagnostic process to isolate the exact line of code that is corrupting the I2C bus state during initialization. All further development is on hold until this critical boot issue is resolved.
+
+---
+
+### 5. Feature & API Requirements
+
+*This section remains unchanged from the previous manifest version.*
+
+* **Connectivity:**
+    * **BLE:** Must provide a BLE service for configuration and telemetry.
+    * **Wi-Fi:** Must support both **Access Point (AP)** and **Station (STA)** modes.
+    * **MQTT:** Must connect to `test.mosquitto.org:1883` and publish telemetry.
+* **Web API & Data Handling:**
+    * A dedicated `TelemetrySerializer` must be used to generate a single, reusable telemetry string.
+    * A lean `/api/v1/config/set` endpoint is required.
+    * A WebSocket server for real-time telemetry is required.
