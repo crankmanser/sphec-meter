@@ -26,7 +26,7 @@
 // --- 1-Wire & Proprietary Buses ---
 #define ONEWIRE_BUS_PIN 15
 #define DHT_PIN 13
-#define DHT_TYPE DHT22
+#define DHT_TYPE DHT11
 
 // --- User Input ---
 #define ENCODER_A_PIN 25

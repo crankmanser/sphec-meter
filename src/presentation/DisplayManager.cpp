@@ -3,22 +3,21 @@
 #include "presentation/DisplayManager.h"
 #include "DebugMacros.h"
 
-DisplayManager::DisplayManager(TCA9548_Manual_Driver& tca) :
+// <<< MODIFIED: The constructor now initializes the Adafruit_SSD1306 objects
+// with the provided 'wire' pointer, instead of the global 'Wire'.
+DisplayManager::DisplayManager(TCA9548_Manual_Driver& tca, TwoWire* wire) :
     _tca(tca),
-    _oled_top(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1),
-    _oled_middle(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1),
-    _oled_bottom(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1)
+    _oled_top(SCREEN_WIDTH, SCREEN_HEIGHT, wire, -1),
+    _oled_middle(SCREEN_WIDTH, SCREEN_HEIGHT, wire, -1),
+    _oled_bottom(SCREEN_WIDTH, SCREEN_HEIGHT, wire, -1)
 {}
 
-// <<< NEW: Implementation of the private helper function.
-// This function directly calls the manual driver.
 void DisplayManager::selectChannel_Direct(uint8_t channel) {
     _tca.selectChannel(channel);
 }
 
-// <<< MODIFIED: The begin() method now uses the direct call pattern for initialization.
 bool DisplayManager::begin(TwoWire* wire) {
-    LOG_MANAGER("Initializing DisplayManager with DIRECT CALL TEST...\n");
+    LOG_MANAGER("Initializing DisplayManager...\n");
     bool success = true;
 
     // Initialize Top OLED directly on Channel 7
@@ -56,7 +55,6 @@ bool DisplayManager::begin(TwoWire* wire) {
     return success;
 }
 
-// The public-facing selectOLED method remains for normal application use.
 void DisplayManager::selectOLED(OLED_ID oled) {
     uint8_t channel = 0;
     switch (oled) {
@@ -64,7 +62,6 @@ void DisplayManager::selectOLED(OLED_ID oled) {
         case OLED_ID::OLED_MIDDLE: channel = OLED_MIDDLE_TCA_CHANNEL; break;
         case OLED_ID::OLED_BOTTOM: channel = OLED_BOTTOM_TCA_CHANNEL; break;
     }
-    // It now calls the same private helper, ensuring consistent behavior.
     selectChannel_Direct(channel);
 }
 

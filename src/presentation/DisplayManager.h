@@ -13,10 +13,11 @@
 
 class DisplayManager {
 public:
-    DisplayManager(TCA9548_Manual_Driver& tca);
+    // <<< MODIFIED: Constructor now accepts the I2C bus object.
+    DisplayManager(TCA9548_Manual_Driver& tca, TwoWire* wire);
     bool begin(TwoWire* wire);
 
-    void selectOLED(OLED_ID oled); // This remains for application use
+    void selectOLED(OLED_ID oled);
     void clearOLED(OLED_ID oled);
     void clearAll();
     void displayOLED(OLED_ID oled);
@@ -24,7 +25,6 @@ public:
     Adafruit_SSD1306* getDisplay(OLED_ID oled);
 
 private:
-    // <<< NEW: Private helper for direct, raw channel selection during init.
     void selectChannel_Direct(uint8_t channel);
 
     TCA9548_Manual_Driver& _tca;

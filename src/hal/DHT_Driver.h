@@ -1,3 +1,5 @@
+// src/hal/DHT_Driver.h
+// MODIFIED FILE
 #pragma once
 
 #include <Arduino.h>
@@ -22,6 +24,7 @@ private:
     // Instance of the underlying Adafruit library.
     DHT _dht;
     
-    // <<< ADDED: The missing member variable to store the pin number.
+    // Member variables to store pin and type.
     uint8_t _pin; 
+    uint8_t _type; // <<< ADDED: To store the configured DHT type.
 };

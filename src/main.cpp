@@ -1,5 +1,5 @@
 // src/main.cpp
-// COMPLETE FILE
+// MODIFIED FILE
 #include <Arduino.h>
 #include "DebugMacros.h"
 #include "boot/init_globals.h"
@@ -10,7 +10,7 @@
 #include "boot/init_tasks.h"
 #include "config/DebugConfig.h"
 #if (ENABLE_SENSOR_SIMULATION)
-#include "debug/simulation.h"
+#include "debug/simulation.hh"
 #endif
 
 #include <SPI.h>
@@ -80,7 +80,7 @@ AmbientHumidityManager* ambientHumidityManager = nullptr;
 SensorProcessor* sensorProcessor = nullptr;
 LDRManager* ldrManager = nullptr;
 ButtonManager* buttonManager = nullptr;
-EncoderManager* encoderManager = nullptr;
+EncoderManager* encoderManager;
 RtcManager* rtcManager = nullptr;
 DisplayManager* displayManager = nullptr;
 UIManager* uiManager = nullptr;
@@ -92,11 +92,22 @@ void setup() {
     LOG_INIT();
     LOG_MAIN("--- SpHEC Meter v1.5.0 Booting ---\n");
 
-    // Instantiate ALL manager and HAL objects first.
+    init_globals();
+
+    // <<< FIX: Instantiate ALL HAL objects first, respecting dependencies. >>>
+    // I2C HALs
     ina219 = new INA219_Driver(INA219_I2C_ADDRESS);
     tca9548 = new TCA9548_Manual_Driver(TCA_ADDRESS, &i2c);
     pcf8563_driver = new PCF8563_Driver();
-    displayManager = new DisplayManager(*tca9548);
+    // SPI & 1-Wire HALs
+    adc1 = new ADS1118_Driver(ADC1_CS_PIN, ADC2_CS_PIN, SD_CS_PIN, &spi, g_spi_bus_mutex);
+    adc2 = new ADS1118_Driver(ADC2_CS_PIN, ADC1_CS_PIN, SD_CS_PIN, &spi, g_spi_bus_mutex);
+    ds18b20 = new DS18B20_Driver(ONEWIRE_BUS_PIN);
+    dht = new DHT_Driver(DHT_PIN, DHT_TYPE);
+    ldr = new LDR_Driver(adc1); // Depends on adc1
+
+    // <<< FIX: Now that HALs exist, instantiate all managers that depend on them. >>>
+    displayManager = new DisplayManager(*tca9548, &i2c);
     rtcManager = new RtcManager(*pcf8563_driver, *tca9548);
     storageManager = new StorageManager(SD_CS_PIN, &spi, g_spi_bus_mutex, g_storage_diag_mutex);
     powerManager = new PowerManager(*ina219, *storageManager);
@@ -105,6 +116,7 @@ void setup() {
     #endif
     wifiManager = new WifiManager(*storageManager, networkConfig);
     mqttManager = new MqttManager();
+    // RawSensorReader now gets valid pointers
     rawSensorReader = new RawSensorReader(&g_raw_sensor_data, adc1, adc2, ina219, ldr, ds18b20, dht);
     liquidTempManager = new LiquidTempManager(&g_raw_sensor_data, &g_processed_data, *storageManager);
     ambientTempManager = new AmbientTempManager(&g_raw_sensor_data, &g_processed_data, *storageManager);
@@ -118,8 +130,7 @@ void setup() {
     buttonManager = new ButtonManager(BTN_TOP_PIN, BTN_MIDDLE_PIN, BTN_BOTTOM_PIN);
     encoderManager = new EncoderManager(ENCODER_A_PIN, ENCODER_B_PIN);
 
-    init_globals();
-
+    // Continue with the rest of the boot sequence.
     if (!init_i2c_devices()) {
         LOG_MAIN("CRITICAL: I2C Device Initialization Failed. Halting.\n");
         while(true) { delay(1000); }

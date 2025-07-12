@@ -8,29 +8,21 @@
 #include "config/hardware_config.h"
 #include "DebugMacros.h"
 
-// External declarations for HAL driver pointers and hardware handles
+// External declarations for HAL driver pointers
 extern ADS1118_Driver* adc1;
 extern ADS1118_Driver* adc2;
 extern DS18B20_Driver* ds18b20;
 extern DHT_Driver* dht;
-extern LDR_Driver* ldr;
-
-extern SPIClass& spi;
-extern SemaphoreHandle_t g_spi_bus_mutex;
+// ldr does not have a begin() method
 
 void init_hals() {
-    // HAL Instantiation (SPI and 1-Wire devices only)
-    adc1 = new ADS1118_Driver(ADC1_CS_PIN, ADC2_CS_PIN, SD_CS_PIN, &spi, g_spi_bus_mutex);
-    adc2 = new ADS1118_Driver(ADC2_CS_PIN, ADC1_CS_PIN, SD_CS_PIN, &spi, g_spi_bus_mutex);
-    ds18b20 = new DS18B20_Driver(ONEWIRE_BUS_PIN);
-    dht = new DHT_Driver(DHT_PIN, DHT_TYPE);
-    ldr = new LDR_Driver(adc1);
+    // <<< FIX: Instantiations have been moved to main.cpp. >>>
+    // This function now only calls the begin() methods.
 
-    // HAL Initialization
-    adc1->begin();
-    adc2->begin();
-    ds18b20->begin();
-    dht->begin();
+    if (adc1) adc1->begin();
+    if (adc2) adc2->begin();
+    if (ds18b20) ds18b20->begin();
+    if (dht) dht->begin();
 
     LOG_MAIN("Non-I2C HAL drivers initialized.\n");
 }

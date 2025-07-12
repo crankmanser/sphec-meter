@@ -3,7 +3,7 @@
 #pragma once
 
 #include "presentation/DisplayManager.h"
-#include "presentation/common/UIRenderProps.h" // <<< FIX: Include full render props
+#include "presentation/common/UIRenderProps.h"
 
 /**
  * @class UIManager
@@ -27,9 +27,10 @@ private:
 
     // Private helper methods for drawing specific UI components.
     void drawTopStatusBar(const TopStatusProps& props);
-    void drawStateStack(const StateStackProps& props); // <<< FIX: Renamed for clarity
-    void drawButtonPrompts(const ButtonPrompt& props); // <<< FIX: Added for clarity
-    void drawOledContent(OLED_ID oled, const OledProps& props);
+    void drawStateStack(const StateStackProps& props);
+    void drawButtonPrompts(const ButtonPrompt& props);
+    // <<< MODIFIED: Signature updated to accept the show_top_bar flag.
+    void drawOledContent(OLED_ID oled, const OledProps& props, bool show_top_bar);
 
     // Private helper for drawing icons from a bitmap atlas.
     void drawIcon(OLED_ID oled, int16_t x, int16_t y, Icon_ID icon);
