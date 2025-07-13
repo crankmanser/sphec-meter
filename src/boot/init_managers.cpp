@@ -20,8 +20,10 @@
 #include "app/WebService.h"
 #include "config/DebugConfig.h"
 #include "DebugMacros.h"
-// <<< ADDED: Include the new MainMenuScreen
+// Screens
 #include "presentation/screens/main_menu/MainMenuScreen.h"
+#include "presentation/screens/main_menu/diagnostics/DiagnosticsMenuScreen.h"
+#include "presentation/screens/main_menu/diagnostics/N_Analysis/NoiseAnalysisScreen.h"
 
 // External declarations for manager pointers
 extern StorageManager* storageManager;
@@ -69,9 +71,11 @@ void init_managers() {
     webService->begin();
     uiManager->begin();
     
-    // <<< MODIFIED: Set up the StateManager with the new MainMenuScreen >>>
     stateManager->addScreen(ScreenState::SCREEN_MAIN_MENU, new MainMenuScreen());
-    stateManager->changeState(ScreenState::SCREEN_MAIN_MENU); // Set the initial screen
+    stateManager->addScreen(ScreenState::SCREEN_DIAGNOSTICS_MENU, new DiagnosticsMenuScreen());
+    stateManager->addScreen(ScreenState::SCREEN_NOISE_ANALYSIS, new NoiseAnalysisScreen());
+    
+    stateManager->changeState(ScreenState::SCREEN_MAIN_MENU);
     stateManager->begin();
     
     buttonManager->begin();

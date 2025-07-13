@@ -3,8 +3,10 @@
 #include "presentation/UIManager.h"
 #include "DebugMacros.h"
 #include "presentation/resources/icons.h"
-#include "presentation/blocks/MenuBlock.h" // <<< ADDED: Include the menu block
+#include "presentation/blocks/MenuBlock.h"
+#include "presentation/blocks/GraphBlock.h" // <<< ADDED
 
+// ... (Constructor and begin methods are unchanged)
 UIManager::UIManager(DisplayManager& displayManager) :
     _displayManager(displayManager)
 {}
@@ -21,7 +23,6 @@ void UIManager::render(const UIRenderProps& props) {
     }
     drawStateStack(props.state_stack_props);
     
-    // Pass the render job to the helper for each OLED
     drawOledContent(OLED_ID::OLED_TOP, props.oled_top_props, props.show_top_bar);
     drawOledContent(OLED_ID::OLED_MIDDLE, props.oled_middle_props, props.show_top_bar);
     drawOledContent(OLED_ID::OLED_BOTTOM, props.oled_bottom_props, props.show_top_bar);
@@ -30,7 +31,7 @@ void UIManager::render(const UIRenderProps& props) {
     _displayManager.displayAll();
 }
 
-// ... drawTopStatusBar, drawStateStack, drawButtonPrompts, drawIcon methods remain the same ...
+// ... (drawTopStatusBar and drawStateStack are unchanged)
 void UIManager::drawTopStatusBar(const TopStatusProps& props) {
     Adafruit_SSD1306* oled1 = _displayManager.getDisplay(OLED_ID::OLED_TOP);
     _displayManager.selectOLED(OLED_ID::OLED_TOP);
@@ -73,22 +74,41 @@ void UIManager::drawStateStack(const StateStackProps& props) {
     drawIcon(OLED_ID::OLED_BOTTOM, 2, 42, props.icon3);
 }
 
+// <<< MODIFIED: This function now draws graphical prompts in the specified locations >>>
 void UIManager::drawButtonPrompts(const ButtonPrompt& props) {
-    Adafruit_SSD1306* display = _displayManager.getDisplay(OLED_ID::OLED_BOTTOM);
-    _displayManager.selectOLED(OLED_ID::OLED_BOTTOM);
-    display->setTextSize(1);
-    display->setTextColor(SSD1306_WHITE);
-    
-    // Clear the previous prompt area first
-    display->fillRect(22, 54, 106, 10, SSD1306_BLACK);
-    display->setCursor(24, 56);
-    // For now, we'll just draw the middle prompt for simplicity.
-    // A real implementation would handle all three.
-    display->print(props.middle_button_text.c_str());
+    auto draw_single_prompt = [&](OLED_ID oled_id, const std::string& text) {
+        if (text.empty()) return;
+        Adafruit_SSD1306* display = _displayManager.getDisplay(oled_id);
+        _displayManager.selectOLED(oled_id);
+        
+        int16_t x1, y1;
+        uint16_t w, h;
+        display->setTextSize(1);
+        display->getTextBounds(text.c_str(), 0, 0, &x1, &y1, &w, &h);
+
+        const int x_margin = 4;
+        const int y_margin = 2;
+        int rect_x = (display->width() - w) / 2 - x_margin;
+        int rect_y = 54;
+        int rect_w = w + (x_margin * 2);
+        int rect_h = h + (y_margin * 2);
+
+        display->fillRect(0, 54, 128, 10, SSD1306_BLACK); // Clear area
+        display->fillRoundRect(rect_x, rect_y, rect_w, rect_h, 2, SSD1306_WHITE);
+        display->setTextColor(SSD1306_BLACK);
+        display->setCursor(rect_x + x_margin, rect_y + y_margin + 1);
+        display->print(text.c_str());
+        display->setTextColor(SSD1306_WHITE);
+    };
+
+    // Draw prompts according to the new layout
+    draw_single_prompt(OLED_ID::OLED_TOP, props.bottom_button_text);
+    draw_single_prompt(OLED_ID::OLED_MIDDLE, props.middle_button_text);
+    draw_single_prompt(OLED_ID::OLED_BOTTOM, props.top_button_text);
 }
 
+// ... (drawIcon is unchanged)
 void UIManager::drawIcon(OLED_ID oled, int16_t x, int16_t y, Icon_ID icon) {
-    // Ensure the icon ID is valid before trying to access the array
     if ((int)icon >= (int)Icon_ID::ICON_COUNT) return;
 
     Adafruit_SSD1306* display = _displayManager.getDisplay(oled);
@@ -96,22 +116,23 @@ void UIManager::drawIcon(OLED_ID oled, int16_t x, int16_t y, Icon_ID icon) {
     display->drawBitmap(x, y, icon_bitmaps[(int)icon], 16, 16, SSD1306_BLACK, SSD1306_WHITE);
 }
 
-// MODIFIED: This function now delegates to UI blocks
+// <<< MODIFIED: This function now delegates to UI blocks >>>
 void UIManager::drawOledContent(OLED_ID oled, const OledProps& props, bool show_top_bar) {
     Adafruit_SSD1306* display = _displayManager.getDisplay(oled);
     _displayManager.selectOLED(oled);
     
-    // --- Clear content area ---
     int clear_y = show_top_bar ? 19 : 0;
-    int clear_h = show_top_bar ? 45 : 64;
-     if (oled == OLED_ID::OLED_BOTTOM) {
-         display->fillRect(21, 0, 107, 53, SSD1306_BLACK);
+    int clear_h = 53 - clear_y; 
+    
+    if (oled == OLED_ID::OLED_BOTTOM) {
+         display->fillRect(21, clear_y, 107, clear_h, SSD1306_BLACK);
     } else {
          display->fillRect(0, clear_y, 128, clear_h, SSD1306_BLACK);
     }
 
     // --- Draw Blocks ---
     MenuBlock::draw(display, props.menu_props);
+    GraphBlock::draw(display, props.graph_props);
 
     // --- Draw simple text lines (if any) ---
     display->setTextSize(1);

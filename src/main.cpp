@@ -43,6 +43,7 @@
 #include "app/StateManager.h"
 #include "app/TelemetrySerializer.h"
 #include "app/WebService.h"
+#include "managers/diagnostics/NoiseAnalysisManager.h"
 
 // --- Global Hardware Handles & Mutexes ---
 SPIClass& spi = SPI;
@@ -87,6 +88,7 @@ UIManager* uiManager = nullptr;
 StateManager* stateManager = nullptr;
 TelemetrySerializer* telemetrySerializer = nullptr;
 WebService* webService = nullptr;
+NoiseAnalysisManager* noiseAnalysisManager = nullptr;
 
 void setup() {
     LOG_INIT();
@@ -125,9 +127,8 @@ void setup() {
     uiManager = new UIManager(*displayManager);
     stateManager = new StateManager();
     buttonManager = new ButtonManager(BTN_TOP_PIN, BTN_MIDDLE_PIN, BTN_BOTTOM_PIN);
-    
-    // <<< FIX: Call the correct default constructor for EncoderManager >>>
     encoderManager = new EncoderManager();
+    noiseAnalysisManager = new NoiseAnalysisManager(adc1, adc2);
 
     // Continue with the rest of the boot sequence
     if (!init_i2c_devices()) {
