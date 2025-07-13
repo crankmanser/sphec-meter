@@ -24,15 +24,12 @@ const TickType_t UI_DELAY_MS = 50;
 void uiTask(void* pvParameters) {
     LOG_TASK("UI Task started.\n");
 
-    // Check for necessary manager objects
     if (!uiManager || !stateManager || !rtcManager || !buttonManager || !encoderManager) {
         LOG_MAIN("[UI_ERROR] UI Task cannot run, a required manager is null.\n");
         vTaskDelete(NULL);
         return;
     }
     
-    // <<< FIX: Use a more robust random seed source that doesn't conflict with Wi-Fi/ADC2 >>>
-    // We use the ESP32's hardware random number generator.
     randomSeed(esp_random());
 
     for (;;) {
@@ -43,10 +40,12 @@ void uiTask(void* pvParameters) {
         // --- STAGE 2: PROCESS INPUT ---
         Screen* active_screen = stateManager->getActiveScreen();
         if (active_screen) {
+            // <<< FIX: Process only ONE step per frame for a smooth scroll >>>
             if (encoder_change > 0) {
-                active_screen->handleInput({InputEventType::ENCODER_INCREMENT, encoder_change});
+                active_screen->handleInput({InputEventType::ENCODER_INCREMENT, 1});
             } else if (encoder_change < 0) {
-                active_screen->handleInput({InputEventType::ENCODER_DECREMENT, encoder_change});
+                // Pass -1 for decrement, even though event.value is not used by menu screen yet
+                active_screen->handleInput({InputEventType::ENCODER_DECREMENT, -1});
             }
 
             if (buttonManager->isPressed(ButtonManager::BTN_TOP)) {
@@ -61,20 +60,12 @@ void uiTask(void* pvParameters) {
         }
 
         // --- STAGE 3: GET RENDER DATA AND DRAW FRAME ---
-        // Update any managers that provide data to the UI
         rtcManager->update();
-
-        // Get the declarative render properties from the active screen
         UIRenderProps props = active_screen->getRenderProps();
-
-        // Populate the live status data (this will eventually be a dedicated controller)
         props.top_status_props.date_text = rtcManager->getDateString();
         props.top_status_props.time_text = rtcManager->getTimeString();
-
-        // Command the UIManager to render the final frame
         uiManager->render(props);
 
-        // Wait for the next cycle
         vTaskDelay(pdMS_TO_TICKS(UI_DELAY_MS));
     }
 }

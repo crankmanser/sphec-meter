@@ -1,4 +1,5 @@
 // src/managers/storage/StorageManager.cpp
+// MODIFIED FILE
 #include "managers/storage/StorageManager.h"
 #include "DebugMacros.h"
 #include <ArduinoJson.h>
@@ -11,7 +12,6 @@
 QueueHandle_t StorageManager::_fileQueue = nullptr;
 TaskHandle_t StorageManager::_storageTaskHandle = nullptr;
 
-// <<< MODIFIED: Constructor definition corrected to accept and initialize the new mutex
 StorageManager::StorageManager(uint8_t cs_pin, SPIClass* spi, SemaphoreHandle_t spi_bus_mutex, SemaphoreHandle_t diag_result_mutex) :
     _cs_pin(cs_pin),
     _spi(spi),
@@ -37,7 +37,9 @@ bool StorageManager::begin() {
 
     xSemaphoreTake(_spi_bus_mutex, portMAX_DELAY);
 
-    if (!_sd.begin(_cs_pin, 25000000UL)) {
+    // SdFat uses its own SPI settings, so we pass a config object.
+    SdSpiConfig spiConfig(_cs_pin, DEDICATED_SPI, 25000000UL, _spi);
+    if (!_sd.begin(spiConfig)) {
         LOG_MAIN("[SM_ERROR] SD Card initialization failed.\n");
         _is_ready = false;
         xSemaphoreGive(_spi_bus_mutex);
@@ -56,18 +58,21 @@ bool StorageManager::begin() {
         return false;
     }
 
-    xTaskCreate(
+    // <<< MODIFIED: Pinned the high-priority storage task to Core 0 >>>
+    xTaskCreatePinnedToCore(
         storageTask,
         "StorageTask",
         4096,
         this,
-        5,
-        &_storageTaskHandle
+        5, // High priority for I/O
+        &_storageTaskHandle,
+        0  // Pin to Core 0
     );
 
     return true;
 }
 
+// ... rest of the file is unchanged ...
 void StorageManager::storageTask(void* pvParameters) {
     StorageManager* self = static_cast<StorageManager*>(pvParameters);
     FileOperationRequest request;

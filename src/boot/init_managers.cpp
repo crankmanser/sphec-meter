@@ -18,10 +18,10 @@
 #include "app/StateManager.h"
 #include "app/TelemetrySerializer.h"
 #include "app/WebService.h"
-#include "presentation/screens/HomeScreen.h"
 #include "config/DebugConfig.h"
 #include "DebugMacros.h"
-// NOTE: RtcManager header is no longer needed here.
+// <<< ADDED: Include the new MainMenuScreen
+#include "presentation/screens/main_menu/MainMenuScreen.h"
 
 // External declarations for manager pointers
 extern StorageManager* storageManager;
@@ -44,10 +44,6 @@ extern WebService* webService;
 extern NetworkConfig networkConfig;
 
 void init_managers() {
-    // MODIFICATION: RtcManager->begin() is REMOVED from this function.
-    // It is now correctly handled in init_i2c_devices().
-
-    // Manager Initialization (Non-I2C managers that are safe to init now)
     storageManager->begin();
     storageManager->recoverFromCrash();
 
@@ -72,8 +68,12 @@ void init_managers() {
     mqttManager->begin(networkConfig.mqtt);
     webService->begin();
     uiManager->begin();
-    stateManager->addScreen(ScreenState::SCREEN_HOME, new HomeScreen());
+    
+    // <<< MODIFIED: Set up the StateManager with the new MainMenuScreen >>>
+    stateManager->addScreen(ScreenState::SCREEN_MAIN_MENU, new MainMenuScreen());
+    stateManager->changeState(ScreenState::SCREEN_MAIN_MENU); // Set the initial screen
     stateManager->begin();
+    
     buttonManager->begin();
     encoderManager->begin();
 

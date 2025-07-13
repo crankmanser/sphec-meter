@@ -1,33 +1,27 @@
 // src/managers/io/EncoderManager.h
+// MODIFIED FILE
 #pragma once
 
 #include <Arduino.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/queue.h"
 
-/**
- * @class EncoderManager
- * @brief Manages the rotary encoder using interrupts and a "Speed Engine".
- *
- * This is a refactor of the legacy EncoderManager, which provided a "silky smooth"
- * user experience by implementing speed-sensitive acceleration for scrolling.
- */
 class EncoderManager {
 public:
-    EncoderManager(uint8_t pin_a, uint8_t pin_b);
+    EncoderManager(); // Constructor no longer takes pins
     void begin();
-    int getChange(); // Returns the number of logical UI steps since the last call.
+    int getChange(); // Gets the change processed by the EncoderTask
 
 private:
-    const uint8_t _pin_a;
-    const uint8_t _pin_b;
+    // --- ISR-related static members ---
+    static void IRAM_ATTR isr(); 
+    
+    // --- RTOS Communication ---
+    // The ISR sends raw pin states to this queue.
+    static QueueHandle_t _event_queue;
+    // The EncoderTask calculates the final steps and stores them here.
+    static volatile int _ui_steps;
 
-    // Volatile as they are modified in an ISR.
-    static volatile int_fast16_t _position;
-    static volatile uint8_t _state;
-
-    // For the "Speed Engine"
-    int_fast16_t _last_position = 0;
-    uint32_t _last_read_time = 0;
-    int _pulses_per_step = 4; // Start with high precision
-
-    static void IRAM_ATTR update_isr(); // Interrupt Service Routine
+    // Friend class declaration to allow EncoderTask to access private members
+    friend void encoderTask(void* pvParameters);
 };

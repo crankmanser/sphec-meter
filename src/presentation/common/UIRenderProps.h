@@ -3,11 +3,10 @@
 #pragma once
 
 #include "UI_types.h"
-// <<< FIX: No longer includes icons.h directly
+#include "presentation/blocks/MenuBlock.h" // <<< ADDED: Include the new block props
 #include <vector>
 
 // --- Status Area Props ---
-
 struct TopStatusProps {
     std::string date_text;
     std::string time_text;
@@ -27,17 +26,18 @@ struct StateStackProps {
     Icon_ID icon3 = Icon_ID::ICON_STATE_IDLE;
 };
 
-// --- Main Screen Content Props ---
-
+// --- Main Screen Content Props (Now includes blocks) ---
 struct OledProps {
     bool is_dirty = true;
+    // Generic text lines
     std::string line1;
     std::string line2;
     std::string line3;
+    // Block-specific props
+    MenuBlockProps menu_props; // <<< ADDED: Props for the MenuBlock
 };
 
 // --- Master Render Props ---
-
 struct UIRenderProps {
     bool show_top_bar = true;
     TopStatusProps top_status_props;

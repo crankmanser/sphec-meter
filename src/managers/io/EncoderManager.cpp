@@ -1,66 +1,42 @@
 // src/managers/io/EncoderManager.cpp
-#include "managers/io/EncoderManager.h"
+// MODIFIED FILE
+#include "EncoderManager.h"
+#include "config/hardware_config.h"
+#include "DebugMacros.h"
 
-// Define static members
-volatile int_fast16_t EncoderManager::_position = 0;
-volatile uint8_t EncoderManager::_state = 0;
+// Initialize static members
+QueueHandle_t EncoderManager::_event_queue = nullptr;
+volatile int EncoderManager::_ui_steps = 0;
 
-EncoderManager::EncoderManager(uint8_t pin_a, uint8_t pin_b) :
-    _pin_a(pin_a),
-    _pin_b(pin_b)
-{}
+// <<< FIX: Define a spinlock for this file's critical section >>>
+static portMUX_TYPE encoderManagerMux = portMUX_INITIALIZER_UNLOCKED;
 
-void IRAM_ATTR EncoderManager::update_isr() {
-    uint8_t pin_a_val = digitalRead(25); // Hardcoded for ISR performance
-    uint8_t pin_b_val = digitalRead(26);
-    uint8_t s = _state & 3;
-    if (pin_a_val) s |= 4;
-    if (pin_b_val) s |= 8;
-    _state = (s >> 2);
+EncoderManager::EncoderManager() {}
 
-    switch (s) {
-        case 1: case 7: case 8: case 14:
-            _position++;
-            return;
-        case 2: case 4: case 11: case 13:
-            _position--;
-            return;
-        case 3: case 12:
-            _position += 2;
-            return;
-        case 6: case 9:
-            _position -= 2;
-            return;
-    }
+void IRAM_ATTR EncoderManager::isr() {
+    uint8_t pin_a = digitalRead(ENCODER_A_PIN);
+    uint8_t pin_b = digitalRead(ENCODER_B_PIN);
+    uint8_t state = (pin_b << 1) | pin_a;
+    xQueueSendFromISR(_event_queue, &state, NULL);
 }
 
 void EncoderManager::begin() {
-    pinMode(_pin_a, INPUT_PULLUP);
-    pinMode(_pin_b, INPUT_PULLUP);
-    attachInterrupt(digitalPinToInterrupt(_pin_a), update_isr, CHANGE);
-    attachInterrupt(digitalPinToInterrupt(_pin_b), update_isr, CHANGE);
+    _event_queue = xQueueCreate(32, sizeof(uint8_t));
+
+    pinMode(ENCODER_A_PIN, INPUT_PULLUP);
+    pinMode(ENCODER_B_PIN, INPUT_PULLUP);
+
+    attachInterrupt(digitalPinToInterrupt(ENCODER_A_PIN), isr, CHANGE);
+    attachInterrupt(digitalPinToInterrupt(ENCODER_B_PIN), isr, CHANGE);
+    LOG_MANAGER("Event-driven EncoderManager initialized.\n");
 }
 
 int EncoderManager::getChange() {
-    int_fast16_t current_pos = _position;
-    int_fast16_t diff = current_pos - _last_position;
-    _last_position = current_pos;
-
-    uint32_t now = millis();
-    uint32_t time_diff = now - _last_read_time;
-    _last_read_time = now;
-
-    // "Speed Engine" logic from legacy project
-    if (time_diff > 0 && abs(diff) > 0) {
-        int pulses_per_ms = abs(diff) * 1000 / time_diff;
-        if (pulses_per_ms > 300) { // Fast turn
-            _pulses_per_step = 1;
-        } else if (pulses_per_ms > 100) { // Medium turn
-            _pulses_per_step = 2;
-        } else { // Slow turn
-            _pulses_per_step = 4;
-        }
-    }
+    // <<< FIX: Pass the spinlock to the critical section macros >>>
+    portENTER_CRITICAL(&encoderManagerMux);
+    int steps = _ui_steps;
+    _ui_steps = 0;
+    portEXIT_CRITICAL(&encoderManagerMux);
     
-    return diff / _pulses_per_step;
+    return steps;
 }
