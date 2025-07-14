@@ -4,7 +4,8 @@
 
 #include "UI_types.h"
 #include "presentation/blocks/MenuBlock.h"
-#include "presentation/blocks/GraphBlock.h" // <<< ADDED: Include the graph block
+#include "presentation/blocks/GraphBlock.h"
+#include "presentation/blocks/ProgressBarBlock.h" // <<< ADDED
 
 // ... (TopStatusProps and StateStackProps are unchanged)
 struct TopStatusProps {
@@ -26,16 +27,17 @@ struct StateStackProps {
     Icon_ID icon3 = Icon_ID::ICON_STATE_IDLE;
 };
 
+
 struct OledProps {
     bool is_dirty = true;
     std::string line1;
     std::string line2;
     std::string line3;
     MenuBlockProps menu_props;
-    GraphBlockProps graph_props; // <<< ADDED: Props for the GraphBlock
+    GraphBlockProps graph_props;
+    ProgressBarBlockProps progress_bar_props; // <<< ADDED
 };
 
-// ... (UIRenderProps is unchanged)
 struct UIRenderProps {
     bool show_top_bar = true;
     TopStatusProps top_status_props;

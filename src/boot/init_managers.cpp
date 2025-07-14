@@ -24,6 +24,7 @@
 #include "presentation/screens/main_menu/MainMenuScreen.h"
 #include "presentation/screens/main_menu/diagnostics/DiagnosticsMenuScreen.h"
 #include "presentation/screens/main_menu/diagnostics/N_Analysis/NoiseAnalysisScreen.h"
+#include "managers/diagnostics/NoiseAnalysisManager.h" // <<< ADDED
 
 // External declarations for manager pointers
 extern StorageManager* storageManager;
@@ -44,6 +45,7 @@ extern StateManager* stateManager;
 extern TelemetrySerializer* telemetrySerializer;
 extern WebService* webService;
 extern NetworkConfig networkConfig;
+extern NoiseAnalysisManager* noiseAnalysisManager; // <<< ADDED
 
 void init_managers() {
     storageManager->begin();
@@ -73,7 +75,8 @@ void init_managers() {
     
     stateManager->addScreen(ScreenState::SCREEN_MAIN_MENU, new MainMenuScreen());
     stateManager->addScreen(ScreenState::SCREEN_DIAGNOSTICS_MENU, new DiagnosticsMenuScreen());
-    stateManager->addScreen(ScreenState::SCREEN_NOISE_ANALYSIS, new NoiseAnalysisScreen());
+    // <<< MODIFIED: Pass the manager pointer to the screen's constructor >>>
+    stateManager->addScreen(ScreenState::SCREEN_NOISE_ANALYSIS, new NoiseAnalysisScreen(noiseAnalysisManager));
     
     stateManager->changeState(ScreenState::SCREEN_MAIN_MENU);
     stateManager->begin();

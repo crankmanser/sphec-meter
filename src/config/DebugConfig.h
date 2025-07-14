@@ -26,7 +26,7 @@
 // Set these to 1 to enable logging for a specific architectural layer,
 // or 0 to disable it. MASTER_DEBUG_ENABLE must be 1.
 #define ENABLE_DEBUG_MAIN       1 // For main.cpp setup and loop
-#define ENABLE_DEBUG_HAL        1 // For Hardware Abstraction Layer (drivers)
-#define ENABLE_DEBUG_MANAGERS   1 // For Manager Layer (logic)
-#define ENABLE_DEBUG_TASKS      1 // For RTOS Tasks
+#define ENABLE_DEBUG_HAL        0 // For Hardware Abstraction Layer (drivers)
+#define ENABLE_DEBUG_MANAGERS   0 // For Manager Layer (logic)
+#define ENABLE_DEBUG_TASKS      0 // For RTOS Tasks
 #define ENABLE_DEBUG_UI         1 // For UI Screens and Rendering
