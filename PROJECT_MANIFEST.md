@@ -307,3 +307,50 @@ The project's architecture has been significantly improved by refactoring the bo
     * A dedicated `TelemetrySerializer` must be used to generate a single, reusable telemetry string.
     * A lean `/api/v1/config/set` endpoint is required.
     * A WebSocket server for real-time telemetry is required.
+
+
+
+
+
+
+
+
+
+    # **Project Manifest: SpHEC Meter**
+
+**Version:** 1.5.0
+**Last Updated:** July 14, 2025
+
+This document is the **single source of truth** for the SpHEC Meter v1.5.0 project. It supersedes all previous manifests and design documents. All development must adhere strictly to the rules and specifications outlined herein.
+
+### 1. The Golden Rules (Non-Negotiable)
+
+* **Firmware is the Source of Truth:** All core logic, state management, and functionality resides on the ESP32 firmware. The companion app is only a UI mirror.
+* **Verify Before Coding:** Before writing any code, you must read the relevant source file(s) to understand their established APIs and architecture.
+* **Prove Your Work:** Demonstrate understanding by quoting the exact, relevant class definitions or function signatures from the project files before producing new code.
+* **No Assumptions:** All reasoning must be based exclusively on the provided project source files. Do not use general programming knowledge that contradicts the project's established "ground truth."
+
+---
+
+### 2. Software Architecture: The "Cabinet" Model
+
+The firmware is divided into distinct layers based on the "Cabinet" philosophy. This enforces a one-way flow of dependencies, ensuring stability and modularity.
+
+* **UI Architecture: Block-Based Assembly**: The user interface is not monolithic. Screens are simple "assemblers" that do not contain drawing logic. Instead, they select from a library of reusable UI **Blocks** (e.g., `MenuBlock`, `GraphBlock`) and provide them with data. The `UIManager` is responsible for rendering these blocks. This is detailed in `UIManifest.md`.
+* **Input Handling: Event-Driven**: User input from the rotary encoder is handled by a high-priority, dedicated RTOS task (`EncoderTask`) that processes hardware interrupts via a queue. This ensures a "silky smooth," responsive feel that is completely decoupled from the UI rendering loop.
+* **System Modes: Focused Analysis**: For computationally intensive operations like noise analysis, the system will enter a "Focused Analysis Mode". This involves temporarily suspending non-essential background tasks (like Telemetry and Connectivity) to dedicate maximum system resources to the analysis, ensuring data integrity.
+
+---
+
+### 3. Phased Development Plan
+
+* **Phase 1: Architectural Refactoring & Stabilization (COMPLETE)**
+    * **Status:** All critical boot-up issues (I2C, RTOS primitives), memory leaks, and hardware interface bugs have been resolved. The system is stable. The core UI interaction model (encoder, buttons, screen navigation) is functional and smooth.
+
+* **Phase 2: Core Feature Completion (IN PROGRESS)**
+    * **Goal:** Build out the core functionality of the device on the new, stable architecture.
+    * **Current Task:** Implementing the **Noise Analysis Engine**. This includes the backend `NoiseAnalysisManager` and its helpers (`StatisticalAnalyzer`, `FftAnalyzer`, `AutoTuner`) and connecting them to the user interface.
+    * **Next Steps:** Implement the full calibration workflow and the remaining menu screens.
+
+---
+(Other sections like Hardware Truths and Library Dependencies remain unchanged.)

@@ -9,13 +9,23 @@
 class NoiseAnalysisScreen : public Screen {
 public:
     NoiseAnalysisScreen();
+    // <<< MODIFIED: onEnter is no longer needed >>>
     void handleInput(const InputEvent& event) override;
     UIRenderProps getRenderProps() override;
 
 private:
+    enum class ViewState {
+        SELECT_SENSOR,
+        SHOW_ANALYSIS
+    };
+    ViewState _current_view;
+
+    std::vector<std::string> _sensor_menu_items;
+    int _selected_sensor_index;
+
     std::vector<float> _sample_data;
-    
-    // <<< ADDED: State for the new sub-menu on OLED #2 >>>
     std::vector<std::string> _view_options;
     int _selected_view_index;
+    
+    // <<< MODIFIED: _is_dirty flag removed >>>
 };

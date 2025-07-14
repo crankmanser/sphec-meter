@@ -4,13 +4,6 @@
 
 #include <Arduino.h>
 
-/**
- * @class ButtonManager
- * @brief Manages the physical buttons, handling debouncing and press/hold detection.
- *
- * This is a refactor of the robust legacy ButtonManager, responsible for turning
- * raw pin states into clean, logical button events.
- */
 class ButtonManager {
 public:
     enum ButtonType {
@@ -30,7 +23,8 @@ public:
     void update(); // Should be called frequently in a high-priority task.
 
     ButtonState getState(ButtonType btn);
-    bool isPressed(ButtonType btn);
+    // <<< MODIFIED: This is the new edge-detection method >>>
+    bool wasJustPressed(ButtonType btn);
 
 private:
     struct Button {
@@ -38,8 +32,9 @@ private:
         ButtonState state = STATE_RELEASED;
         uint32_t last_press_time = 0;
         bool is_held_registered = false;
+        // <<< ADDED: Flag to track the single press event >>>
+        bool just_pressed = false;
 
-        // <<< FIX: Explicit constructor to initialize the const 'pin' member.
         Button(uint8_t p) : pin(p) {}
     };
 

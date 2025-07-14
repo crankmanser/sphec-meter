@@ -58,6 +58,11 @@ RawSensorData g_raw_sensor_data;
 ProcessedSensorData g_processed_data;
 NetworkConfig networkConfig;
 
+// --- Task Handles ---
+TaskHandle_t g_sensorTaskHandle = NULL;
+TaskHandle_t g_telemetryTaskHandle = NULL;
+TaskHandle_t g_connectivityTaskHandle = NULL;
+
 // --- Driver & Manager Pointers ---
 // HALs
 INA219_Driver* ina219 = nullptr;
@@ -128,7 +133,14 @@ void setup() {
     stateManager = new StateManager();
     buttonManager = new ButtonManager(BTN_TOP_PIN, BTN_MIDDLE_PIN, BTN_BOTTOM_PIN);
     encoderManager = new EncoderManager();
-    noiseAnalysisManager = new NoiseAnalysisManager(adc1, adc2);
+    noiseAnalysisManager = new NoiseAnalysisManager(
+        adc1, 
+        adc2, 
+        ina219, 
+        g_sensorTaskHandle, 
+        g_telemetryTaskHandle, 
+        g_connectivityTaskHandle
+    );
 
     // Continue with the rest of the boot sequence
     if (!init_i2c_devices()) {

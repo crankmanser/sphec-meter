@@ -1,20 +1,19 @@
 // src/presentation/blocks/GraphBlock.cpp
-// NEW FILE
+// MODIFIED FILE
 #include "GraphBlock.h"
-#include <algorithm> // For std::min_element, std::max_element
+#include <algorithm>
 
 void GraphBlock::draw(Adafruit_GFX* display, const GraphBlockProps& props) {
     if (!props.is_enabled || !props.data_points || props.data_points->size() < 2) {
         return;
     }
 
-    const int graph_x = 0, graph_y = 20, graph_w = 128, graph_h = 32;
-
-    // Draw Title
-    display->setTextSize(1);
-    display->setTextColor(1);
-    display->setCursor(graph_x, graph_y - 10);
-    display->print(props.title.c_str());
+    // <<< MODIFIED: Graph area is now dynamic >>>
+    const int graph_x = 0;
+    const int graph_y = props.show_top_bar ? 19 : 0;
+    const int graph_w = 128;
+    // Use full height minus the prompt area at the bottom
+    const int graph_h = 54 - graph_y; 
 
     // Draw Graph Area Outline
     display->drawRect(graph_x, graph_y, graph_w, graph_h, 1);
@@ -28,19 +27,24 @@ void GraphBlock::draw(Adafruit_GFX* display, const GraphBlockProps& props) {
     }
 
     float y_range = max_val - min_val;
-    if (y_range == 0) y_range = 1.0; // Avoid division by zero
+    if (y_range < 1e-6) y_range = 1.0; 
 
     // Plot Data
-    for (size_t i = 0; i < props.data_points->size() - 1; ++i) {
-        float data_curr = (*props.data_points)[i];
-        float data_next = (*props.data_points)[i+1];
+    int last_x = 0;
+    int last_y = 0;
+    for (size_t i = 0; i < props.data_points->size(); ++i) {
+        // <<< FIX: Multiply by 1000 to preserve floating point precision for map() >>>
+        long val_map = (*props.data_points)[i] * 1000;
+        long min_map = min_val * 1000;
+        long max_map = max_val * 1000;
 
-        int x1 = map(i, 0, props.data_points->size() - 1, graph_x, graph_x + graph_w);
-        int y1 = graph_y + graph_h - map(data_curr, min_val, max_val, 0, graph_h);
+        int current_x = map(i, 0, props.data_points->size() - 1, graph_x, graph_x + graph_w - 1);
+        int current_y = graph_y + graph_h - map(val_map, min_map, max_map, 0, graph_h -1);
 
-        int x2 = map(i + 1, 0, props.data_points->size() - 1, graph_x, graph_x + graph_w);
-        int y2 = graph_y + graph_h - map(data_next, min_val, max_val, 0, graph_h);
-        
-        display->drawLine(x1, y1, x2, y2, 1);
+        if (i > 0) {
+            display->drawLine(last_x, last_y, current_x, current_y, 1);
+        }
+        last_x = current_x;
+        last_y = current_y;
     }
 }

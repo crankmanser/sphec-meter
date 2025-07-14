@@ -7,13 +7,15 @@ This document is the **single source of truth** for the SpHEC Meter's UI archite
 
 ---
 
-## 1. The UI Philosophy: Declarative & Component-Based
+
+## 1. The UI Philosophy: Block-Based Assembly
 
 The UI is built on one core principle: **Screens do not draw themselves.**
 
-A screen's only job is to act as a **state machine**. It responds to user input, manages its internal state (e.g., the selected menu item), and, when asked, produces a simple, declarative data structure (`UIRenderProps`) that describes *what* should be on the screen.
+A screen's only job is to act as a **state machine**. It responds to user input and manages its internal state (e.g., the selected menu item). To render itself, it populates a properties struct (`UIRenderProps`) that describes which reusable **UI Blocks** to use (e.g., `MenuBlock`, `GraphBlock`) and what data to display.
 
-The `UIManager` is the only component that performs drawing. It takes the `UIRenderProps` and translates that data into low-level draw commands. This strict separation of concerns is the primary defense against "god files."
+The `UIManager` is the only component that performs drawing. It takes the `UIRenderProps` from the active screen and calls the appropriate `draw()` method for each requested block. This strict separation of concerns is the primary defense against monolithic "god files" and ensures a consistent look and feel.
+
 
 ---
 
@@ -50,16 +52,17 @@ This system handles all data visualization.
 
 To add a new screen to the UI (e.g., a "Settings" menu):
 
-1.  **Create the Screen Class**: Create new files `src/presentation/screens/SettingsScreen.h` and `.cpp`. The class must inherit from the `Screen` base class.
-2.  **Implement State Logic**: In `SettingsScreen.cpp`, implement the logic to manage the screen's state. For a menu, this would be the list of menu items and an integer to track the selected index.
-3.  **Implement `handleInput()`**: Write the logic to change the screen's state based on input events. An `ENCODER_INCREMENT` event should increment the selected index. A `BTN_MIDDLE_PRESS` event should call `_stateManager->changeState(...)` to navigate to the selected sub-menu.
-4.  **Implement `getRenderProps()`**: This is the most important method.
+1.  **Create Directory:** Create a new directory for your screen that follows the menu hierarchy (e.g., `src/presentation/screens/main_menu/settings/`).
+2.  **Create the Screen Class**: Create new `.h` and `.cpp` files for your screen. The class must inherit from the `Screen` base class.
+3.  **Implement State Logic**: In the `.cpp` file, implement the logic to manage the screen's internal state (e.g., a list of menu items and an integer to track the selected index).
+4.  **Implement `handleInput()`**: Write the logic to change the screen's state based on input events from the user.
+5.  **Implement `getRenderProps()`**: This is the most important method.
     * Create a new `UIRenderProps` object.
-    * Populate the `OledProps` for the middle screen using the **block-based system**. For a menu, you would create `MenuLine` objects for the previous, selected, and next items. The `is_selected` flag should be set to `true` for the currently selected item.
-    * Populate the `button_prompts` field with the appropriate text ("Select", "Back", etc.).
+    * **Populate the Block Props**: Instead of drawing, you will populate the properties for the UI Block you want to use. For a menu, you would enable the `menu_props` on the desired OLED and provide it with your list of items and the selected index.
+    * **Populate Button Prompts**: Set the text for the button prompts (`top_button_text`, `middle_button_text`, `bottom_button_text`).
     * Return the completed `props` object.
-5.  **Register the Screen**:
+6.  **Register the Screen**:
     * Add a new state to the `ScreenState` enum in `src/app/common/App_types.h`.
-    * In `main.cpp`, create an instance of your new `SettingsScreen` and register it with the `StateManager` using `stateManager->addScreen(...)`.
+    * In `src/boot/init_managers.cpp`, create an instance of your new screen and register it with the `StateManager` using `stateManager->addScreen(...)`.
 
 By following these steps, you contribute a new, modular component that integrates seamlessly into the existing architecture without violating its core principles.

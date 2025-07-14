@@ -11,14 +11,13 @@
 #include "managers/io/ButtonManager.h"
 #include "managers/io/EncoderManager.h"
 
-// External declarations for global manager pointers
+// External declarations
 extern UIManager* uiManager;
 extern StateManager* stateManager;
 extern RtcManager* rtcManager;
 extern ButtonManager* buttonManager;
 extern EncoderManager* encoderManager;
 
-// The main loop for the UI will run at approximately 20 FPS
 const TickType_t UI_DELAY_MS = 50; 
 
 void uiTask(void* pvParameters) {
@@ -40,21 +39,20 @@ void uiTask(void* pvParameters) {
         // --- STAGE 2: PROCESS INPUT ---
         Screen* active_screen = stateManager->getActiveScreen();
         if (active_screen) {
-            // <<< FIX: Process only ONE step per frame for a smooth scroll >>>
             if (encoder_change > 0) {
                 active_screen->handleInput({InputEventType::ENCODER_INCREMENT, 1});
             } else if (encoder_change < 0) {
-                // Pass -1 for decrement, even though event.value is not used by menu screen yet
                 active_screen->handleInput({InputEventType::ENCODER_DECREMENT, -1});
             }
 
-            if (buttonManager->isPressed(ButtonManager::BTN_TOP)) {
+            // <<< MODIFIED: Use wasJustPressed instead of isPressed >>>
+            if (buttonManager->wasJustPressed(ButtonManager::BTN_TOP)) {
                 active_screen->handleInput({InputEventType::BTN_TOP_PRESS, 1});
             }
-            if (buttonManager->isPressed(ButtonManager::BTN_MIDDLE)) {
+            if (buttonManager->wasJustPressed(ButtonManager::BTN_MIDDLE)) {
                 active_screen->handleInput({InputEventType::BTN_MIDDLE_PRESS, 1});
             }
-            if (buttonManager->isPressed(ButtonManager::BTN_BOTTOM)) {
+            if (buttonManager->wasJustPressed(ButtonManager::BTN_BOTTOM)) {
                 active_screen->handleInput({InputEventType::BTN_BOTTOM_PRESS, 1});
             }
         }

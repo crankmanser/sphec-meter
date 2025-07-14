@@ -1,4 +1,5 @@
 // src/managers/io/ButtonManager.cpp
+// MODIFIED FILE
 #include "managers/io/ButtonManager.h"
 
 ButtonManager::ButtonManager(uint8_t pin_top, uint8_t pin_middle, uint8_t pin_bottom) :
@@ -28,6 +29,8 @@ void ButtonManager::updateButton(Button& btn) {
             if (is_currently_pressed) {
                 btn.state = STATE_PRESSED;
                 btn.last_press_time = now;
+                // <<< ADDED: Set the just_pressed flag on the transition >>>
+                btn.just_pressed = true; 
             }
             break;
         
@@ -58,6 +61,19 @@ ButtonManager::ButtonState ButtonManager::getState(ButtonType btn) {
     return STATE_RELEASED;
 }
 
-bool ButtonManager::isPressed(ButtonType btn) {
-    return getState(btn) == STATE_PRESSED;
+// <<< ADDED: Implementation for the new edge-detection method >>>
+bool ButtonManager::wasJustPressed(ButtonType btn) {
+    Button* p_btn = nullptr;
+    switch (btn) {
+        case BTN_TOP:    p_btn = &_btn_top;    break;
+        case BTN_MIDDLE: p_btn = &_btn_middle; break;
+        case BTN_BOTTOM: p_btn = &_btn_bottom; break;
+    }
+
+    if (p_btn && p_btn->just_pressed) {
+        // Read the flag, clear it, and return true.
+        p_btn->just_pressed = false;
+        return true;
+    }
+    return false;
 }

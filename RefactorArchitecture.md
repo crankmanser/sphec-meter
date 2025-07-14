@@ -1,22 +1,32 @@
-Architecture: Smart-EC-pH-Meter v1.4.7
-This document outlines the "Cabinet" software architecture for the v1.4.7 refactor. It is the single source of truth for the project's design, defining the strict layers, components, and design patterns that must be followed to ensure a stable, maintainable, and robust firmware.
+# Architecture: Smart-EC-pH-Meter v1.5.0
 
-1. Guiding Principles
-⦁	Isolation (The "Cabinet" Philosophy): Each component (cabinet) is a black box. It hides its internal complexity and exposes a clean, simple public interface. Cabinets must not expose their internal state or dependencies.
-⦁	Single Responsibility: Each cabinet has one, and only one, job. For example, the PowerManager's only job is to manage the battery state; it does not handle Wi-Fi or sensor readings.
-⦁	Strict Layering: Components can only interact with components in the layers below them. An Application component can call a Manager, but a Manager cannot call an Application component. This enforces a one-way flow of dependencies.
-⦁	Code Brevity (The "Anti-God File" Rule): To ensure maintainability and readability, any source file approaching or exceeding 200 lines of code must be critically reviewed for refactoring. Complex logic within a file should be broken down into smaller, logical functions or extracted into new, dedicated helper classes and consolidated into appropriate sub-directories.
-⦁	Standardization Over Flexibility: To ensure a consistent and predictable user experience, the UI is built from a fixed set of standardized layouts and components.
+This document outlines the "Cabinet" software architecture for the v1.5.0 refactor. It is the single source of truth for the project's design.
 
-2. Layered Architecture Overview
+## 1. Guiding Principles
+* **Isolation (The "Cabinet" Philosophy)**: Each component is a black box.
+* **Single Responsibility**: Each cabinet has one job.
+* **Strict Layering**: Components only interact with layers below them.
+* **Code Brevity (The "Anti-God File" Rule)**: Files should be small and focused.
+
+---
+
+## 2. Layered Architecture Overview
 The firmware is divided into four distinct layers. Data flows upwards from the hardware to the UI.
-⦁	Layer 1 - HAL (Hardware Abstraction Layer): Direct, stateless drivers for physical hardware components.
-⦁	Layer 2 - Manager Layer: The "brains" of the operation. Contains all the core logic, state management, and services, each encapsulated in its own cabinet.
-⦁	Layer 3 - Application Layer: Orchestrates the managers to create a functioning application. Contains all high-level logic, RTOS tasks, and the system state machine.
-⦁	Layer 4 - Presentation Layer (UI): Responsible for displaying data and presenting the UI to the user. Contains no business logic.
+* **Layer 1 - HAL (Hardware Abstraction Layer)**
+* **Layer 2 - Manager Layer**
+* **Layer 3 - Application Layer**
+* **Layer 4 - Presentation Layer (UI)**
 
-3. Proposed File Structure
-This file structure physically enforces the layered architecture and the new code brevity principle.
+---
+
+## 3. UI Architecture: Block-Based Assembly
+
+The UI is built on a **declarative, block-based model**. Screens are simple state machines that contain no drawing logic. A screen's job is to select the appropriate UI "Block" (e.g., `MenuBlock`, `GraphBlock`) and provide it with data. The `UIManager` is the rendering engine that calls the correct block's `draw()` method. This enforces a high degree of separation and reusability.
+
+The **button prompt system** is standardized. Labels are drawn on the OLED adjacent to the corresponding physical button's counterpart on the opposite side of the device:
+* **Top Button** -> Label on **OLED #3** (Bottom)
+* **Middle Button** -> Label on **OLED #2** (Middle)
+* **Bottom Button** -> Label on **OLED #1** (Top)
 
 sphec_meter_v1.4.7/  
 ├── src/  
@@ -63,9 +73,18 @@ sphec_meter_v1.4.7/
 ├── ... (Other project files)
 
 
-## 4. UI Architecture: The Four-Core Model
+## 4. RTOS Design & Concurrency
 
-To ensure a modular, responsive, and maintainable user interface, the UI is not a monolithic system. It is built from a set of four distinct, cooperative "cores," each with a single responsibility. This design is detailed further in the **UIManifest.md**.
+The firmware is a true multi-threaded application.
+
+* **Core Affinity**: To guarantee UI responsiveness, tasks are pinned to specific CPU cores.
+    * **Core 1 (UI & Input Core)**: Hosts the `UiTask` and the high-priority `EncoderTask`. This creates a low-latency loop for user interaction.
+    * **Core 0 (Processing Core)**: Hosts all other background tasks, including `SensorTask`, `TelemetryTask`, `ConnectivityTask`, and `StorageTask`.
+
+* **Event-Driven Input**: The rotary encoder is serviced by a hardware ISR that places raw state changes onto a FreeRTOS queue. The dedicated `EncoderTask` processes these events and applies a "Speed Engine" to translate them into smooth UI steps. This decouples input capture from the UI rendering loop, eliminating jitter.
+
+* **Focused Analysis Mode**: For computationally expensive diagnostics, the system can enter a mode where non-essential background tasks are temporarily suspended via `vTaskSuspend()`. This dedicates maximum CPU resources to the analysis and ensures the highest possible signal integrity during sensitive measurements.
+
 
 ### 4.1. Core #1: The GUI Engine (The "Canvas")
 * **Purpose**: This is the foundational rendering and input pipeline.
