@@ -543,3 +543,51 @@ The immediate priority is to build out the backend logic for the **Noise Analysi
 1.  **Implement Focused Analysis Mode**: Implement the logic in `NoiseAnalysisManager` to suspend and resume background tasks (`SensorTask`, `TelemetryTask`, etc.) when an analysis is run.
 2.  **Implement Real Data Capture**: Replace the placeholder sine-wave data in the `NoiseAnalysisScreen` with real data captured by the `NoiseAnalysisManager`.
 3.  **Implement FFT and Auto-Tuner**: Build out the remaining helper classes (`FftAnalyzer`, `AutoTuner`) to complete the feature set of the Noise Analysis Engine.
+
+
+
+
+
+
+
+
+
+
+
+
+# **Project Status Report: SpHEC Meter v1.6.2**
+
+**Date:** July 15, 2025
+
+**Author:** Gemini AI Assistant
+
+**Status:** **Stable.** pBios refactor complete. Ready for next feature development phase.
+
+## **1. Work Completed (Phase 2c: pBios Refactor)**
+
+This architectural pivot is now **complete**. The legacy concept of a pBios has been successfully modernized and integrated into the core firmware, creating a cleaner, more robust, and more powerful diagnostics environment.
+
+### **Key Accomplishments:**
+
+* **Architectural Pivot to Dual-Boot System:** The firmware no longer has a single boot path. It now intelligently detects a specific button combination at power-on to enter one of two modes: `NORMAL` or `DIAGNOSTICS`.
+* **Conditional Task & Manager Initialization:** The boot sequence (`init_tasks`, `init_managers`) is now mode-aware.
+    * In `DIAGNOSTICS` mode, non-essential background tasks (`SensorTask`, `TelemetryTask`) and their associated managers are **never created**. This provides a truly "quiet" system for sensitive measurements, fulfilling the core requirement of the pBios concept.
+    * The `UiTask` and `ConnectivityTask` remain active in `DIAGNOSTICS` mode, a significant improvement over the legacy pBios that allows for a responsive UI and remote control via the companion app.
+* **Boot-Loop and Watchdog Issues Resolved:** All critical boot-time bugs, including `xQueueReceive` asserts and task watchdog timeouts, have been fixed by correcting the initialization order and ensuring long-running analysis tasks do not block the CPU.
+* **Non-Blocking UI Implemented:** The Noise Analysis feature now runs in a dedicated, temporary RTOS task. This ensures the main `UiTask` is never blocked, keeping the user interface smooth and responsive at all times.
+* **Visual Feedback Implemented:** A reusable `ProgressBarBlock` has been created and integrated. It provides immediate visual feedback to the user during long operations, using a "dumb but intelligent" timer to create the illusion of a smart, accurate progress bar.
+
+## **2. Current Project Status**
+
+The project is stable, and the pBios refactor has been successfully verified.
+
+* **Architecturally Sound:** The new dual-boot architecture provides a clean separation between normal operation and diagnostics.
+* **Ready for Next Steps:** With the diagnostics foundation now robust and user-friendly, the project is perfectly positioned to proceed with further feature development.
+
+## **3. Next Steps**
+
+The immediate priority is to leverage our new, stable diagnostics mode to complete the remaining features.
+
+1.  **UI Cleanup:** Refactor the `MainMenuScreen` to remove the now-redundant "Diagnostics" option.
+2.  **Manager Cleanup:** Remove the now-unnecessary `enterFocusedMode` and `exitFocusedMode` task suspension logic from the `NoiseAnalysisManager`.
+3.  **Implement Stage 1 Filter:** Build a dedicated high-frequency filter (e.g., a notch filter) and integrate it into the `SensorProcessor`'s signal chain, using the results from the FFT analysis to configure it.

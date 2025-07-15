@@ -9,6 +9,7 @@
 #include "boot/post.h"
 #include "boot/init_tasks.h"
 #include "config/DebugConfig.h"
+#include "app/common/SystemState.h"
 #if (ENABLE_SENSOR_SIMULATION)
 #include "debug/simulation.h"
 #endif
@@ -95,11 +96,26 @@ TelemetrySerializer* telemetrySerializer = nullptr;
 WebService* webService = nullptr;
 NoiseAnalysisManager* noiseAnalysisManager = nullptr;
 
+// Define the global boot mode variable 
+BootMode g_boot_mode = BootMode::NORMAL;
+
 void setup() {
     LOG_INIT();
-    LOG_MAIN("--- SpHEC Meter v1.5.0 Booting ---\n");
+    LOG_MAIN("--- SpHEC Meter v1.6.2 Booting ---\n");
 
     init_globals();
+
+    // Boot Mode Detection ---
+    pinMode(BTN_MIDDLE_PIN, INPUT_PULLUP);
+    pinMode(BTN_BOTTOM_PIN, INPUT_PULLUP);
+    delay(50); // Small delay for pullups to stabilize
+    if(digitalRead(BTN_MIDDLE_PIN) == LOW && digitalRead(BTN_BOTTOM_PIN) == LOW) {
+        g_boot_mode = BootMode::DIAGNOSTICS;
+        LOG_MAIN("DIAGNOSTICS MODE DETECTED\n");
+    } else {
+        g_boot_mode = BootMode::NORMAL;
+        LOG_MAIN("Normal boot mode detected.\n");
+    }
 
     // Instantiate ALL HAL objects first
     ina219 = new INA219_Driver(INA219_I2C_ADDRESS);
@@ -133,26 +149,32 @@ void setup() {
     stateManager = new StateManager();
     buttonManager = new ButtonManager(BTN_TOP_PIN, BTN_MIDDLE_PIN, BTN_BOTTOM_PIN);
     encoderManager = new EncoderManager();
-    noiseAnalysisManager = new NoiseAnalysisManager(
-        adc1, 
-        adc2, 
-        ina219, 
-        g_sensorTaskHandle, 
-        g_telemetryTaskHandle, 
-        g_connectivityTaskHandle
-    );
 
-    // Continue with the rest of the boot sequence
+    buttonManager->begin();
+    encoderManager->begin();
+
+    // Continue with the boot sequence
     if (!init_i2c_devices()) {
         LOG_MAIN("CRITICAL: I2C Device Initialization Failed. Halting.\n");
         while(true) { delay(1000); }
     }
     
     init_hals();
-    init_managers();
-
+    
     if (run_post()) {
-        init_tasks();
+        init_tasks(); // This function will now be mode-aware
+
+        // Instantiate the NoiseAnalysisManager AFTER tasks are created
+        noiseAnalysisManager = new NoiseAnalysisManager(
+            adc1, 
+            adc2, 
+            ina219, 
+            g_sensorTaskHandle, 
+            g_telemetryTaskHandle, 
+            g_connectivityTaskHandle
+        );
+
+        init_managers(); // This function will also be mode-aware
         LOG_MAIN("Boot sequence successful. Application starting.\n");
     } else {
         LOG_MAIN("CRITICAL: Power-On Self-Test Failed. Halting.\n");
