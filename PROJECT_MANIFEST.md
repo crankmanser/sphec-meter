@@ -25,31 +25,42 @@ This section lists the non-negotiable hardware realities that all software must 
     * **Platform:** Espressif 32
     * **Board:** esp32dev
     * **Framework:** arduino
+
 * **Bus Configuration:**
     * **I2C Pins:** `SDA` is on pin `21`, `SCL` is on pin `22`.
     * **SPI Pins (VSPI):** `MOSI` is on pin `23`, `MISO` is on pin `19`, `SCK` is on pin `18`.
     * **1-Wire Bus:** The 1-Wire bus is on pin `15`.
     * **DHT Sensor:** The DHT11 sensor is on pin `13`.
+
 * **I2C Device Topology:**
     * The **INA219 Power Monitor** sits directly on the primary I2C bus at address `0x40`.
     * All other I2C devices (**RTC, OLEDs**) are behind a **TCA9548A Multiplexer** at address `0x70`.
     * The **RTC** is on channel `0` of the multiplexer.
     * **Software Mandate:** All I2C communication with the RTC or OLEDs *must* first select the correct channel via the `TCA9548_Driver`.
+
 * **SPI Bus & Devices:**
     * **Fundamental Instability:** The SPI bus is considered untrustworthy.
     * **Software Mandate:** All SPI transactions must be protected by a mutex. Drivers must be stateless and must re-initialize bus settings for every transaction, explicitly managing all Chip Select (CS) lines.
     * **SD Card:** CS is on pin `5`.
     * **ADC1 (pH & 3.3V):** CS is on pin `4`.
     * **ADC2 (EC & 5V):** CS is on pin `2`.
+
 * **ADC & Sensor Configuration:**
     * **ADC1:** Measures the **pH Probe** (Differential A0-A1) and the **3.3V Bus** (Single-Ended A2).
     * **ADC2:** Measures the **EC Probe** (Differential A0-A1) and the **5V Bus** (Single-Ended A2).
     * **Voltage Divider:** Both pH and EC sensor outputs are passed through a 10k+10k voltage divider before reaching the ADC.
     * **Software Mandate:** The `SensorProcessor` *must* multiply the raw ADC voltage reading by a factor of 2 to compensate.
+
 * **LEDs & Logic:**
     * There is one top **bicolor (Red/Green) LED** and one bottom **single Green LED**.
     * The LEDs are **common anode**. `digitalWrite(pin, LOW)` turns the LED **ON**.
     * **Software Mandate:** All LED control logic must be encapsulated in the `LEDManager`. The "Amber" color is a software construct achieved by rapidly alternating the Red and Green LEDs.
+
+* **Operational Modes:** The firmware operates in one of two modes,       
+    determined at boot:
+    * **Normal Mode:** Default mode. All RTOS tasks (`SensorTask`, `TelemetryTask`, etc.) are active. The UI boots to the `MainMenuScreen`.
+    * **Diagnostics Mode (pBios):** Activated by holding the **Middle and Bottom buttons** during power-on. In this mode, only essential tasks (`UiTask`, `ConnectivityTask`, etc.) are created. Non-essential tasks like `SensorTask` and `TelemetryTask` are **not created**, ensuring a quiet system for sensitive measurements. The UI boots directly to the `DiagnosticsMenuScreen`.
+
 
 ---
 
@@ -62,6 +73,13 @@ The firmware is divided into four distinct layers based on the "Cabinet" philoso
     * **Single Responsibility:** Each cabinet has one, and only one, job.
     * **Strict Layering:** Components can only interact with components in the layers directly below them.
     * **Data-Driven UI:** The Presentation Layer is strictly for displaying data and contains no business logic.
+
+* **Modular Boot Sequence:** The `setup()` function in `main.cpp` delegates initialization to a sequence of functions in the `src/boot/` directory. This sequence is now **mode-aware**.
+
+* **RTOS Design - Conditional Task Creation:** The `init_tasks` function now checks the global `g_boot_mode` variable. The full suite of tasks is only created in `NORMAL` mode. In `DIAGNOSTICS` mode, a minimal set of tasks is created to preserve system resources and ensure measurement integrity.
+
+* **UI Architecture: Block-Based Assembly**: The user interface is built on a declarative model where screens assemble reusable UI Blocks (`MenuBlock`, `GraphBlock`, `ProgressBarBlock`).
+
 
 ---
 
@@ -353,4 +371,52 @@ The firmware is divided into distinct layers based on the "Cabinet" philosophy. 
     * **Next Steps:** Implement the full calibration workflow and the remaining menu screens.
 
 ---
-(Other sections like Hardware Truths and Library Dependencies remain unchanged.)
+
+
+
+
+
+
+
+
+
+
+# **Project Manifest: SpHEC Meter**
+
+**Version:** 1.6.2
+**Last Updated:** July 15, 2025
+
+This document is the **single source of truth** for the SpHEC Meter project. It supersedes all previous manifests and design documents. All development must adhere strictly to the rules and specifications outlined herein.
+
+### 1. The Golden Rules (Non-Negotiable)
+
+* **Firmware is the Source of Truth:** All core logic resides on the ESP32 firmware. The companion app is only a UI mirror.
+* **Verify Before Coding:** Read relevant source files to understand established APIs and architecture.
+* **Prove Your Work:** Demonstrate understanding by quoting exact class definitions or function signatures.
+* **No Assumptions:** All reasoning must be based exclusively on the provided project source files.
+* **Stop if Blocked:** If a file is missing or a tool fails, stop and report the failure.
+
+---
+
+### 2. Hardware & Operational Truths
+
+This section lists the non-negotiable hardware and operational realities that all software must respect.
+
+* **(Unchanged Hardware Sections: I2C, SPI, ADC, etc.)**
+* **Operational Modes:** The firmware operates in one of two modes, determined at boot:
+    * **Normal Mode:** Default mode. All RTOS tasks (`SensorTask`, `TelemetryTask`, etc.) are active. The UI boots to the `MainMenuScreen`.
+    * **Diagnostics Mode (pBios):** Activated by holding the **Middle and Bottom buttons** during power-on. In this mode, only essential tasks (`UiTask`, `ConnectivityTask`, etc.) are created. Non-essential tasks like `SensorTask` and `TelemetryTask` are **not created**, ensuring a quiet system for sensitive measurements. The UI boots directly to the `DiagnosticsMenuScreen`.
+
+---
+
+### 3. Software Architecture: The "Cabinet" Model & Modular Boot
+
+The firmware is divided into distinct layers based on the "Cabinet" philosophy.
+
+* **Modular Boot Sequence:** The `setup()` function in `main.cpp` delegates initialization to a sequence of functions in the `src/boot/` directory. This sequence is now **mode-aware**.
+* **RTOS Design - Conditional Task Creation:** The `init_tasks` function now checks the global `g_boot_mode` variable. The full suite of tasks is only created in `NORMAL` mode. In `DIAGNOSTICS` mode, a minimal set of tasks is created to preserve system resources and ensure measurement integrity.
+* **UI Architecture: Block-Based Assembly**: The user interface is built on a declarative model where screens assemble reusable UI Blocks (`MenuBlock`, `GraphBlock`, `ProgressBarBlock`).
+
+---
+
+(Other sections like Feature Requirements, Library Dependencies, and Layered Architecture Breakdown remain conceptually the same, though their implementation now respects the new boot mode logic).

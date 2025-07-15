@@ -19,12 +19,13 @@
 #include "app/TelemetrySerializer.h"
 #include "app/WebService.h"
 #include "config/DebugConfig.h"
+#include "app/common/SystemState.h" // <<< ADDED
 #include "DebugMacros.h"
 // Screens
 #include "presentation/screens/main_menu/MainMenuScreen.h"
 #include "presentation/screens/main_menu/diagnostics/DiagnosticsMenuScreen.h"
 #include "presentation/screens/main_menu/diagnostics/N_Analysis/NoiseAnalysisScreen.h"
-#include "managers/diagnostics/NoiseAnalysisManager.h" // <<< ADDED
+#include "managers/diagnostics/NoiseAnalysisManager.h"
 
 // External declarations for manager pointers
 extern StorageManager* storageManager;
@@ -45,7 +46,7 @@ extern StateManager* stateManager;
 extern TelemetrySerializer* telemetrySerializer;
 extern WebService* webService;
 extern NetworkConfig networkConfig;
-extern NoiseAnalysisManager* noiseAnalysisManager; // <<< ADDED
+extern NoiseAnalysisManager* noiseAnalysisManager;
 
 void init_managers() {
     storageManager->begin();
@@ -56,33 +57,43 @@ void init_managers() {
         storageManager->saveState(ConfigType::NETWORK_CONFIG, (const uint8_t*)&networkConfig, sizeof(networkConfig));
     }
 
-    powerManager->begin();
-    liquidTempManager->begin();
-    ambientTempManager->begin();
-    ambientHumidityManager->begin();
-    ldrManager->begin();
-    sensorProcessor->begin();
-    telemetrySerializer->begin();
-
+    // --- Initialize managers that run in ALL modes ---
     #if (ENABLE_BLE_STACK)
     if (bleManager) bleManager->begin(networkConfig.ble);
     #endif
-
     wifiManager->begin();
     mqttManager->begin(networkConfig.mqtt);
     webService->begin();
     uiManager->begin();
-    
-    stateManager->addScreen(ScreenState::SCREEN_MAIN_MENU, new MainMenuScreen());
-    stateManager->addScreen(ScreenState::SCREEN_DIAGNOSTICS_MENU, new DiagnosticsMenuScreen());
-    // <<< MODIFIED: Pass the manager pointer to the screen's constructor >>>
-    stateManager->addScreen(ScreenState::SCREEN_NOISE_ANALYSIS, new NoiseAnalysisScreen(noiseAnalysisManager));
-    
-    stateManager->changeState(ScreenState::SCREEN_MAIN_MENU);
-    stateManager->begin();
-    
     buttonManager->begin();
     encoderManager->begin();
+
+    // --- Initialize managers that ONLY run in NORMAL mode ---
+    if (g_boot_mode == BootMode::NORMAL) {
+        powerManager->begin();
+        liquidTempManager->begin();
+        ambientTempManager->begin();
+        ambientHumidityManager->begin();
+        ldrManager->begin();
+        sensorProcessor->begin();
+        telemetrySerializer->begin();
+    }
+    
+    // --- State & Screen Initialization ---
+    stateManager->addScreen(ScreenState::SCREEN_MAIN_MENU, new MainMenuScreen());
+    stateManager->addScreen(ScreenState::SCREEN_DIAGNOSTICS_MENU, new DiagnosticsMenuScreen());
+    stateManager->addScreen(ScreenState::SCREEN_NOISE_ANALYSIS, new NoiseAnalysisScreen(noiseAnalysisManager));
+    
+    // <<< MODIFIED: Set initial screen based on boot mode >>>
+    if (g_boot_mode == BootMode::DIAGNOSTICS) {
+        LOG_MAIN("Setting initial screen to Diagnostics Menu.\n");
+        stateManager->changeState(ScreenState::SCREEN_DIAGNOSTICS_MENU);
+    } else {
+        LOG_MAIN("Setting initial screen to Main Menu.\n");
+        stateManager->changeState(ScreenState::SCREEN_MAIN_MENU);
+    }
+    
+    stateManager->begin();
 
     LOG_MAIN("All managers initialized.\n");
 }
