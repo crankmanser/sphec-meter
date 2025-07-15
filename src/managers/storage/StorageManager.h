@@ -13,9 +13,11 @@
 
 class StorageDiagnostics;
 
+// <<< MODIFIED: Added RECOVER operation type >>>
 enum class FileOperationType {
     WRITE,
-    DIAGNOSTICS
+    DIAGNOSTICS,
+    RECOVER
 };
 
 struct FileOperationRequest {
@@ -40,9 +42,9 @@ public:
     bool restoreBackup(const std::vector<uint8_t>& backupData);
 
     // --- System Integrity ---
-    void recoverFromCrash();
+    bool requestRecovery(); // <<< MODIFIED: This is now the public method
     bool writeShutdownFlag();
-    bool checkAndClearShutdownFlag(); // <<< NEW METHOD
+    bool checkAndClearShutdownFlag();
 
     // --- Diagnostics ---
     bool requestDiagnostics();
@@ -63,6 +65,7 @@ private:
     StorageDiagnostics* _diagnostics;
     volatile StorageDiagnosticResult _last_diag_result;
 
+    void recoverFromCrash(); // <<< MODIFIED: Now a private helper
     void runAndStoreDiagnostics();
     static void storageTask(void* pvParameters);
 };

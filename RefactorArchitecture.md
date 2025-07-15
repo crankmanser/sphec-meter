@@ -107,4 +107,27 @@ The firmware is a true multi-threaded application.
 * **Behavior**: A screen wishing to display a graph will manage the `GraphDataBuffer` and describe the graph's appearance via a `GraphProps` data structure, which the `UIManager` then renders.
 
 
+## 5. Boot & Execution Flow
+
+The system's execution flow is now controlled by a minimal bootloader in `main.cpp`.
+
+5.1.  **`main.cpp` (Bootloader)**:
+    * Initializes core peripherals (`init_globals`, `init_i2c_devices`).
+    * Instantiates all possible manager objects.
+    * Initializes the `StorageManager`.
+    * Checks for a clean shutdown flag. If the flag is not present, it runs the `StorageManager`'s asynchronous recovery routine.
+    * Detects the user's requested boot mode (`NORMAL` or `DIAGNOSTICS`) by reading the hardware buttons.
+    * Calls either `run_normal_mode()` or `run_pbios_mode()`, handing off control permanently.
+
+5.2.  **`run_normal_mode()` (Application Mode Handler)**:
+    * Initializes all required hardware abstraction layers (`init_hals`).
+    * Initializes the `ButtonManager` and `EncoderManager`.
+    * Creates the full set of FreeRTOS tasks (`init_tasks`).
+    * Initializes the full set of application managers (`init_managers`).
+    * Yields control entirely to the FreeRTOS scheduler, which now runs the main application.
+
+5.3.  **`run_pbios_mode()` (Diagnostics Mode Handler)**:
+    * Initializes only the minimal set of managers required for the diagnostics UI (`ButtonManager`, `UIManager`, etc.).
+    * **Does not** create the main application's RTOS tasks.
+    * Enters a simple, blocking `while(true)` loop that polls for input and renders the pBios UI, providing a stable and quiet environment for running tests.
 

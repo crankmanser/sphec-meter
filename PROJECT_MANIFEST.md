@@ -419,4 +419,11 @@ The firmware is divided into distinct layers based on the "Cabinet" philosophy.
 
 ---
 
-(Other sections like Feature Requirements, Library Dependencies, and Layered Architecture Breakdown remain conceptually the same, though their implementation now respects the new boot mode logic).
+
+
+
+
+
+
+
+
