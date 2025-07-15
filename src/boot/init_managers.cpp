@@ -19,7 +19,7 @@
 #include "app/TelemetrySerializer.h"
 #include "app/WebService.h"
 #include "config/DebugConfig.h"
-#include "app/common/SystemState.h" // <<< ADDED
+#include "app/common/SystemState.h"
 #include "DebugMacros.h"
 // Screens
 #include "presentation/screens/main_menu/MainMenuScreen.h"
@@ -46,29 +46,23 @@ extern StateManager* stateManager;
 extern TelemetrySerializer* telemetrySerializer;
 extern WebService* webService;
 extern NetworkConfig networkConfig;
-extern NoiseAnalysisManager* noiseAnalysisManager;
 
-void init_managers() {
-    storageManager->begin();
-    storageManager->recoverFromCrash();
-
+void init_managers(NoiseAnalysisManager* noiseAnalysisManager) {
+    // --- STAGE 1: UNIVERSAL MANAGERS ---
+    // The StorageManager's recovery is now handled in main.cpp before this.
+    // We just need to load the network configuration.
     if (!storageManager->loadState(ConfigType::NETWORK_CONFIG, (uint8_t*)&networkConfig, sizeof(networkConfig))) {
-        LOG_MAIN("No network config file found. Creating default.\n");
         storageManager->saveState(ConfigType::NETWORK_CONFIG, (const uint8_t*)&networkConfig, sizeof(networkConfig));
     }
-
-    // --- Initialize managers that run in ALL modes ---
     #if (ENABLE_BLE_STACK)
     if (bleManager) bleManager->begin(networkConfig.ble);
     #endif
     wifiManager->begin();
     mqttManager->begin(networkConfig.mqtt);
     webService->begin();
-    uiManager->begin();
-    buttonManager->begin();
-    encoderManager->begin();
+    uiManager->begin(); 
 
-    // --- Initialize managers that ONLY run in NORMAL mode ---
+    // --- STAGE 2: NORMAL MODE MANAGERS ---
     if (g_boot_mode == BootMode::NORMAL) {
         powerManager->begin();
         liquidTempManager->begin();
@@ -79,21 +73,21 @@ void init_managers() {
         telemetrySerializer->begin();
     }
     
-    // --- State & Screen Initialization ---
+    // --- STAGE 3: STATE MANAGER & SCREEN SETUP ---
     stateManager->addScreen(ScreenState::SCREEN_MAIN_MENU, new MainMenuScreen());
-    stateManager->addScreen(ScreenState::SCREEN_DIAGNOSTICS_MENU, new DiagnosticsMenuScreen());
-    stateManager->addScreen(ScreenState::SCREEN_NOISE_ANALYSIS, new NoiseAnalysisScreen(noiseAnalysisManager));
     
-    // <<< MODIFIED: Set initial screen based on boot mode >>>
-    if (g_boot_mode == BootMode::DIAGNOSTICS) {
-        LOG_MAIN("Setting initial screen to Diagnostics Menu.\n");
-        stateManager->changeState(ScreenState::SCREEN_DIAGNOSTICS_MENU);
-    } else {
-        LOG_MAIN("Setting initial screen to Main Menu.\n");
-        stateManager->changeState(ScreenState::SCREEN_MAIN_MENU);
+    // Conditionally add the Diagnostics screens only if the manager exists (i.e., in pBios mode)
+    if (noiseAnalysisManager != nullptr) {
+        stateManager->addScreen(ScreenState::SCREEN_DIAGNOSTICS_MENU, new DiagnosticsMenuScreen());
+        stateManager->addScreen(ScreenState::SCREEN_NOISE_ANALYSIS, new NoiseAnalysisScreen(noiseAnalysisManager));
     }
     
+    if (g_boot_mode == BootMode::DIAGNOSTICS) {
+        stateManager->changeState(ScreenState::SCREEN_DIAGNOSTICS_MENU);
+    } else {
+        stateManager->changeState(ScreenState::SCREEN_MAIN_MENU);
+    }
     stateManager->begin();
 
-    LOG_MAIN("All managers initialized.\n");
+    LOG_MANAGER("Manager initialization complete.\n");
 }

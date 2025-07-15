@@ -9,6 +9,9 @@
 #include "helpers/FileNamer.h"
 #include "helpers/AtomicSave.h"
 
+// ... (constructor, destructor, begin, shutdown methods are unchanged) ...
+const char* SHUTDOWN_FLAG_FILENAME = "/shutdown.ok";
+
 QueueHandle_t StorageManager::_fileQueue = nullptr;
 TaskHandle_t StorageManager::_storageTaskHandle = nullptr;
 
@@ -37,7 +40,6 @@ bool StorageManager::begin() {
 
     xSemaphoreTake(_spi_bus_mutex, portMAX_DELAY);
 
-    // SdFat uses its own SPI settings, so we pass a config object.
     SdSpiConfig spiConfig(_cs_pin, DEDICATED_SPI, 25000000UL, _spi);
     if (!_sd.begin(spiConfig)) {
         LOG_MAIN("[SM_ERROR] SD Card initialization failed.\n");
@@ -58,27 +60,88 @@ bool StorageManager::begin() {
         return false;
     }
 
-    // <<< MODIFIED: Pinned the high-priority storage task to Core 0 >>>
     xTaskCreatePinnedToCore(
         storageTask,
         "StorageTask",
         4096,
         this,
-        5, // High priority for I/O
+        5, 
         &_storageTaskHandle,
-        0  // Pin to Core 0
+        0
     );
 
     return true;
 }
 
-// ... rest of the file is unchanged ...
+bool StorageManager::checkAndClearShutdownFlag() {
+    if (!_is_ready) return false;
+
+    xSemaphoreTake(_spi_bus_mutex, portMAX_DELAY);
+    bool flag_existed = _sd.exists(SHUTDOWN_FLAG_FILENAME);
+
+    if (flag_existed) {
+        _sd.remove(SHUTDOWN_FLAG_FILENAME);
+    }
+    xSemaphoreGive(_spi_bus_mutex);
+
+    if (flag_existed) {
+        LOG_MANAGER("Clean shutdown flag found. Previous session ended correctly.\n");
+    } else {
+        LOG_MAIN("[SM_WARNING] Shutdown flag not found. Previous session may have crashed.\n");
+    }
+
+    return flag_existed;
+}
+
+bool StorageManager::writeShutdownFlag() {
+    if (!_is_ready) {
+        LOG_MAIN("[SM_ERROR] Cannot write shutdown flag, SD not ready.\n");
+        return false;
+    }
+
+    xSemaphoreTake(_spi_bus_mutex, portMAX_DELAY);
+
+    FsFile file = _sd.open(SHUTDOWN_FLAG_FILENAME, O_WRITE | O_CREAT);
+    bool success = false;
+    if (file) {
+        if (file.sync()) {
+            LOG_MANAGER("Shutdown flag synced to SD card.\n");
+            success = true;
+        } else {
+            LOG_MAIN("[SM_ERROR] Failed to sync shutdown flag file.\n");
+            success = false;
+        }
+        file.close();
+    } else {
+        LOG_MAIN("[SM_ERROR] Failed to create shutdown flag file.\n");
+    }
+
+    xSemaphoreGive(_spi_bus_mutex);
+    return success;
+}
+
+/**
+ * @brief Queues an asynchronous request to perform crash recovery.
+ */
+bool StorageManager::requestRecovery() {
+    FileOperationRequest request;
+    request.op_type = FileOperationType::RECOVER;
+
+    if (xQueueSend(_fileQueue, &request, (TickType_t)10) != pdPASS) {
+        LOG_MAIN("[SM_ERROR] Failed to send recovery request to file queue.\n");
+        return false;
+    }
+    return true;
+}
+
+
 void StorageManager::storageTask(void* pvParameters) {
     StorageManager* self = static_cast<StorageManager*>(pvParameters);
     FileOperationRequest request;
 
     for (;;) {
         if (xQueueReceive(self->_fileQueue, &request, portMAX_DELAY) == pdPASS) {
+            // The task takes the mutex for the duration of the operation.
             xSemaphoreTake(self->_spi_bus_mutex, portMAX_DELAY);
             
             switch(request.op_type) {
@@ -88,12 +151,41 @@ void StorageManager::storageTask(void* pvParameters) {
                 case FileOperationType::DIAGNOSTICS:
                     self->runAndStoreDiagnostics();
                     break;
+                // <<< MODIFIED: Handle the new recovery request >>>
+                case FileOperationType::RECOVER:
+                    self->recoverFromCrash();
+                    break;
             }
             xSemaphoreGive(self->_spi_bus_mutex);
         }
     }
 }
 
+// <<< MODIFIED: This function is now private and called by the storageTask >>>
+void StorageManager::recoverFromCrash() {
+    if (!_is_ready) {
+        return;
+    }
+    LOG_MANAGER("Checking for incomplete writes from previous crash...\n");
+
+    // No need to take mutex here, the calling task already has it.
+    for (int i = 0; i <= static_cast<int>(ConfigType::FILTER_TUNING_CONFIG); ++i) {
+        ConfigType type = static_cast<ConfigType>(i);
+        const char* tempFileName = FileNamer::getTempFileName(type);
+        const char* finalFileName = FileNamer::getFileName(type);
+
+        if (_sd.exists(tempFileName)) {
+            LOG_MANAGER("Found temporary file %s. Restoring...\n", tempFileName);
+            if (_sd.exists(finalFileName)) {
+                _sd.remove(finalFileName);
+            }
+            _sd.rename(tempFileName, finalFileName);
+        }
+    }
+}
+
+
+// ... (rest of file is unchanged) ...
 void StorageManager::runAndStoreDiagnostics() {
     if (_diagnostics) {
         StorageDiagnosticResult temp_result = _diagnostics->performDiagnostics();
@@ -240,30 +332,6 @@ bool StorageManager::restoreBackup(const std::vector<uint8_t>& backupData) {
     }
 
     return true;
-}
-
-
-void StorageManager::recoverFromCrash() {
-    if (!_is_ready) {
-        return;
-    }
-    LOG_MANAGER("Checking for incomplete writes from previous crash...\n");
-
-    xSemaphoreTake(_spi_bus_mutex, portMAX_DELAY);
-    for (int i = 0; i <= static_cast<int>(ConfigType::FILTER_TUNING_CONFIG); ++i) {
-        ConfigType type = static_cast<ConfigType>(i);
-        const char* tempFileName = FileNamer::getTempFileName(type);
-        const char* finalFileName = FileNamer::getFileName(type);
-
-        if (_sd.exists(tempFileName)) {
-            LOG_MANAGER("Found temporary file %s. Restoring...\n", tempFileName);
-            if (_sd.exists(finalFileName)) {
-                _sd.remove(finalFileName);
-            }
-            _sd.rename(tempFileName, finalFileName);
-        }
-    }
-    xSemaphoreGive(_spi_bus_mutex);
 }
 
 std::vector<uint8_t> StorageManager::readFile(ConfigType type) {

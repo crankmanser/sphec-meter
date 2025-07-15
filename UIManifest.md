@@ -66,3 +66,41 @@ To add a new screen to the UI (e.g., a "Settings" menu):
     * In `src/boot/init_managers.cpp`, create an instance of your new screen and register it with the `StateManager` using `stateManager->addScreen(...)`.
 
 By following these steps, you contribute a new, modular component that integrates seamlessly into the existing architecture without violating its core principles.
+
+
+## 1. The UI Philosophy: Block-Based Assembly
+
+The UI is built on one core principle: **Screens do not draw themselves.**
+
+A screen's only job is to act as a **state machine**. It responds to user input and manages its internal state. To render itself, it populates a properties struct (`UIRenderProps`) that describes which reusable **UI Blocks** to use (e.g., `MenuBlock`, `GraphBlock`) and what data to display. The `UIManager` is the only component that performs drawing during normal operation.
+
+---
+
+## 2. Boot & Shutdown UI
+
+The system utilizes dedicated UI blocks for boot and shutdown sequences that can be called directly, even before the main `UIManager` and RTOS tasks are running.
+
+* **`BootBlock`**: A specialized block used by the bootloader in `main.cpp`. It is responsible for displaying the initial boot status, the interactive "pBios" prompt, and the "Recovery Mode" screen.
+* **`ShutdownBlock`**: A simple, full-screen block used by the `initiate_shutdown()` handler to display a "Shutting Down" message, ensuring the user knows the device has received the command.
+
+---
+
+## 3. The Four-Core Architecture (Main Application)
+
+The UI of the main application is composed of four distinct, cooperative systems.
+
+### Core #1: The GUI Engine (The "Canvas")
+* **`UiTask`**: The RTOS task that orchestrates the entire process.
+* **`StateManager`**: Owns all screen instances and manages transitions.
+* **`UIManager`**: The rendering engine. Takes `UIRenderProps` and draws the frame.
+
+### Core #2: The Stateful Status System (The "Dashboard")
+* **`StatusIndicatorController`**: The "brain" that observes system state and decides which status icons to display.
+
+### Core #3: The Wizard Engine (The "Director")
+* **`Wizard` & `WizardStep`**: A framework for creating multi-step, guided workflows like calibration.
+
+### Core #4: The Graphing & Trending Engine (The "Chartist")
+* **`GraphDataBuffer` & `GraphProps`**: A system for managing and displaying time-series data.
+
+---

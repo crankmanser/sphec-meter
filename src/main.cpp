@@ -10,22 +10,19 @@
 #include "boot/init_tasks.h"
 #include "config/DebugConfig.h"
 #include "app/common/SystemState.h"
-#if (ENABLE_SENSOR_SIMULATION)
-#include "debug/simulation.h"
-#endif
-
-#include <SPI.h>
-#include <Wire.h>
-#include "data_models/SensorData_types.h"
-#include "config/Network_Config.h"
+#include "presentation/blocks/BootBlock.h"
+#include "managers/storage/StorageManager.h"
+// ... other includes
+#include "app/modes/normal.h"
+#include "app/modes/pbios.h"
 #include "hal/INA219_Driver.h"
 #include "hal/ADS1118_Driver.h"
+#include "hal/TCA9548_Manual_Driver.h"
+#include "hal/PCF8563_Driver.h"
+#include "managers/diagnostics/NoiseAnalysisManager.h"
 #include "hal/DS18B20_Driver.h"
 #include "hal/DHT_Driver.h"
 #include "hal/LDR_Driver.h"
-#include "hal/TCA9548_Manual_Driver.h"
-#include "hal/PCF8563_Driver.h"
-#include "managers/storage/StorageManager.h"
 #include "managers/power/PowerManager.h"
 #include "managers/connectivity/BleManager.h"
 #include "managers/connectivity/WifiManager.h"
@@ -44,9 +41,8 @@
 #include "app/StateManager.h"
 #include "app/TelemetrySerializer.h"
 #include "app/WebService.h"
-#include "managers/diagnostics/NoiseAnalysisManager.h"
 
-// --- Global Hardware Handles & Mutexes ---
+// ... (global declarations are unchanged) ...
 SPIClass& spi = SPI;
 TwoWire i2c = TwoWire(0);
 SemaphoreHandle_t g_spi_bus_mutex;
@@ -54,18 +50,14 @@ SemaphoreHandle_t g_raw_data_mutex;
 SemaphoreHandle_t g_processed_data_mutex;
 SemaphoreHandle_t g_storage_diag_mutex;
 
-// --- Global Data Structures ---
 RawSensorData g_raw_sensor_data;
 ProcessedSensorData g_processed_data;
 NetworkConfig networkConfig;
 
-// --- Task Handles ---
 TaskHandle_t g_sensorTaskHandle = NULL;
 TaskHandle_t g_telemetryTaskHandle = NULL;
 TaskHandle_t g_connectivityTaskHandle = NULL;
 
-// --- Driver & Manager Pointers ---
-// HALs
 INA219_Driver* ina219 = nullptr;
 ADS1118_Driver* adc1 = nullptr;
 ADS1118_Driver* adc2 = nullptr;
@@ -74,8 +66,13 @@ DHT_Driver* dht = nullptr;
 LDR_Driver* ldr = nullptr;
 TCA9548_Manual_Driver* tca9548 = nullptr;
 PCF8563_Driver* pcf8563_driver = nullptr;
-// Managers
 StorageManager* storageManager = nullptr;
+DisplayManager* displayManager = nullptr;
+ButtonManager* buttonManager = nullptr;
+EncoderManager* encoderManager = nullptr;
+StateManager* stateManager = nullptr;
+UIManager* uiManager = nullptr;
+RtcManager* rtcManager = nullptr;
 PowerManager* powerManager = nullptr;
 BleManager* bleManager = nullptr;
 WifiManager* wifiManager = nullptr;
@@ -86,38 +83,20 @@ AmbientTempManager* ambientTempManager = nullptr;
 AmbientHumidityManager* ambientHumidityManager = nullptr;
 SensorProcessor* sensorProcessor = nullptr;
 LDRManager* ldrManager = nullptr;
-ButtonManager* buttonManager = nullptr;
-EncoderManager* encoderManager = nullptr; // Note: This is now a pointer
-RtcManager* rtcManager = nullptr;
-DisplayManager* displayManager = nullptr;
-UIManager* uiManager = nullptr;
-StateManager* stateManager = nullptr;
 TelemetrySerializer* telemetrySerializer = nullptr;
 WebService* webService = nullptr;
 NoiseAnalysisManager* noiseAnalysisManager = nullptr;
 
-// Define the global boot mode variable 
 BootMode g_boot_mode = BootMode::NORMAL;
 
-void setup() {
-    LOG_INIT();
-    LOG_MAIN("--- SpHEC Meter v1.6.2 Booting ---\n");
 
+void setup() {
+    // --- BOOTLOADER SEQUENCE ---
+    LOG_INIT();
+    LOG_MAIN("--- SpHEC Meter v1.6.9 Bootloader ---\n");
     init_globals();
 
-    // Boot Mode Detection ---
-    pinMode(BTN_MIDDLE_PIN, INPUT_PULLUP);
-    pinMode(BTN_BOTTOM_PIN, INPUT_PULLUP);
-    delay(50); // Small delay for pullups to stabilize
-    if(digitalRead(BTN_MIDDLE_PIN) == LOW && digitalRead(BTN_BOTTOM_PIN) == LOW) {
-        g_boot_mode = BootMode::DIAGNOSTICS;
-        LOG_MAIN("DIAGNOSTICS MODE DETECTED\n");
-    } else {
-        g_boot_mode = BootMode::NORMAL;
-        LOG_MAIN("Normal boot mode detected.\n");
-    }
-
-    // Instantiate ALL HAL objects first
+    // ... (Object instantiation is unchanged) ...
     ina219 = new INA219_Driver(INA219_I2C_ADDRESS);
     tca9548 = new TCA9548_Manual_Driver(TCA_ADDRESS, &i2c);
     pcf8563_driver = new PCF8563_Driver();
@@ -126,8 +105,6 @@ void setup() {
     ds18b20 = new DS18B20_Driver(ONEWIRE_BUS_PIN);
     dht = new DHT_Driver(DHT_PIN, DHT_TYPE);
     ldr = new LDR_Driver(adc1);
-
-    // Now instantiate all managers
     displayManager = new DisplayManager(*tca9548, &i2c);
     rtcManager = new RtcManager(*pcf8563_driver, *tca9548);
     storageManager = new StorageManager(SD_CS_PIN, &spi, g_spi_bus_mutex, g_storage_diag_mutex);
@@ -150,42 +127,37 @@ void setup() {
     buttonManager = new ButtonManager(BTN_TOP_PIN, BTN_MIDDLE_PIN, BTN_BOTTOM_PIN);
     encoderManager = new EncoderManager();
 
-    buttonManager->begin();
-    encoderManager->begin();
 
-    // Continue with the boot sequence
+    // --- Initialize hardware required for boot decisions ---
+    storageManager->begin();
     if (!init_i2c_devices()) {
         LOG_MAIN("CRITICAL: I2C Device Initialization Failed. Halting.\n");
         while(true) { delay(1000); }
     }
-    
-    init_hals();
-    
-    if (run_post()) {
-        init_tasks(); // This function will now be mode-aware
 
-        // Instantiate the NoiseAnalysisManager AFTER tasks are created
-        noiseAnalysisManager = new NoiseAnalysisManager(
-            adc1, 
-            adc2, 
-            ina219, 
-            g_sensorTaskHandle, 
-            g_telemetryTaskHandle, 
-            g_connectivityTaskHandle
-        );
-
-        init_managers(); // This function will also be mode-aware
-        LOG_MAIN("Boot sequence successful. Application starting.\n");
+    // --- Perform recovery if necessary ---
+    if (!storageManager->checkAndClearShutdownFlag()) {
+        BootBlockProps props;
+        props.title = "Recovery";
+        props.message = "Checking files...";
+        BootBlock::draw(displayManager, props);
+        storageManager->requestRecovery(); // <<< MODIFIED: Call the non-blocking method
+        vTaskDelay(pdMS_TO_TICKS(1000)); // Wait for the async operation to likely complete
+    }
+    
+    // --- Detect user intent and hand off control ---
+    bool pBiosRequested = (digitalRead(BTN_MIDDLE_PIN) == LOW && digitalRead(BTN_BOTTOM_PIN) == LOW);
+    g_boot_mode = pBiosRequested ? BootMode::DIAGNOSTICS : BootMode::NORMAL;
+    
+    // <<< MODIFIED: Instantiate NoiseAnalysisManager only if needed >>>
+    if(g_boot_mode == BootMode::DIAGNOSTICS) {
+        noiseAnalysisManager = new NoiseAnalysisManager(adc1, adc2, ina219, nullptr, nullptr, nullptr);
+        run_pbios_mode();
     } else {
-        LOG_MAIN("CRITICAL: Power-On Self-Test Failed. Halting.\n");
-        while (true) { delay(1000); }
+        run_normal_mode();
     }
 }
 
 void loop() {
-    #if (ENABLE_SENSOR_SIMULATION)
-        run_test_and_halt();
-    #else
-        vTaskDelete(NULL);
-    #endif
+    vTaskDelete(NULL);
 }
