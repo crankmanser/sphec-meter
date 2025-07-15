@@ -19,7 +19,7 @@
 #include "app/TelemetrySerializer.h"
 #include "app/WebService.h"
 #include "config/DebugConfig.h"
-#include "app/common/SystemState.h" // <<< ADDED
+#include "app/common/SystemState.h"
 #include "DebugMacros.h"
 // Screens
 #include "presentation/screens/main_menu/MainMenuScreen.h"
@@ -49,7 +49,10 @@ extern NetworkConfig networkConfig;
 extern NoiseAnalysisManager* noiseAnalysisManager;
 
 void init_managers() {
-    storageManager->begin();
+    // --- STAGE 1: CORE & CONNECTIVITY MANAGERS ---
+    // Initialize managers that are required in both NORMAL and DIAGNOSTICS modes.
+    // This includes storage, connectivity, and the core UI rendering engine.
+    // The StorageManager is now initialized in main.cpp before this function is called.
     storageManager->recoverFromCrash();
 
     if (!storageManager->loadState(ConfigType::NETWORK_CONFIG, (uint8_t*)&networkConfig, sizeof(networkConfig))) {
@@ -57,7 +60,6 @@ void init_managers() {
         storageManager->saveState(ConfigType::NETWORK_CONFIG, (const uint8_t*)&networkConfig, sizeof(networkConfig));
     }
 
-    // --- Initialize managers that run in ALL modes ---
     #if (ENABLE_BLE_STACK)
     if (bleManager) bleManager->begin(networkConfig.ble);
     #endif
@@ -65,10 +67,11 @@ void init_managers() {
     mqttManager->begin(networkConfig.mqtt);
     webService->begin();
     uiManager->begin();
-    buttonManager->begin();
-    encoderManager->begin();
+    // Input managers are now initialized in main.cpp before task creation.
 
-    // --- Initialize managers that ONLY run in NORMAL mode ---
+    // --- STAGE 2: NORMAL MODE MANAGERS ---
+    // Initialize managers that provide the main application logic.
+    // These are only needed in NORMAL mode to save resources in DIAGNOSTICS mode.
     if (g_boot_mode == BootMode::NORMAL) {
         powerManager->begin();
         liquidTempManager->begin();
@@ -78,13 +81,14 @@ void init_managers() {
         sensorProcessor->begin();
         telemetrySerializer->begin();
     }
-    
-    // --- State & Screen Initialization ---
+
+    // --- STAGE 3: STATE & SCREEN INITIALIZATION ---
+    // Add all possible screens to the StateManager, then set the initial screen
+    // based on the detected boot mode.
     stateManager->addScreen(ScreenState::SCREEN_MAIN_MENU, new MainMenuScreen());
     stateManager->addScreen(ScreenState::SCREEN_DIAGNOSTICS_MENU, new DiagnosticsMenuScreen());
     stateManager->addScreen(ScreenState::SCREEN_NOISE_ANALYSIS, new NoiseAnalysisScreen(noiseAnalysisManager));
-    
-    // <<< MODIFIED: Set initial screen based on boot mode >>>
+
     if (g_boot_mode == BootMode::DIAGNOSTICS) {
         LOG_MAIN("Setting initial screen to Diagnostics Menu.\n");
         stateManager->changeState(ScreenState::SCREEN_DIAGNOSTICS_MENU);
@@ -92,7 +96,6 @@ void init_managers() {
         LOG_MAIN("Setting initial screen to Main Menu.\n");
         stateManager->changeState(ScreenState::SCREEN_MAIN_MENU);
     }
-    
     stateManager->begin();
 
     LOG_MAIN("All managers initialized.\n");

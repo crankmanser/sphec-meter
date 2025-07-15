@@ -10,10 +10,12 @@
 #include "boot/init_tasks.h"
 #include "config/DebugConfig.h"
 #include "app/common/SystemState.h"
+#include "presentation/blocks/BootBlock.h"
 #if (ENABLE_SENSOR_SIMULATION)
 #include "debug/simulation.h"
 #endif
 
+// ... (includes and global pointer declarations are unchanged) ...
 #include <SPI.h>
 #include <Wire.h>
 #include "data_models/SensorData_types.h"
@@ -46,7 +48,6 @@
 #include "app/WebService.h"
 #include "managers/diagnostics/NoiseAnalysisManager.h"
 
-// --- Global Hardware Handles & Mutexes ---
 SPIClass& spi = SPI;
 TwoWire i2c = TwoWire(0);
 SemaphoreHandle_t g_spi_bus_mutex;
@@ -54,18 +55,14 @@ SemaphoreHandle_t g_raw_data_mutex;
 SemaphoreHandle_t g_processed_data_mutex;
 SemaphoreHandle_t g_storage_diag_mutex;
 
-// --- Global Data Structures ---
 RawSensorData g_raw_sensor_data;
 ProcessedSensorData g_processed_data;
 NetworkConfig networkConfig;
 
-// --- Task Handles ---
 TaskHandle_t g_sensorTaskHandle = NULL;
 TaskHandle_t g_telemetryTaskHandle = NULL;
 TaskHandle_t g_connectivityTaskHandle = NULL;
 
-// --- Driver & Manager Pointers ---
-// HALs
 INA219_Driver* ina219 = nullptr;
 ADS1118_Driver* adc1 = nullptr;
 ADS1118_Driver* adc2 = nullptr;
@@ -74,7 +71,6 @@ DHT_Driver* dht = nullptr;
 LDR_Driver* ldr = nullptr;
 TCA9548_Manual_Driver* tca9548 = nullptr;
 PCF8563_Driver* pcf8563_driver = nullptr;
-// Managers
 StorageManager* storageManager = nullptr;
 PowerManager* powerManager = nullptr;
 BleManager* bleManager = nullptr;
@@ -87,7 +83,7 @@ AmbientHumidityManager* ambientHumidityManager = nullptr;
 SensorProcessor* sensorProcessor = nullptr;
 LDRManager* ldrManager = nullptr;
 ButtonManager* buttonManager = nullptr;
-EncoderManager* encoderManager = nullptr; // Note: This is now a pointer
+EncoderManager* encoderManager = nullptr;
 RtcManager* rtcManager = nullptr;
 DisplayManager* displayManager = nullptr;
 UIManager* uiManager = nullptr;
@@ -96,28 +92,24 @@ TelemetrySerializer* telemetrySerializer = nullptr;
 WebService* webService = nullptr;
 NoiseAnalysisManager* noiseAnalysisManager = nullptr;
 
-// Define the global boot mode variable 
 BootMode g_boot_mode = BootMode::NORMAL;
 
-void setup() {
-    LOG_INIT();
-    LOG_MAIN("--- SpHEC Meter v1.6.2 Booting ---\n");
 
+void setup() {
+    // --- STAGE 1: INITIALIZE CORE PERIPHERALS & READ USER INTENT ---
+    LOG_INIT();
+    LOG_MAIN("--- SpHEC Meter v1.6.6 Booting ---\n");
     init_globals();
 
-    // Boot Mode Detection ---
-    pinMode(BTN_MIDDLE_PIN, INPUT_PULLUP);
-    pinMode(BTN_BOTTOM_PIN, INPUT_PULLUP);
-    delay(50); // Small delay for pullups to stabilize
-    if(digitalRead(BTN_MIDDLE_PIN) == LOW && digitalRead(BTN_BOTTOM_PIN) == LOW) {
-        g_boot_mode = BootMode::DIAGNOSTICS;
-        LOG_MAIN("DIAGNOSTICS MODE DETECTED\n");
-    } else {
-        g_boot_mode = BootMode::NORMAL;
-        LOG_MAIN("Normal boot mode detected.\n");
+    // Read the user's intent to enter pBios at the earliest possible moment.
+    bool pBiosRequested = (digitalRead(BTN_MIDDLE_PIN) == LOW && digitalRead(BTN_BOTTOM_PIN) == LOW);
+    if (pBiosRequested) {
+        LOG_MAIN("User has requested pBios (DIAGNOSTICS) mode.\n");
     }
 
-    // Instantiate ALL HAL objects first
+    // --- STAGE 2: INSTANTIATE ALL OBJECTS ---
+    // Create instances of ALL drivers and managers. This does NOT initialize them,
+    // it only allocates memory and calls their constructors.
     ina219 = new INA219_Driver(INA219_I2C_ADDRESS);
     tca9548 = new TCA9548_Manual_Driver(TCA_ADDRESS, &i2c);
     pcf8563_driver = new PCF8563_Driver();
@@ -126,8 +118,6 @@ void setup() {
     ds18b20 = new DS18B20_Driver(ONEWIRE_BUS_PIN);
     dht = new DHT_Driver(DHT_PIN, DHT_TYPE);
     ldr = new LDR_Driver(adc1);
-
-    // Now instantiate all managers
     displayManager = new DisplayManager(*tca9548, &i2c);
     rtcManager = new RtcManager(*pcf8563_driver, *tca9548);
     storageManager = new StorageManager(SD_CS_PIN, &spi, g_spi_bus_mutex, g_storage_diag_mutex);
@@ -149,32 +139,64 @@ void setup() {
     stateManager = new StateManager();
     buttonManager = new ButtonManager(BTN_TOP_PIN, BTN_MIDDLE_PIN, BTN_BOTTOM_PIN);
     encoderManager = new EncoderManager();
+    noiseAnalysisManager = new NoiseAnalysisManager(adc1, adc2, ina219, g_sensorTaskHandle, g_telemetryTaskHandle, g_connectivityTaskHandle);
 
-    buttonManager->begin();
-    encoderManager->begin();
+    // --- STAGE 3: SHUTDOWN RECOVERY & FILE SYSTEM CHECK ---
+    storageManager->begin();
+    bool was_clean_shutdown = storageManager->checkAndClearShutdownFlag();
 
-    // Continue with the boot sequence
     if (!init_i2c_devices()) {
         LOG_MAIN("CRITICAL: I2C Device Initialization Failed. Halting.\n");
         while(true) { delay(1000); }
     }
-    
-    init_hals();
-    
-    if (run_post()) {
-        init_tasks(); // This function will now be mode-aware
 
-        // Instantiate the NoiseAnalysisManager AFTER tasks are created
-        noiseAnalysisManager = new NoiseAnalysisManager(
-            adc1, 
-            adc2, 
-            ina219, 
-            g_sensorTaskHandle, 
-            g_telemetryTaskHandle, 
-            g_connectivityTaskHandle
-        );
+    if (!was_clean_shutdown) {
+        LOG_MAIN("Performing improper shutdown recovery...\n");
+        BootBlockProps props;
+        props.title = "Recovery";
+        props.message = "Checking files...";
+        BootBlock::draw(displayManager, props);
+        storageManager->recoverFromCrash();
+        delay(2000);
+    }
 
-        init_managers(); // This function will also be mode-aware
+    // --- STAGE 4: SET FINAL BOOT MODE & RUN INTERACTIVE UI ---
+    // Now that recovery is complete, set the final boot mode based on the user's
+    // initial request.
+    g_boot_mode = pBiosRequested ? BootMode::DIAGNOSTICS : BootMode::NORMAL;
+
+    bool post_passed = run_post();
+
+    if (g_boot_mode == BootMode::DIAGNOSTICS) {
+        LOG_MAIN("Entering pBios interactive boot screen...\n");
+        BootBlockProps props;
+        props.title = "pBios Boot";
+        props.message = "Release buttons";
+        uint32_t last_anim_time = millis();
+        while (digitalRead(BTN_MIDDLE_PIN) == LOW || digitalRead(BTN_BOTTOM_PIN) == LOW) {
+            if (millis() - last_anim_time > 250) {
+                props.animation_step = (props.animation_step + 1) % 4;
+                last_anim_time = millis();
+            }
+            BootBlock::draw(displayManager, props);
+            delay(10);
+        }
+    } else {
+        LOG_MAIN("Entering normal boot screen...\n");
+        BootBlockProps props;
+        props.title = "SpHEC Meter";
+        props.message = "Booting...";
+        BootBlock::draw(displayManager, props);
+        delay(1500);
+    }
+
+    // --- STAGE 5: FINAL INITIALIZATION & TASK CREATION ---
+    if (post_passed) {
+        buttonManager->begin();
+        encoderManager->begin();
+        init_hals();
+        init_tasks();
+        init_managers();
         LOG_MAIN("Boot sequence successful. Application starting.\n");
     } else {
         LOG_MAIN("CRITICAL: Power-On Self-Test Failed. Halting.\n");

@@ -9,6 +9,10 @@
 #include "helpers/FileNamer.h"
 #include "helpers/AtomicSave.h"
 
+// --- Filename for the shutdown flag ---
+const char* SHUTDOWN_FLAG_FILENAME = "/shutdown.ok";
+
+// ... (Constructor, Destructor, begin(), checkAndClearShutdownFlag() are unchanged) ...
 QueueHandle_t StorageManager::_fileQueue = nullptr;
 TaskHandle_t StorageManager::_storageTaskHandle = nullptr;
 
@@ -37,7 +41,6 @@ bool StorageManager::begin() {
 
     xSemaphoreTake(_spi_bus_mutex, portMAX_DELAY);
 
-    // SdFat uses its own SPI settings, so we pass a config object.
     SdSpiConfig spiConfig(_cs_pin, DEDICATED_SPI, 25000000UL, _spi);
     if (!_sd.begin(spiConfig)) {
         LOG_MAIN("[SM_ERROR] SD Card initialization failed.\n");
@@ -46,7 +49,7 @@ bool StorageManager::begin() {
         return false;
     }
     xSemaphoreGive(_spi_bus_mutex);
-    
+
     _is_ready = true;
     LOG_MANAGER("SD Card initialized.\n");
 
@@ -58,21 +61,70 @@ bool StorageManager::begin() {
         return false;
     }
 
-    // <<< MODIFIED: Pinned the high-priority storage task to Core 0 >>>
     xTaskCreatePinnedToCore(
         storageTask,
         "StorageTask",
         4096,
         this,
-        5, // High priority for I/O
+        5,
         &_storageTaskHandle,
-        0  // Pin to Core 0
+        0
     );
 
     return true;
 }
+bool StorageManager::checkAndClearShutdownFlag() {
+    if (!_is_ready) return false; // If SD isn't ready, it was not a clean shutdown.
 
-// ... rest of the file is unchanged ...
+    xSemaphoreTake(_spi_bus_mutex, portMAX_DELAY);
+    bool flag_existed = _sd.exists(SHUTDOWN_FLAG_FILENAME);
+
+    if (flag_existed) {
+        _sd.remove(SHUTDOWN_FLAG_FILENAME);
+    }
+    xSemaphoreGive(_spi_bus_mutex);
+
+    if (flag_existed) {
+        LOG_MANAGER("Clean shutdown flag found. Previous session ended correctly.\n");
+    } else {
+        LOG_MAIN("[SM_WARNING] Shutdown flag not found. Previous session may have crashed.\n");
+    }
+
+    return flag_existed;
+}
+
+
+bool StorageManager::writeShutdownFlag() {
+    if (!_is_ready) {
+        LOG_MAIN("[SM_ERROR] Cannot write shutdown flag, SD not ready.\n");
+        return false;
+    }
+
+    xSemaphoreTake(_spi_bus_mutex, portMAX_DELAY);
+
+    FsFile file = _sd.open(SHUTDOWN_FLAG_FILENAME, O_WRITE | O_CREAT);
+    bool success = false;
+    if (file) {
+        // <<< MODIFIED: Add an explicit sync call >>>
+        // This forces the SD card controller to flush its cache to the
+        // physical flash memory, ensuring the write is permanent before we proceed.
+        if (file.sync()) {
+            LOG_MANAGER("Shutdown flag synced to SD card.\n");
+            success = true;
+        } else {
+            LOG_MAIN("[SM_ERROR] Failed to sync shutdown flag file.\n");
+            success = false;
+        }
+        file.close();
+    } else {
+        LOG_MAIN("[SM_ERROR] Failed to create shutdown flag file.\n");
+    }
+
+    xSemaphoreGive(_spi_bus_mutex);
+    return success;
+}
+
+// ... (rest of the file is unchanged) ...
 void StorageManager::storageTask(void* pvParameters) {
     StorageManager* self = static_cast<StorageManager*>(pvParameters);
     FileOperationRequest request;
