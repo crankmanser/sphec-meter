@@ -424,6 +424,84 @@ The firmware is divided into distinct layers based on the "Cabinet" philosophy.
 
 
 
+Project Manifest: SpHEC Meter
+Version: 1.6.4
+Last Updated: July 16, 2025
+
+This document is the single source of truth for the SpHEC Meter project. It supersedes all previous manifests and design documents. All development must adhere strictly to the rules and specifications outlined herein.
+
+1. The Golden Rules (Non-Negotiable)
+Firmware is the Source of Truth: All core logic resides on the ESP32 firmware.
+
+Verify Before Coding: Read relevant source files to understand established APIs and architecture.
+
+Prove Your Work: Demonstrate understanding by quoting exact class definitions or function signatures.
+
+No Assumptions: All reasoning must be based exclusively on the provided project source files.
+
+Stop if Blocked: If a file is missing or a tool fails, stop and report the failure.
+
+2. Hardware & Operational Truths
+(Unchanged Hardware Sections: I2C, SPI, ADC, etc.)
+
+Operational Modes: The firmware operates in one of two modes, determined at boot:
+
+Normal Mode: Default mode. All RTOS tasks (SensorTask, TelemetryTask, etc.) are active. The UI boots to the MainMenuScreen.
+
+Diagnostics Mode (pBios): Activated by holding the Middle and Bottom buttons during power-on. In this mode, only essential tasks (UiTask, ConnectivityTask, StorageTask, etc.) are created. Non-essential tasks like SensorTask and TelemetryTask are not created, ensuring a quiet system for sensitive measurements. The UI boots directly to the DiagnosticsMenuScreen.
+
+3. Software Architecture: The "Cabinet" Model & Modular Boot
+The firmware is divided into distinct layers based on the "Cabinet" philosophy.
+
+Modular Boot Sequence: The setup() function in main.cpp is now extremely lean. It instantiates global objects and then hands off control to a dedicated runBootSequence() function located in src/boot/boot_sequence.cpp. This function orchestrates a robust, multi-phase startup that correctly initializes hardware, detects the boot mode, and starts RTOS tasks in the proper order to prevent deadlocks.
+
+RTOS Design - Correct Task Priorities: The system uses a well-defined RTOS priority scheme to prevent deadlocks and ensure stability:
+
+Priority 5 (Highest): StorageTask (To ensure it quickly releases the shared SPI mutex).
+
+Priority 4: EncoderTask (For maximum UI responsiveness).
+
+Priority 3: UiTask (For responsive screen drawing).
+
+Priority 2: SensorTask, TelemetryTask (Background data processing).
+
+Priority 1 (Lowest): ConnectivityTask, loopTask (Housekeeping).
+
+UI Architecture: Block-Based Assembly: The user interface is built on a declarative model where screens assemble reusable UI Blocks (MenuBlock, GraphBlock, ProgressBarBlock).
+
+4. Phased Development Plan
+Phase 0: Architectural Refactor & Stabilization (COMPLETE)
+
+Status: All critical boot-up issues, including the priority inversion deadlock, have is not resolved. The system is unstable, and the boot sequence is still functioning as intended.
+
+Phase 1: Finalize the pBios Architecture (Code Cleanup) (Current Phase)
+
+Goal: Clean up and simplify the codebase by removing logic that became obsolete after the successful dual-boot refactoring.
+
+Tasks:
+
+Refactor MainMenuScreen to remove the redundant "Diagnostics" menu item.
+
+Refactor NoiseAnalysisManager to remove the unnecessary enterFocusedMode() and exitFocusedMode() methods.
+
+Phase 2: Implement the Three-Phase Filter Engine
+
+Goal: Build the sophisticated, multi-stage measurement and tuning process for the Noise Analysis feature.
+
+Phase 3: Final System Verification
+
+Goal: Perform a complete test of the new architecture and features.
+
+
+
+
+
+
+
+
+
+
+
 
 
 

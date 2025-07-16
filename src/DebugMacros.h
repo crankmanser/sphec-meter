@@ -16,6 +16,13 @@
     #define LOG_PREPEND()
 #endif
 
+// <<< NEW: Dedicated logger for the boot sequence >>>
+#if (MASTER_DEBUG_ENABLE && ENABLE_DEBUG_MAIN)
+    #define LOG_BOOT(format, ...) do { LOG_PREPEND(); printf("[BOOT] " format, ##__VA_ARGS__); } while(0)
+#else
+    #define LOG_BOOT(...)
+#endif
+
 #if (MASTER_DEBUG_ENABLE && ENABLE_DEBUG_MAIN)
     #define LOG_MAIN(format, ...) do { LOG_PREPEND(); printf("[MAIN] " format, ##__VA_ARGS__); } while(0)
 #else

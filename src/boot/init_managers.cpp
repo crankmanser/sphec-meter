@@ -48,12 +48,17 @@ extern WebService* webService;
 extern NetworkConfig networkConfig;
 
 void init_managers(NoiseAnalysisManager* noiseAnalysisManager) {
-    // --- STAGE 1: UNIVERSAL MANAGERS ---
-    // The StorageManager's recovery is now handled in main.cpp before this.
-    // We just need to load the network configuration.
-    if (!storageManager->loadState(ConfigType::NETWORK_CONFIG, (uint8_t*)&networkConfig, sizeof(networkConfig))) {
-        storageManager->saveState(ConfigType::NETWORK_CONFIG, (const uint8_t*)&networkConfig, sizeof(networkConfig));
-    }
+    // Start the RTOS components of the StorageManager (task and queue).
+    storageManager->startRtosDependencies();
+
+    // --- FIX: Removed the dangerous load/save block ---
+    // The main boot thread no longer tries to save default files.
+    // We only attempt to load the config. If it fails, the global networkConfig
+    // struct already holds safe, in-memory defaults for the current session.
+    // The StorageTask will create the default file in the background for the next boot.
+    storageManager->loadState(ConfigType::NETWORK_CONFIG, (uint8_t*)&networkConfig, sizeof(networkConfig));
+    
+    // Initialize the rest of the managers
     #if (ENABLE_BLE_STACK)
     if (bleManager) bleManager->begin(networkConfig.ble);
     #endif
@@ -62,7 +67,7 @@ void init_managers(NoiseAnalysisManager* noiseAnalysisManager) {
     webService->begin();
     uiManager->begin(); 
 
-    // --- STAGE 2: NORMAL MODE MANAGERS ---
+    // Initialize managers that only run in NORMAL mode
     if (g_boot_mode == BootMode::NORMAL) {
         powerManager->begin();
         liquidTempManager->begin();
@@ -73,10 +78,9 @@ void init_managers(NoiseAnalysisManager* noiseAnalysisManager) {
         telemetrySerializer->begin();
     }
     
-    // --- STAGE 3: STATE MANAGER & SCREEN SETUP ---
+    // --- STATE MANAGER & SCREEN SETUP ---
     stateManager->addScreen(ScreenState::SCREEN_MAIN_MENU, new MainMenuScreen());
     
-    // Conditionally add the Diagnostics screens only if the manager exists (i.e., in pBios mode)
     if (noiseAnalysisManager != nullptr) {
         stateManager->addScreen(ScreenState::SCREEN_DIAGNOSTICS_MENU, new DiagnosticsMenuScreen());
         stateManager->addScreen(ScreenState::SCREEN_NOISE_ANALYSIS, new NoiseAnalysisScreen(noiseAnalysisManager));

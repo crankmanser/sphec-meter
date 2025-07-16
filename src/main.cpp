@@ -2,19 +2,13 @@
 // MODIFIED FILE
 #include <Arduino.h>
 #include "DebugMacros.h"
-#include "boot/init_globals.h"
-#include "boot/init_i2c_devices.h"
-#include "boot/init_hals.h"
-#include "boot/init_managers.h"
-#include "boot/post.h"
-#include "boot/init_tasks.h"
+#include "boot/boot_sequence.h" 
+#include "boot/init_globals.h" // <<< ADDED: Include init_globals header
+
+// Include all required headers for object instantiation
 #include "config/DebugConfig.h"
 #include "app/common/SystemState.h"
-#include "presentation/blocks/BootBlock.h"
 #include "managers/storage/StorageManager.h"
-// ... other includes
-#include "app/modes/normal.h"
-#include "app/modes/pbios.h"
 #include "hal/INA219_Driver.h"
 #include "hal/ADS1118_Driver.h"
 #include "hal/TCA9548_Manual_Driver.h"
@@ -42,7 +36,7 @@
 #include "app/TelemetrySerializer.h"
 #include "app/WebService.h"
 
-// ... (global declarations are unchanged) ...
+// --- Global Variable Declarations ---
 SPIClass& spi = SPI;
 TwoWire i2c = TwoWire(0);
 SemaphoreHandle_t g_spi_bus_mutex;
@@ -58,6 +52,7 @@ TaskHandle_t g_sensorTaskHandle = NULL;
 TaskHandle_t g_telemetryTaskHandle = NULL;
 TaskHandle_t g_connectivityTaskHandle = NULL;
 
+// --- Global Pointer Declarations ---
 INA219_Driver* ina219 = nullptr;
 ADS1118_Driver* adc1 = nullptr;
 ADS1118_Driver* adc2 = nullptr;
@@ -91,15 +86,20 @@ BootMode g_boot_mode = BootMode::NORMAL;
 
 
 void setup() {
-    // --- BOOTLOADER SEQUENCE ---
     LOG_INIT();
-    LOG_MAIN("--- SpHEC Meter v1.6.9 Bootloader ---\n");
+    
+    // --- FIX: STEP 1: INITIALIZE GLOBAL PRIMITIVES FIRST ---
+    // This is the definitive fix for the boot crash. By creating the mutexes
+    // before any other objects are instantiated, we guarantee that any manager
+    // constructor that receives a mutex handle will get a valid one.
     init_globals();
 
-    // ... (Object instantiation is unchanged) ...
+    // --- STEP 2: Instantiate all global objects ---
+    // Now that the mutexes exist, it is safe to create all the manager objects.
     ina219 = new INA219_Driver(INA219_I2C_ADDRESS);
     tca9548 = new TCA9548_Manual_Driver(TCA_ADDRESS, &i2c);
     pcf8563_driver = new PCF8563_Driver();
+    storageManager = new StorageManager(SD_CS_PIN, &spi, g_spi_bus_mutex, g_storage_diag_mutex);
     adc1 = new ADS1118_Driver(ADC1_CS_PIN, ADC2_CS_PIN, SD_CS_PIN, &spi, g_spi_bus_mutex);
     adc2 = new ADS1118_Driver(ADC2_CS_PIN, ADC1_CS_PIN, SD_CS_PIN, &spi, g_spi_bus_mutex);
     ds18b20 = new DS18B20_Driver(ONEWIRE_BUS_PIN);
@@ -107,7 +107,6 @@ void setup() {
     ldr = new LDR_Driver(adc1);
     displayManager = new DisplayManager(*tca9548, &i2c);
     rtcManager = new RtcManager(*pcf8563_driver, *tca9548);
-    storageManager = new StorageManager(SD_CS_PIN, &spi, g_spi_bus_mutex, g_storage_diag_mutex);
     powerManager = new PowerManager(*ina219, *storageManager);
     #if (ENABLE_BLE_STACK)
     bleManager = new BleManager();
@@ -127,37 +126,12 @@ void setup() {
     buttonManager = new ButtonManager(BTN_TOP_PIN, BTN_MIDDLE_PIN, BTN_BOTTOM_PIN);
     encoderManager = new EncoderManager();
 
-
-    // --- Initialize hardware required for boot decisions ---
-    storageManager->begin();
-    if (!init_i2c_devices()) {
-        LOG_MAIN("CRITICAL: I2C Device Initialization Failed. Halting.\n");
-        while(true) { delay(1000); }
-    }
-
-    // --- Perform recovery if necessary ---
-    if (!storageManager->checkAndClearShutdownFlag()) {
-        BootBlockProps props;
-        props.title = "Recovery";
-        props.message = "Checking files...";
-        BootBlock::draw(displayManager, props);
-        storageManager->requestRecovery(); // <<< MODIFIED: Call the non-blocking method
-        vTaskDelay(pdMS_TO_TICKS(1000)); // Wait for the async operation to likely complete
-    }
-    
-    // --- Detect user intent and hand off control ---
-    bool pBiosRequested = (digitalRead(BTN_MIDDLE_PIN) == LOW && digitalRead(BTN_BOTTOM_PIN) == LOW);
-    g_boot_mode = pBiosRequested ? BootMode::DIAGNOSTICS : BootMode::NORMAL;
-    
-    // <<< MODIFIED: Instantiate NoiseAnalysisManager only if needed >>>
-    if(g_boot_mode == BootMode::DIAGNOSTICS) {
-        noiseAnalysisManager = new NoiseAnalysisManager(adc1, adc2, ina219, nullptr, nullptr, nullptr);
-        run_pbios_mode();
-    } else {
-        run_normal_mode();
-    }
+    // --- STEP 3: Run the master boot sequence ---
+    // This single function now handles the entire startup process.
+    runBootSequence();
 }
 
 void loop() {
+    // The main loop is no longer used; all logic is in RTOS tasks.
     vTaskDelete(NULL);
 }

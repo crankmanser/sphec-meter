@@ -1,3 +1,5 @@
+// src/app/SensorTask.cpp
+// MODIFIED FILE
 #include "app/SensorTask.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -12,7 +14,7 @@
 #include "managers/sensor/LDRManager.h"
 #include "managers/power/PowerManager.h"
 
-// Forward declarations of global manager pointers and mutexes from main.cpp
+// External declarations of global manager pointers and mutexes from main.cpp
 extern RawSensorReader* rawSensorReader;
 extern LiquidTempManager* liquidTempManager;
 extern AmbientTempManager* ambientTempManager;
@@ -31,33 +33,47 @@ void sensorTask(void* pvParameters) {
     LOG_TASK("Sensor Task started.\n");
 
     for (;;) {
-        // --- STAGE 1: RAW SENSOR READING ---
-        // This stage is responsible for acquiring data from all physical sensors.
-        // It's protected by a mutex to ensure thread-safe access to the raw data struct.
-        if (xSemaphoreTake(g_raw_data_mutex, portMAX_DELAY) == pdTRUE) {
-            rawSensorReader->update();
-            xSemaphoreGive(g_raw_data_mutex);
-        }
+        LOG_TASK("--- Sensor Task Cycle Start ---\n");
 
-        // --- STAGE 2: INDEPENDENT PROCESSING ---
-        // This stage processes the raw data into final scientific values.
-        // It requires locking both the raw and processed data structs to ensure
-        // it's working with a consistent set of data.
+        // --- FIX: Refactored to use a single, comprehensive critical section ---
+        // This is the definitive fix for the deadlock. By taking both mutexes at the start
+        // and releasing them at the end, we create a single, atomic operation for the
+        // entire data pipeline, preventing any possibility of a deadlock.
+
+        // --- STAGE 1: ACQUIRE ALL RESOURCES ---
         if (xSemaphoreTake(g_raw_data_mutex, portMAX_DELAY) == pdTRUE) {
             if (xSemaphoreTake(g_processed_data_mutex, portMAX_DELAY) == pdTRUE) {
+                
+                // --- STAGE 2: PERFORM ALL DATA OPERATIONS ---
+                
+                // Read from all physical sensors into the raw data struct.
+                LOG_TASK("Updating RawSensorReader...\n");
+                rawSensorReader->update();
+
+                // Process all raw data into final, calibrated scientific values.
+                LOG_TASK("Updating processing managers...\n");
                 liquidTempManager->update();
                 ambientTempManager->update();
                 ambientHumidityManager->update();
                 sensorProcessor->update();
                 ldrManager->update();
+                
+                // The PowerManager update is independent of the sensor data mutexes,
+                // but we include it here for a clean, sequential update cycle.
+                LOG_TASK("Updating PowerManager...\n");
+                powerManager->update();
+
+                // --- STAGE 3: RELEASE ALL RESOURCES ---
                 xSemaphoreGive(g_processed_data_mutex);
+            } else {
+                 LOG_MAIN("[SENSOR_TASK_ERROR] Failed to take processed_data_mutex.\n");
             }
             xSemaphoreGive(g_raw_data_mutex);
+        } else {
+            LOG_MAIN("[SENSOR_TASK_ERROR] Failed to take raw_data_mutex.\n");
         }
-
         
-        // Update the power manager as part of the core data production cycle.
-        powerManager->update();
+        LOG_TASK("--- Sensor Task Cycle End ---\n");
         
         // Wait for the next sensor read cycle
         vTaskDelay(pdMS_TO_TICKS(SENSOR_DELAY_MS));

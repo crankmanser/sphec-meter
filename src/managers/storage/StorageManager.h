@@ -13,11 +13,12 @@
 
 class StorageDiagnostics;
 
-// <<< MODIFIED: Added RECOVER operation type >>>
 enum class FileOperationType {
     WRITE,
     DIAGNOSTICS,
-    RECOVER
+    RECOVER,
+    // <<< NEW: A new operation type for the self-check >>>
+    CHECK_DEFAULTS 
 };
 
 struct FileOperationRequest {
@@ -31,7 +32,8 @@ public:
     StorageManager(uint8_t cs_pin, SPIClass* spi, SemaphoreHandle_t spi_bus_mutex, SemaphoreHandle_t diag_result_mutex);
     ~StorageManager();
 
-    bool begin();
+    bool begin(); 
+    void startRtosDependencies();
 
     // --- State & Config I/O ---
     bool saveState(ConfigType type, const uint8_t* data, size_t len);
@@ -42,17 +44,13 @@ public:
     bool restoreBackup(const std::vector<uint8_t>& backupData);
 
     // --- System Integrity ---
-    bool requestRecovery(); // <<< MODIFIED: This is now the public method
+    bool requestRecovery();
     bool writeShutdownFlag();
     bool checkAndClearShutdownFlag();
 
     // --- Diagnostics ---
     bool requestDiagnostics();
     StorageDiagnosticResult getDiagnosticResult() const;
-
-    // --- RTOS Members ---
-    static TaskHandle_t _storageTaskHandle;
-    static QueueHandle_t _fileQueue;
 
 private:
     uint8_t _cs_pin;
@@ -63,9 +61,15 @@ private:
     bool _is_ready = false;
 
     StorageDiagnostics* _diagnostics;
-    volatile StorageDiagnosticResult _last_diag_result;
+    StorageDiagnosticResult _last_diag_result;
 
-    void recoverFromCrash(); // <<< MODIFIED: Now a private helper
+    TaskHandle_t _storageTaskHandle;
+    QueueHandle_t _fileQueue;
+    bool _rtos_initialized; 
+
+    // <<< NEW: Private helper to check and create missing config files >>>
+    void checkAndCreateDefaults();
+    void recoverFromCrash();
     void runAndStoreDiagnostics();
     static void storageTask(void* pvParameters);
 };
