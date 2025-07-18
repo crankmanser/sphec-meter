@@ -1,12 +1,12 @@
 // src/app/modes/pbios.h
-// NEW FILE
+// MODIFIED FILE
 #pragma once
+
+// Forward-declare AppContext
+struct AppContext;
 
 /**
  * @brief Initializes and runs the pBios (diagnostics) mode.
- *
- * This function contains a simple, blocking loop for the pBios UI.
- * It initializes only the minimal set of managers required for diagnostics
- * and does NOT create the main application's RTOS tasks.
+ * @param appContext A pointer to the central application context.
  */
-void run_pbios_mode();
+void run_pbios_mode(AppContext* appContext);

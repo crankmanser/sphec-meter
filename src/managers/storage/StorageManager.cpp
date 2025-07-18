@@ -80,40 +80,41 @@ void StorageManager::startRtosDependencies() {
         "StorageTask",
         4096,
         this,
-        // --- FIX: Assign highest priority to the StorageTask ---
-        // This is the core of the deadlock fix. By making this task the highest
-        // priority, we ensure that once it takes the SPI mutex, it will run to
-        // completion without being preempted by a lower-priority task (like SensorTask)
-        // that also wants the same mutex.
-        5, 
+        5, // High priority
         &_storageTaskHandle,
         0
     );
     
     _rtos_initialized = true;
+
+    FileOperationRequest request;
+    request.op_type = FileOperationType::CHECK_DEFAULTS;
+    xQueueSend(_fileQueue, &request, (TickType_t)10);
+
+
     LOG_MANAGER("StorageManager RTOS components initialized.\n");
 }
 
-void StorageManager::checkAndCreateDefaults() {
-    LOG_MANAGER("StorageTask started, running initial file integrity check...\n");
-    
-    xSemaphoreTake(_spi_bus_mutex, portMAX_DELAY);
+// <<< ADDED: Implementation for the new public getter. >>>
+SdFs* StorageManager::getSdFs() {
+    return &_sd;
+}
 
+void StorageManager::checkAndCreateDefaults() {
+    LOG_MANAGER("StorageTask: Running initial file integrity check...\n");
+    
     if (!_sd.exists(FileNamer::getFileName(ConfigType::NETWORK_CONFIG))) {
         LOG_MANAGER("Network config not found, creating default.\n");
         NetworkConfig defaultConfig;
         AtomicSave::performSave(&_sd, ConfigType::NETWORK_CONFIG, (const uint8_t*)&defaultConfig, sizeof(defaultConfig));
     }
     
-    xSemaphoreGive(_spi_bus_mutex);
     LOG_MANAGER("File integrity check complete.\n");
 }
 
 
 void StorageManager::storageTask(void* pvParameters) {
     StorageManager* self = static_cast<StorageManager*>(pvParameters);
-
-    self->checkAndCreateDefaults();
 
     FileOperationRequest request;
     for (;;) {
@@ -139,7 +140,6 @@ void StorageManager::storageTask(void* pvParameters) {
     }
 }
 
-// ... (Rest of file is unchanged) ...
 bool StorageManager::saveState(ConfigType type, const uint8_t* data, size_t len) {
     if (!_is_ready || !_rtos_initialized) {
         LOG_MAIN("[SM_ERROR] saveState - Not ready or RTOS components not started.\n");

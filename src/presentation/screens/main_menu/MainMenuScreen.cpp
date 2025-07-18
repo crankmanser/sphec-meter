@@ -2,7 +2,7 @@
 // MODIFIED FILE
 #include "MainMenuScreen.h"
 #include "app/StateManager.h"
-#include "app/common/system_control.h" // <<< ADDED: Include the new system control header
+#include "app/common/system_control.h"
 #include "DebugMacros.h"
 
 MainMenuScreen::MainMenuScreen() : _selected_index(0) {
@@ -36,8 +36,8 @@ void MainMenuScreen::handleInput(const InputEvent& event) {
             }
         }
         else if (selected_item == "Shutdown") {
-            // <<< MODIFIED: Call the global shutdown function >>>
-            initiate_shutdown();
+            // <<< MODIFIED: Pass the context to the shutdown function >>>
+            initiate_shutdown(_appContext);
         }
     }
 }

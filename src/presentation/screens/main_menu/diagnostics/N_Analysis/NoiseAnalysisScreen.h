@@ -7,18 +7,21 @@
 #include <vector>
 #include <string>
 
+// Forward-declare AppContext
+struct AppContext;
+
 class NoiseAnalysisScreen : public Screen {
 public:
     NoiseAnalysisScreen(NoiseAnalysisManager* noiseAnalysisManager);
     void handleInput(const InputEvent& event) override;
     UIRenderProps getRenderProps() override;
-    // <<< ADDED: onEnter to reset state when the screen becomes active >>>
-    void onEnter(StateManager* stateManager) override;
+    // <<< MODIFIED: Signature updated to match the base Screen class >>>
+    void onEnter(StateManager* stateManager, AppContext* context) override;
 
 private:
     enum class ViewState {
         SELECT_SENSOR,
-        ANALYZING, // <<< ADDED
+        ANALYZING,
         SHOW_ANALYSIS
     };
     ViewState _current_view;
@@ -28,7 +31,7 @@ private:
 
     // --- Member variables for analysis ---
     NoiseAnalysisManager* _noise_analysis_manager;
-    NoiseAnalysisParams _analysis_params; // Struct to pass to the task
+    NoiseAnalysisParams _analysis_params; 
     TaskHandle_t _analysis_task_handle;
     volatile bool _analysis_complete_flag;
 

@@ -1,25 +1,17 @@
 // src/app/modes/normal.cpp
 // MODIFIED FILE
 #include "normal.h"
+#include "app/AppContext.h" // <<< ADDED
 #include "boot/init_hals.h"
-#include "boot/init_managers.h"
-#include "app/UiTask.h"
+#include "boot/init_tasks.h" // <<< ADDED
 #include "DebugMacros.h"
 
-// Foward declare to match the required signature
-class NoiseAnalysisManager;
-
-void run_normal_mode() {
+void run_normal_mode(AppContext* appContext) {
     LOG_MAIN("--- Entering NORMAL Application Mode ---\n");
 
-    // --- STAGE 1: INITIALIZE HARDWARE & MANAGERS ---
-    init_hals();
-    init_managers(nullptr); 
-
-    // --- STAGE 2: CREATE THE UI TASK ---
-    // This is created last to ensure all managers and screens are ready.
-    // --- FIX: Assign the correct priority from the new scheme ---
-    xTaskCreatePinnedToCore(uiTask, "UiTask", 4096, NULL, 3, NULL, 1);
+    // Initialize HALs and create the application tasks, passing the context down.
+    init_hals(appContext);
+    init_tasks(appContext); // Tasks are now created within the normal mode flow.
 
     LOG_MAIN("NORMAL mode initialization complete. Handing control to FreeRTOS.\n");
 }

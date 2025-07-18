@@ -47,3 +47,16 @@ Software Mandate: The SensorProcessor must account for this voltage divider by m
 Constraint: All I2C devices (RTC, OLEDs) are on a bus controlled by a TCA9548A multiplexer, the INA219 sits directly on the i2c bus.
 
 Software Mandate: All I2C communication must first select the correct channel on the multiplexer via the TCA9548_Driver.
+
+I2C Bus Configuration & Initialization
+Constraint: The I2C bus is considered extremely sensitive during the initial boot sequence. The order in which devices are initialized is critical to bus stability.
+
+Hardware Truth: All I2C devices (RTC, OLEDs) except for the INA219 are on a bus controlled by a TCA9548A multiplexer.
+
+Software Mandate:
+
+The physical I2C bus (Wire.begin() or i2c.begin()) must be initialized immediately before the drivers that use it are initialized.
+
+The known-stable initialization order from the legacy firmware must be precisely replicated: DisplayManager, then RtcManager, then INA219_Driver. Initializing devices out of this order can leave the I2C bus or the multiplexer in an unknown state, leading to LoadProhibited kernel panics.
+
+All hardware initialization must be performed sequentially within the main setup() function, before any other RTOS tasks that might access hardware are started.

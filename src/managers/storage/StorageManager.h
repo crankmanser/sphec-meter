@@ -17,7 +17,6 @@ enum class FileOperationType {
     WRITE,
     DIAGNOSTICS,
     RECOVER,
-    // <<< NEW: A new operation type for the self-check >>>
     CHECK_DEFAULTS 
 };
 
@@ -52,10 +51,15 @@ public:
     bool requestDiagnostics();
     StorageDiagnosticResult getDiagnosticResult() const;
 
+    // <<< ADDED: Public getter for the underlying SdFs object >>>
+    // This allows other parts of the system (like our main.cpp test loop)
+    // to perform direct file operations when necessary.
+    SdFs* getSdFs();
+
 private:
     uint8_t _cs_pin;
     SPIClass* _spi;
-    SdFs _sd;
+    SdFs _sd; // This is the actual SdFat file system object
     SemaphoreHandle_t _spi_bus_mutex;
     SemaphoreHandle_t _diag_result_mutex;
     bool _is_ready = false;
@@ -67,7 +71,6 @@ private:
     QueueHandle_t _fileQueue;
     bool _rtos_initialized; 
 
-    // <<< NEW: Private helper to check and create missing config files >>>
     void checkAndCreateDefaults();
     void recoverFromCrash();
     void runAndStoreDiagnostics();

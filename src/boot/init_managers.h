@@ -2,12 +2,11 @@
 // MODIFIED FILE
 #pragma once
 
-// Forward-declare to avoid circular dependencies
-class NoiseAnalysisManager;
+// Forward-declare AppContext
+struct AppContext;
 
 /**
  * @brief Instantiates and initializes all manager cabinets.
- * @param noiseAnalysisManager A pointer to the noise analysis manager,
- * which will be null if not in DIAGNOSTICS mode.
+ * @param appContext A pointer to the central application context struct.
  */
-void init_managers(NoiseAnalysisManager* noiseAnalysisManager);
+void init_managers(AppContext* appContext);

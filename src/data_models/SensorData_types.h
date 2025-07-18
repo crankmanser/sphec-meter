@@ -1,9 +1,10 @@
+// src/data_models/SensorData_types.h
+// MODIFIED FILE
 #pragma once
 
-#include <cstdint> // <<< ADDED: Includes standard integer types like int16_t
+#include <cstdint> 
 
 // This struct holds raw, unprocessed data directly from the HAL.
-// It is populated by the RawSensorReader.
 struct RawSensorData {
     int16_t adc_ph_raw;
     int16_t adc_ec_raw;
@@ -17,7 +18,6 @@ struct RawSensorData {
 };
 
 // This struct holds final, clean, scientific values.
-// It is populated by the specialized managers (PH_Manager, EC_Manager, etc.).
 struct ProcessedSensorData {
     float liquid_temp_c;
     float ambient_temp_c;
@@ -25,5 +25,10 @@ struct ProcessedSensorData {
     float ph_value;
     float ec_value;
     float light_level_percent;
-    // ... we will add KPI fields here later
 };
+
+// <<< ADDED: Extern declarations for global data structs >>>
+// These variables are defined in main.cpp. Any file that includes this
+// header can now access them. This resolves the linker error.
+extern RawSensorData g_raw_sensor_data;
+extern ProcessedSensorData g_processed_data;

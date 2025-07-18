@@ -636,3 +636,52 @@ Sensor Data: The sensor values in the telemetry log are currently 0.0. This is u
 3. Next Steps
 With the system not stable, we will not resume our original development plan until the device boot sequence and startup are inorder, the sensors need be brough back online again as tehy are outputting value=0.
 
+
+
+
+
+
+
+
+Project Status Report: SpHEC Meter v1.6.5
+Date: July 18, 2025
+Author: Gemini AI Assistant
+Status: CRITICAL FAILURE. The project is blocked by a persistent, fatal boot-time crash. The core instability ("ghost in the shell") has not been resolved.
+
+1. The Core Problem: A Persistent "Guru Meditation Error"
+Despite a complete, top-to-bottom refactoring of the RTOS architecture and dependency management system, the device remains fundamentally unstable. The system consistently crashes during the early stages of the boot sequence with a Guru Meditation Error: Core 1 panic'ed (LoadProhibited).
+
+Symptom: The crash is a hardware-level memory access violation (EXCVADDR: 0x0000003c), which is a classic sign of the CPU attempting to use a NULL or corrupted pointer.
+
+Location: The crash occurs deterministically at the exact moment the RtcManager is being initialized, immediately after the DisplayManager completes its initialization.
+
+2. Actions Taken & Failure Analysis
+The previous multi-phase refactoring effort was a comprehensive attempt to solve the instability by improving the software architecture. This effort has failed.
+
+Architectural Refactor (AppContext): We successfully replaced the tangled web of global variables with a clean, explicit AppContext dependency container. Result: This did not fix the crash.
+
+RTOS-Level Refactoring (BootTask vs. setup()): We experimented with multiple RTOS-level initialization strategies, including a dedicated BootTask and consolidating all logic into the main setup() function. Result: This did not fix the crash.
+
+I2C Initialization Reordering: We attempted multiple I2C device initialization sequences based on the project manifest's warnings about bus sensitivity. Result: This did not fix the crash.
+
+Conclusion: The root cause of the crash is not a high-level software architecture problem (like a deadlock or race condition between tasks) but a much deeper, more subtle hardware-level initialization conflict. The interaction between the I2C bus, the TCA9548A multiplexer, and the specific libraries used for the RTC and OLEDs is creating a fatal, low-level bus corruption that our software-only fixes have been unable to prevent. The "ghost" is a hardware compatibility issue, not just a software bug.
+
+3. Current Status
+The project is unstable, un-bootable, and critically blocked. All attempts to achieve a stable boot with the new manager classes and architecture have been unsuccessful. The path forward requires a more drastic, hardware-focused approach.
+
+Hardware Constraints Update
+Here is the revised section for the Hardware_Constraints.md file.
+
+5. I2C Bus Configuration & Initialization
+Constraint: The I2C bus is considered EXTREMELY UNSTABLE during the initial boot sequence. The precise, line-by-line order of library calls for device initialization is the most critical factor for system stability.
+
+Hardware Truth: All I2C devices (RTC, OLEDs) except for the INA219 are on a bus controlled by a TCA9548A multiplexer.
+
+Software Mandate:
+
+Initialization Order is Paramount: The known-stable initialization sequence from the legacy firmware must be precisely replicated. Deviations of even a single function call have been proven to cause fatal LoadProhibited kernel panics. The legacy main.cpp is the single source of truth for the correct boot sequence.
+
+Sequential, Pre-Scheduler Initialization: All I2C hardware and driver initializations must be performed sequentially within the main setup() function, before the FreeRTOS scheduler is started and any other tasks are created. Attempting to initialize I2C peripherals from a secondary RTOS task will lead to unpredictable hardware states and immediate system crashes.
+
+Bus Contention: The act of initializing the DisplayManager (which communicates on multiple multiplexer channels) appears to leave the bus in a state that is incompatible with the subsequent initialization of the RtcManager. This is the direct source of the current boot crash and represents a fundamental hardware/library-level conflict.
+

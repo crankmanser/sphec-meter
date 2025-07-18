@@ -2,11 +2,11 @@
 // MODIFIED FILE
 #include "NoiseAnalysisScreen.h"
 #include "app/StateManager.h"
-#include "app/NoiseAnalysisTask.h" // <<< ADDED
-#include "DebugMacros.h"          // <<< ADDED
+#include "app/NoiseAnalysisTask.h"
+#include "DebugMacros.h"
 #include <cmath>
 
-
+// ... (Constructor is unchanged) ...
 NoiseAnalysisScreen::NoiseAnalysisScreen(NoiseAnalysisManager* noiseAnalysisManager) :
     _noise_analysis_manager(noiseAnalysisManager),
     _current_view(ViewState::SELECT_SENSOR),
@@ -15,7 +15,7 @@ NoiseAnalysisScreen::NoiseAnalysisScreen(NoiseAnalysisManager* noiseAnalysisMana
     _analysis_task_handle(NULL),
     _analysis_complete_flag(false),
     _analysis_start_time_ms(0),
-    _estimated_duration_ms(2000) // Estimate 2 seconds for the analysis
+    _estimated_duration_ms(2000) 
 {
     _sensor_menu_items.push_back("pH Probe");
     _sensor_menu_items.push_back("EC Probe");
@@ -29,14 +29,19 @@ NoiseAnalysisScreen::NoiseAnalysisScreen(NoiseAnalysisManager* noiseAnalysisMana
     _view_options.push_back("Recommended Tuning");
 }
 
-void NoiseAnalysisScreen::onEnter(StateManager* stateManager) {
-    _stateManager = stateManager;
+
+// <<< MODIFIED: Implementation updated to match new signature from header >>>
+void NoiseAnalysisScreen::onEnter(StateManager* stateManager, AppContext* context) {
+    // We call the base class's onEnter to store the pointers
+    Screen::onEnter(stateManager, context);
+    
     // Reset the screen to its initial state every time we enter it
     _current_view = ViewState::SELECT_SENSOR;
     _analysis_complete_flag = false;
     LOG_UI("Entered NoiseAnalysisScreen.\n");
 }
 
+// ... (Rest of the file is unchanged) ...
 void NoiseAnalysisScreen::handleInput(const InputEvent& event) {
     switch (_current_view) {
         case ViewState::SELECT_SENSOR:
@@ -45,23 +50,21 @@ void NoiseAnalysisScreen::handleInput(const InputEvent& event) {
             } else if (event.type == InputEventType::ENCODER_DECREMENT) {
                 if (_selected_sensor_index > 0) _selected_sensor_index--;
             } else if (event.type == InputEventType::BTN_MIDDLE_PRESS) {
-                // --- This is where we start the analysis ---
                 if (_noise_analysis_manager) {
                     LOG_UI("Starting noise analysis for sensor %d.\n", _selected_sensor_index);
                     _analysis_complete_flag = false;
                     _analysis_start_time_ms = millis();
                     _current_view = ViewState::ANALYZING;
 
-                    // Configure and launch the one-shot analysis task
                     _analysis_params = { _noise_analysis_manager, static_cast<SensorToAnalyze>(_selected_sensor_index), &_analysis_complete_flag };
                     xTaskCreatePinnedToCore(
                         noiseAnalysisTask,
                         "NoiseAnalysisTask",
                         4096,
                         &_analysis_params,
-                        5, // High priority
+                        5, 
                         &_analysis_task_handle,
-                        0  // Pin to Core 0
+                        0
                     );
                 }
             } else if (event.type == InputEventType::BTN_BOTTOM_PRESS) {
@@ -70,7 +73,6 @@ void NoiseAnalysisScreen::handleInput(const InputEvent& event) {
             break;
 
         case ViewState::ANALYZING:
-            // Intentionally block input while analysis is running, except for cancel.
             if (event.type == InputEventType::BTN_BOTTOM_PRESS) {
                  LOG_UI("User cancelled noise analysis.\n");
                  if(_analysis_task_handle != NULL) {
@@ -97,14 +99,13 @@ UIRenderProps NoiseAnalysisScreen::getRenderProps() {
     UIRenderProps props;
     props.show_top_bar = false;
 
-    // Check if a completed analysis is ready
     if (_analysis_complete_flag) {
         LOG_UI("Analysis complete, fetching results.\n");
         _stat_results = _noise_analysis_manager->getStatisticalResult();
         _fft_results = _noise_analysis_manager->getFftResult();
         _tuning_results = _noise_analysis_manager->getRecommendedTuning();
         _current_view = ViewState::SHOW_ANALYSIS;
-        _analysis_complete_flag = false; // Reset flag
+        _analysis_complete_flag = false;
     }
 
     switch (_current_view) {
@@ -128,15 +129,14 @@ UIRenderProps NoiseAnalysisScreen::getRenderProps() {
                 uint32_t elapsed_ms = millis() - _analysis_start_time_ms;
                 int progress = 0;
 
-                // --- "Dumb but Intelligent" Progress Bar Logic ---
                 uint32_t ninety_five_percent_time = _estimated_duration_ms * 0.95;
                 if (elapsed_ms < ninety_five_percent_time) {
                     progress = (elapsed_ms * 95) / ninety_five_percent_time;
                 } else {
                     progress = 95;
                     uint32_t remaining_time = _estimated_duration_ms - ninety_five_percent_time;
-                    uint32_t stage2_time = remaining_time / 2; // 95-97%
-                    uint32_t stage3_time = remaining_time / 2; // 97-99%
+                    uint32_t stage2_time = remaining_time / 2;
+                    uint32_t stage3_time = remaining_time / 2;
 
                     if (elapsed_ms < ninety_five_percent_time + stage2_time) {
                         progress = 95 + ((elapsed_ms - ninety_five_percent_time) * 2) / stage2_time;

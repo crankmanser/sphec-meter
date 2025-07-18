@@ -1,4 +1,5 @@
 // src/app/WebService.cpp
+// MODIFIED FILE
 #include "app/WebService.h"
 #include "DebugMacros.h"
 #include <ESPmDNS.h>
@@ -6,14 +7,17 @@
 #include <ArduinoJson.h>
 #include "config/calibration_config.h"
 
-// <<< NEW: Include all handler modules >>>
+// <<< MODIFIED: Include the single source of truth for all global variables >>>
+#include "app/globals.h"
+
+// Include all handler modules
 #include "api_handlers/StorageHandlers.h" 
 #include "api_handlers/CalibrationHandlers.h"
 #include "api_handlers/TuningHandlers.h"
 #include "api_handlers/SensorDataHandlers.h"
 
-extern RawSensorData g_raw_sensor_data;
-extern SemaphoreHandle_t g_raw_data_mutex;
+// <<< REMOVED: Redundant extern declarations are no longer needed. >>>
+// The globals are now correctly declared in globals.h
 
 static WebService* _webServiceInstance = nullptr;
 

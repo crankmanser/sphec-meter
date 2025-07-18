@@ -2,136 +2,143 @@
 // MODIFIED FILE
 #include <Arduino.h>
 #include "DebugMacros.h"
-#include "boot/boot_sequence.h" 
-#include "boot/init_globals.h" // <<< ADDED: Include init_globals header
+#include "app/globals.h"
+#include "app/AppContext.h"
 
-// Include all required headers for object instantiation
-#include "config/DebugConfig.h"
-#include "app/common/SystemState.h"
-#include "managers/storage/StorageManager.h"
+// --- Include all necessary headers ---
+#include "config/hardware_config.h"
+#include "hal/TCA9548_Manual_Driver.h"
 #include "hal/INA219_Driver.h"
 #include "hal/ADS1118_Driver.h"
-#include "hal/TCA9548_Manual_Driver.h"
-#include "hal/PCF8563_Driver.h"
-#include "managers/diagnostics/NoiseAnalysisManager.h"
 #include "hal/DS18B20_Driver.h"
 #include "hal/DHT_Driver.h"
 #include "hal/LDR_Driver.h"
+#include "hal/PCF8563_Driver.h"
+#include "managers/storage/StorageManager.h"
+#include "presentation/DisplayManager.h"
+#include "managers/rtc/RtcManager.h"
+#include "managers/io/ButtonManager.h"
+#include "managers/io/EncoderManager.h"
+#include "presentation/UIManager.h"
+#include "app/StateManager.h"
 #include "managers/power/PowerManager.h"
-#include "managers/connectivity/BleManager.h"
-#include "managers/connectivity/WifiManager.h"
-#include "managers/connectivity/MqttManager.h"
 #include "managers/sensor/RawSensorReader.h"
 #include "managers/sensor/LiquidTempManager.h"
 #include "managers/sensor/AmbientTempManager.h"
 #include "managers/sensor/AmbientHumidityManager.h"
 #include "managers/sensor/SensorProcessor.h"
 #include "managers/sensor/LDRManager.h"
-#include "managers/io/ButtonManager.h"
-#include "managers/io/EncoderManager.h"
-#include "managers/rtc/RtcManager.h"
-#include "presentation/DisplayManager.h"
-#include "presentation/UIManager.h"
-#include "app/StateManager.h"
 #include "app/TelemetrySerializer.h"
+#include "managers/connectivity/WifiManager.h"
+#include "managers/connectivity/MqttManager.h"
 #include "app/WebService.h"
+#include "managers/diagnostics/NoiseAnalysisManager.h"
+#if (ENABLE_BLE_STACK)
+#include "managers/connectivity/BleManager.h"
+#endif
 
-// --- Global Variable Declarations ---
-SPIClass& spi = SPI;
-TwoWire i2c = TwoWire(0);
+// --- Task Headers ---
+#include "app/UiTask.h"
+#include "app/ConnectivityTask.h"
+#include "app/SensorTask.h"
+#include "app/TelemetryTask.h"
+#include "app/EncoderTask.h"
+
+// --- Boot Headers ---
+#include "boot/init_i2c_devices.h"
+#include "boot/init_hals.h"
+#include "boot/init_managers.h"
+#include "boot/init_tasks.h"
+#include "boot/post.h"
+#include "app/modes/normal.h"
+#include "app/modes/pbios.h"
+
+// --- Global Objects (Definitions) ---
+SPIClass spi(VSPI);
+TwoWire i2c(0);
 SemaphoreHandle_t g_spi_bus_mutex;
 SemaphoreHandle_t g_raw_data_mutex;
 SemaphoreHandle_t g_processed_data_mutex;
 SemaphoreHandle_t g_storage_diag_mutex;
 
+BootMode g_boot_mode = BootMode::NORMAL;
+NetworkConfig networkConfig;
 RawSensorData g_raw_sensor_data;
 ProcessedSensorData g_processed_data;
-NetworkConfig networkConfig;
-
-TaskHandle_t g_sensorTaskHandle = NULL;
-TaskHandle_t g_telemetryTaskHandle = NULL;
-TaskHandle_t g_connectivityTaskHandle = NULL;
-
-// --- Global Pointer Declarations ---
-INA219_Driver* ina219 = nullptr;
-ADS1118_Driver* adc1 = nullptr;
-ADS1118_Driver* adc2 = nullptr;
-DS18B20_Driver* ds18b20 = nullptr;
-DHT_Driver* dht = nullptr;
-LDR_Driver* ldr = nullptr;
-TCA9548_Manual_Driver* tca9548 = nullptr;
-PCF8563_Driver* pcf8563_driver = nullptr;
-StorageManager* storageManager = nullptr;
-DisplayManager* displayManager = nullptr;
-ButtonManager* buttonManager = nullptr;
-EncoderManager* encoderManager = nullptr;
-StateManager* stateManager = nullptr;
-UIManager* uiManager = nullptr;
-RtcManager* rtcManager = nullptr;
-PowerManager* powerManager = nullptr;
-BleManager* bleManager = nullptr;
-WifiManager* wifiManager = nullptr;
-MqttManager* mqttManager = nullptr;
-RawSensorReader* rawSensorReader = nullptr;
-LiquidTempManager* liquidTempManager = nullptr;
-AmbientTempManager* ambientTempManager = nullptr;
-AmbientHumidityManager* ambientHumidityManager = nullptr;
-SensorProcessor* sensorProcessor = nullptr;
-LDRManager* ldrManager = nullptr;
-TelemetrySerializer* telemetrySerializer = nullptr;
-WebService* webService = nullptr;
-NoiseAnalysisManager* noiseAnalysisManager = nullptr;
-
-BootMode g_boot_mode = BootMode::NORMAL;
-
+AppContext appContext;
 
 void setup() {
+    Serial.begin(115200);
+    while (!Serial);
     LOG_INIT();
+    LOG_MAIN("\n\n--- SpHEC Meter v1.7.2 Final ---\n");
+
+    // --- PHASE 1: Create RTOS Primitives ---
+    g_spi_bus_mutex = xSemaphoreCreateMutex();
+    g_raw_data_mutex = xSemaphoreCreateMutex();
+    g_processed_data_mutex = xSemaphoreCreateMutex();
+    g_storage_diag_mutex = xSemaphoreCreateMutex();
     
-    // --- FIX: STEP 1: INITIALIZE GLOBAL PRIMITIVES FIRST ---
-    // This is the definitive fix for the boot crash. By creating the mutexes
-    // before any other objects are instantiated, we guarantee that any manager
-    // constructor that receives a mutex handle will get a valid one.
-    init_globals();
+    // --- PHASE 2: Initialize Hardware Buses ---
+    i2c.begin(I2C_SDA_PIN, I2C_SCL_PIN);
+    spi.begin(SPI_SCK_PIN, SPI_MISO_PIN, SPI_MOSI_PIN);
 
-    // --- STEP 2: Instantiate all global objects ---
-    // Now that the mutexes exist, it is safe to create all the manager objects.
-    ina219 = new INA219_Driver(INA219_I2C_ADDRESS);
-    tca9548 = new TCA9548_Manual_Driver(TCA_ADDRESS, &i2c);
-    pcf8563_driver = new PCF8563_Driver();
-    storageManager = new StorageManager(SD_CS_PIN, &spi, g_spi_bus_mutex, g_storage_diag_mutex);
-    adc1 = new ADS1118_Driver(ADC1_CS_PIN, ADC2_CS_PIN, SD_CS_PIN, &spi, g_spi_bus_mutex);
-    adc2 = new ADS1118_Driver(ADC2_CS_PIN, ADC1_CS_PIN, SD_CS_PIN, &spi, g_spi_bus_mutex);
-    ds18b20 = new DS18B20_Driver(ONEWIRE_BUS_PIN);
-    dht = new DHT_Driver(DHT_PIN, DHT_TYPE);
-    ldr = new LDR_Driver(adc1);
-    displayManager = new DisplayManager(*tca9548, &i2c);
-    rtcManager = new RtcManager(*pcf8563_driver, *tca9548);
-    powerManager = new PowerManager(*ina219, *storageManager);
+    // --- PHASE 3: Instantiate all objects ---
+    appContext.tca = new TCA9548_Manual_Driver(TCA_ADDRESS, &i2c);
+    appContext.ina219 = new INA219_Driver(INA219_I2C_ADDRESS);
+    appContext.adc1 = new ADS1118_Driver(ADC1_CS_PIN, ADC2_CS_PIN, SD_CS_PIN, &spi, g_spi_bus_mutex);
+    appContext.adc2 = new ADS1118_Driver(ADC2_CS_PIN, ADC1_CS_PIN, SD_CS_PIN, &spi, g_spi_bus_mutex);
+    appContext.ds18b20 = new DS18B20_Driver(ONEWIRE_BUS_PIN);
+    appContext.dht = new DHT_Driver(DHT_PIN, DHT_TYPE);
+    appContext.ldr = new LDR_Driver(appContext.adc1);
+    appContext.rtc_driver = new PCF8563_Driver();
+    appContext.displayManager = new DisplayManager(*appContext.tca, &i2c);
+    appContext.storageManager = new StorageManager(SD_CS_PIN, &spi, g_spi_bus_mutex, g_storage_diag_mutex);
+    appContext.rtcManager = new RtcManager(*appContext.rtc_driver, *appContext.tca);
+    appContext.buttonManager = new ButtonManager(BTN_TOP_PIN, BTN_MIDDLE_PIN, BTN_BOTTOM_PIN);
+    appContext.encoderManager = new EncoderManager();
+    appContext.stateManager = new StateManager();
+    appContext.uiManager = new UIManager(*appContext.displayManager);
+    appContext.powerManager = new PowerManager(*appContext.ina219, *appContext.storageManager);
+    appContext.rawSensorReader = new RawSensorReader(&g_raw_sensor_data, appContext.adc1, appContext.adc2, appContext.ina219, appContext.ldr, appContext.ds18b20, appContext.dht);
+    appContext.liquidTempManager = new LiquidTempManager(&g_raw_sensor_data, &g_processed_data, *appContext.storageManager);
+    appContext.ambientTempManager = new AmbientTempManager(&g_raw_sensor_data, &g_processed_data, *appContext.storageManager);
+    appContext.ambientHumidityManager = new AmbientHumidityManager(&g_raw_sensor_data, &g_processed_data, *appContext.storageManager);
+    appContext.sensorProcessor = new SensorProcessor(&g_raw_sensor_data, &g_processed_data, *appContext.storageManager);
+    appContext.ldrManager = new LDRManager(&g_raw_sensor_data, &g_processed_data, *appContext.storageManager);
+    appContext.telemetrySerializer = new TelemetrySerializer(&g_processed_data, *appContext.powerManager);
+    appContext.wifiManager = new WifiManager(*appContext.storageManager, networkConfig);
+    appContext.mqttManager = new MqttManager();
+    appContext.webService = new WebService(*appContext.storageManager, networkConfig, appContext.sensorProcessor, appContext.rawSensorReader);
+    appContext.noiseAnalysisManager = new NoiseAnalysisManager(appContext.adc1, appContext.adc2, appContext.ina219, nullptr, nullptr, nullptr);
     #if (ENABLE_BLE_STACK)
-    bleManager = new BleManager();
+    appContext.bleManager = new BleManager();
     #endif
-    wifiManager = new WifiManager(*storageManager, networkConfig);
-    mqttManager = new MqttManager();
-    rawSensorReader = new RawSensorReader(&g_raw_sensor_data, adc1, adc2, ina219, ldr, ds18b20, dht);
-    liquidTempManager = new LiquidTempManager(&g_raw_sensor_data, &g_processed_data, *storageManager);
-    ambientTempManager = new AmbientTempManager(&g_raw_sensor_data, &g_processed_data, *storageManager);
-    ambientHumidityManager = new AmbientHumidityManager(&g_raw_sensor_data, &g_processed_data, *storageManager);
-    ldrManager = new LDRManager(&g_raw_sensor_data, &g_processed_data, *storageManager);
-    sensorProcessor = new SensorProcessor(&g_raw_sensor_data, &g_processed_data, *storageManager);
-    telemetrySerializer = new TelemetrySerializer(&g_processed_data, *powerManager);
-    webService = new WebService(*storageManager, networkConfig, sensorProcessor, rawSensorReader);
-    uiManager = new UIManager(*displayManager);
-    stateManager = new StateManager();
-    buttonManager = new ButtonManager(BTN_TOP_PIN, BTN_MIDDLE_PIN, BTN_BOTTOM_PIN);
-    encoderManager = new EncoderManager();
 
-    // --- STEP 3: Run the master boot sequence ---
-    // This single function now handles the entire startup process.
-    runBootSequence();
-}
+    // --- PHASE 4: Sequential Hardware Initialization ---
+    init_i2c_devices(&appContext);
+    init_hals(&appContext);
+    appContext.storageManager->begin();
 
-void loop() {
-    // The main loop is no longer used; all logic is in RTOS tasks.
+    // --- PHASE 5: Detect Boot Mode ---
+    appContext.buttonManager->begin();
+    appContext.encoderManager->begin();
+    pinMode(BTN_MIDDLE_PIN, INPUT_PULLUP);
+    pinMode(BTN_BOTTOM_PIN, INPUT_PULLUP);
+    delay(10); 
+    bool pBiosRequested = (digitalRead(BTN_MIDDLE_PIN) == LOW && digitalRead(BTN_BOTTOM_PIN) == LOW);
+    g_boot_mode = pBiosRequested ? BootMode::DIAGNOSTICS : BootMode::NORMAL;
+    LOG_BOOT("Boot Mode: %s\n", pBiosRequested ? "DIAGNOSTICS" : "NORMAL");
+
+    // --- PHASE 6: Initialize Managers ---
+    init_managers(&appContext);
+    
+    // --- PHASE 7: Start RTOS Tasks ---
+    LOG_BOOT("Creating RTOS Tasks...\n");
+    init_tasks(&appContext);
+
+    LOG_MAIN("Setup complete. Deleting loopTask.\n");
     vTaskDelete(NULL);
 }
+
+void loop() {}

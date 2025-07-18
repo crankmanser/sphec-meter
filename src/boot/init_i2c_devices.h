@@ -1,5 +1,9 @@
 // src/boot/init_i2c_devices.h
+// MODIFIED FILE
 #pragma once
+
+// Forward-declare AppContext
+struct AppContext;
 
 /**
  * @brief Initializes all I2C devices in the correct sequence.
@@ -8,6 +12,7 @@
  * to ensure the bus is stable and devices are brought up in the exact
  * order that is proven to work in the legacy firmware.
  *
+ * @param appContext A pointer to the central application context struct.
  * @return true if all devices initialize successfully, false otherwise.
  */
-bool init_i2c_devices();
+bool init_i2c_devices(AppContext* appContext);
