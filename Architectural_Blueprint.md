@@ -89,7 +89,7 @@ The system uses a dual-core FreeRTOS architecture to ensure UI responsiveness an
 
 1. **Develop a Cabinet First:** Before adding a new manager to main.cpp or creating an RTOS task for it, we first build the cabinet's class structure (.h and .cpp files).
 
-2. **Write Tests for the Cabinet:** We then immediately create a corresponding test folder in the test directory. We write a series of tests to validate all of its core logic. For the CalibrationManager, we would write tests to prove it can:
+2. **Write Tests for the Cabinet:** We then immediately create a corresponding test folder in the test directory. We write a series of tests to validate all of its core logic. `exp:` For the CalibrationManager, we would write tests to prove it can:
 
  # a. Correctly calculate the quadratic coefficients from 3 ideal data points.
 
