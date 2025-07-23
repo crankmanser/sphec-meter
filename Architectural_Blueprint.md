@@ -84,3 +84,19 @@ The system uses a dual-core FreeRTOS architecture to ensure UI responsiveness an
 1.  **Unified `ConfigManager`:** A new cabinet will be created to provide a single interface for all configuration data. It will internally decide whether to fetch data from the fast internal flash (for filter params) or the SD card via `StorageEngine` (for large models).
 2.  **Centralized Fault Handling:** A global `FaultHandler` will be implemented to centralize error logging and reporting, ensuring a consistent system-wide response to critical failures.
 3.  **Commitment to Unit Testing:** The modular "Cabinet" architecture will be leveraged by using PlatformIO's unit testing framework to test each module in isolation, ensuring reliability before integration.
+
+## 4. We will integrate testing directly into our development process.
+
+1. **Develop a Cabinet First:** Before adding a new manager to main.cpp or creating an RTOS task for it, we first build the cabinet's class structure (.h and .cpp files).
+
+2. **Write Tests for the Cabinet:** We then immediately create a corresponding test folder in the test directory. We write a series of tests to validate all of its core logic. For the CalibrationManager, we would write tests to prove it can:
+
+ # a. Correctly calculate the quadratic coefficients from 3 ideal data points.
+
+ # b. Correctly calculate the "Calibration Quality Score".
+
+ # c. Return an error if given invalid data.
+
+3. **Integrate Only After Passing:** Only after the cabinet passes all of its unit tests do we integrate it into the main firmware and its RTOS tasks.
+
+This "test-driven" approach is a best practice that prevents complex bugs by ensuring each individual component of our system is proven to be reliable before we connect them together.
