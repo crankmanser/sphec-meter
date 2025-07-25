@@ -12,14 +12,16 @@
 // --- Cabinet Headers ---
 #include <FaultHandler.h>
 #include <ConfigManager.h>
-// #include <DisplayManager.h> // We will add this back after the test passes
+#include <DisplayManager.h>
+#include <SdManager.h> // Now included
 
 // =================================================================
 // Global Objects (Cabinet Instances)
 // =================================================================
 FaultHandler faultHandler;
 ConfigManager configManager;
-// DisplayManager displayManager;
+DisplayManager displayManager;
+SdManager sdManager; // Now included
 
 // =================================================================
 // setup() - Application Entry Point
@@ -27,13 +29,26 @@ ConfigManager configManager;
 void setup() {
   Serial.begin(115200);
   delay(1000);
-  LOG_BOOT("SpHEC Meter v2.1.0 Booting...");
+  LOG_BOOT("SpHEC Meter v2.1.14 Booting...");
 
-  LOG_BOOT("Initializing Cabinets...");
+  LOG_BOOT("Initializing Core Cabinets...");
   faultHandler.begin();
+  displayManager.begin(faultHandler);
+  displayManager.showBootScreen();
+
+  // Initialize the SdManager.
+  // Note: The blueprint specifies that the ADC manager must be initialized before the
+  // SdManager. We will add that logic when the ADC manager is created.
+  if (sdManager.begin(faultHandler, SD_CS_PIN)) {
+      LOG_BOOT("SdManager Initialized.");
+  } else {
+      LOG_BOOT("FATAL: SdManager FAILED to initialize.");
+      // Here you would trigger a fault or a persistent error on the display
+  }
+
+  // Initialize higher-level cabinets that may depend on storage
   configManager.begin(faultHandler);
-  // displayManager.begin(faultHandler); // Add back later
-  // displayManager.showBootScreen();
+
 
   LOG_BOOT("Mode: Normal");
   LOG_BOOT("Creating FreeRTOS tasks...");
