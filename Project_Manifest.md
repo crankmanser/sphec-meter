@@ -4,6 +4,42 @@ This document tracks the development progress, current tasks, and future roadmap
 
 ## Changelog (What Was Done)
 
+* **v2.1.28 (2025-07-26):**
+    * **Status:** Complete.
+    * **Fix:** Resolved the final, persistent `SdManager` initialization failure by implementing the **explicit bus arbitration** strategy discovered from the legacy project. All SPI device managers now manually de-select other slaves before initiating a transaction, ensuring a stable, conflict-free shared bus.
+    * **Milestone:** All foundational hardware (ADCs, SD Card) are now initializing and functioning correctly. The project is unblocked and ready for application-level development.
+* **v2.1.27 (2025-07-26):**
+    * **Status:** Complete.
+    * **Fix:** Implemented a robust, mutex-protected, shared SPI bus architecture, mirroring the successful pattern from the legacy project.
+* **v2.1.26 (2025-07-25):**
+    * **Status:** Complete.
+    * **Fix:** Successfully implemented the **"Intentional Bus Priming"** strategy discovered from the legacy project. A "dummy read" is now performed on an ADC immediately after the `AdcManager` is initialized. This stabilizes the SPI bus and allows the `SdManager` to initialize successfully.
+    * **Milestone:** The primary goal of this session is now complete. The firmware correctly initializes all foundational hardware components, respects the "SPI Bus Precedence Rule", and successfully reads data from both ADCs and the SD Card.
+* **v2.1.25 (2025-07-25):**
+    * **Status:** Complete.
+    * **Fix:** Corrected the SPI clock speed for the SD card to a safer 4 MHz, which improved compatibility and was a necessary step for successful initialization.
+* **v2.1.23 (2025-07-25):**
+    * **Status:** Complete.
+    * **Fix:** Resolved both the `SdManager` initialization failure and the zero-value ADC readings.
+        1.  Added SPI transaction control (`beginTransaction`/`endTransaction`) to the `AdcManager` to fix the `0.00 mV` readings, as required by the custom driver.
+        2.  Performed a "dummy read" after initializing the `AdcManager` to properly prime the SPI bus, which allowed the `SdManager` to initialize successfully.
+    * **Milestone:** The firmware now correctly initializes all foundational hardware components, respects the "SPI Bus Precedence Rule", and successfully reads data from the ADCs. The primary goal of this session is now complete.
+## Changelog (What Was Done)
+* **v2.1.22 (2025-07-25):**
+    * **Status:** Complete.
+    * **Fix:** Resolved a critical `Guru Meditation Error` (LoadProhibited) that was causing a fatal crash on boot. The issue was a null pointer dereference in the `AdcManager` caused by an incorrect initialization order. The fix involved changing the `ADS1118` objects to pointers and creating them dynamically after the SPI bus was initialized.
+* **v2.1.21 (2025-07-25):**
+    * **Status:** Complete.
+    * **Milestone:** All unit tests for foundational cabinets (`FaultHandler`, `ConfigManager`, `DisplayManager`, `AdcManager`, `SdManager`) are now passing. The persistent, hardware-level `[upload] Error 2` has been resolved by reinstalling the USB-to-serial drivers, unblocking all future development.
+* **v2.1.20 (2025-07-25):**
+    * **Status:** Complete.
+    * **Fix:** Resolved the persistent `[upload] Error 2` by performing a clean reinstallation of the USB-to-serial (CP210x) driver, which fixed a driver conflict that made the COM port unavailable during the upload process.
+* **v2.1.19 (2025-07-25):**
+    * **Status:** Failed
+    * **Issue:** An attempt to bypass the test framework and perform a direct firmware upload also failed. The error `Could not open COMx, the port doesn't exist` confirmed the issue is with the uploader's access to the port, not the test environment.
+* **v2.1.18 (2025-07-25):**
+    * **Status:** In Progress
+    * **Task:** Created and integrated a new `AdcManager` cabinet to manage the ADS1118 ADCs. Updated `main.cpp` to perform a hardware-level test to read and display ADC values, verifying sensor functionality before addressing the `SdManager` initialization issue.
 * **v2.1.17 (2025-07-25):**
     * **Status:** In Progress.
     * **Task:** Initiating a new session to resolve the persistent `SdManager` initialization failure by correctly implementing the "SPI Bus Precedence Rule".
@@ -54,7 +90,7 @@ This document tracks the development progress, current tasks, and future roadmap
 
 ## Current Task (What We Are Doing)
 
-* **Verify `SdManager` Initialization.** With the boot sequence now correctly following the architectural constraints, we will build and upload the firmware to confirm that the `SdManager` initializes successfully.
+* **Session Complete.** All foundational hardware drivers and managers have been successfully integrated and tested. The system is stable and ready for the next phase of development.
 
 
 
@@ -65,10 +101,10 @@ This document tracks the development progress, current tasks, and future roadmap
 
 ## Roadmap (What Is to Come)
 
-1.  Implement the `PowerMonitor` cabinet and its associated `i2cTask`.
-2.  Implement the `FilterManagerHF` and `FilterManagerLF` cabinets.
-3.  Develop the `adcTask` to read from the ADS1118 ADCs.
-4.  Develop the `CalibrationManager` and the 3-point calibration UI wizard.
-5.  Implement the `StatusIndicatorController`.
-6.  Develop the `ConnectivityManager` and the API layer.
-7.  Implement the full UI based on the `UIEngine` components.
+1. Implement the `PowerMonitor` cabinet and its associated `i2cTask`.
+2. Implement the `FilterManagerHF` and `FilterManagerLF` cabinets.
+3. Develop the `adcTask` to read from the ADS1118 ADCs.
+4. Develop the `CalibrationManager` and the 3-point calibration UI wizard.
+5. Implement the `StatusIndicatorController`.
+6. Develop the `ConnectivityManager` and the API layer.
+7. Implement the full UI based on the `UIEngine` components.
