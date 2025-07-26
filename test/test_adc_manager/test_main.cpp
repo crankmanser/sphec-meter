@@ -6,6 +6,10 @@
 #include <FaultHandler.h>
 
 FaultHandler testFaultHandler;
+// In a test environment, we don't have a real SPI bus or mutex.
+// We can pass nullptr for these as the smoke test only checks for successful compilation and instantiation.
+SPIClass* vspi = nullptr;
+SemaphoreHandle_t spiMutex = nullptr;
 
 void setUp(void) {}
 void tearDown(void) {}
@@ -21,7 +25,8 @@ void test_adc_manager_initialization() {
 
     // ACT
     // The success of this test is that the code runs without a fault.
-    adcManager.begin(testFaultHandler);
+    // We now provide all required arguments for the begin() method.
+    adcManager.begin(testFaultHandler, vspi, spiMutex, 0);
 
     // ASSERT
     TEST_ASSERT_TRUE(true);

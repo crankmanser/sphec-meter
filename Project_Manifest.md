@@ -4,6 +4,13 @@ This document tracks the development progress, current tasks, and future roadmap
 
 ## Changelog (What Was Done)
 
+* **v2.2.0 (2025-07-26):**
+    * **Status:** Complete.
+    * **Milestone:** Successfully integrated the `PowerMonitor` cabinet and its `INA219_Driver` HAL into the main application.
+    * **Feature:** Created a new `i2cTask` to periodically call `powerMonitor.update()`, ensuring the battery gauge is always current.
+    * **Feature:** Created a new `sensorTask` to perform periodic raw data acquisition from the ADCs.
+    * **Feature:** Implemented a `telemetryTask` to gather and report processed data from all managers to the serial monitor, confirming end-to-end data flow.
+    * **Enhancement:** Integrated the live State of Charge (SOC) from the `PowerMonitor` into the `DisplayManager`'s boot screen for immediate visual feedback.
 * **v2.1.28 (2025-07-26):**
     * **Status:** Complete.
     * **Fix:** Resolved the final, persistent `SdManager` initialization failure by implementing the **explicit bus arbitration** strategy discovered from the legacy project. All SPI device managers now manually de-select other slaves before initiating a transaction, ensuring a stable, conflict-free shared bus.
@@ -90,7 +97,8 @@ This document tracks the development progress, current tasks, and future roadmap
 
 ## Current Task (What We Are Doing)
 
-* **Session Complete.** All foundational hardware drivers and managers have been successfully integrated and tested. The system is stable and ready for the next phase of development.
+* **Session Complete.** We have successfully integrated the `PowerMonitor` and established the core application tasks (`sensorTask`, `i2cTask`, `telemetryTask`). The system is stable and producing live data.
+
 
 
 
@@ -101,10 +109,9 @@ This document tracks the development progress, current tasks, and future roadmap
 
 ## Roadmap (What Is to Come)
 
-1. Implement the `PowerMonitor` cabinet and its associated `i2cTask`.
-2. Implement the `FilterManagerHF` and `FilterManagerLF` cabinets.
-3. Develop the `adcTask` to read from the ADS1118 ADCs.
-4. Develop the `CalibrationManager` and the 3-point calibration UI wizard.
-5. Implement the `StatusIndicatorController`.
-6. Develop the `ConnectivityManager` and the API layer.
-7. Implement the full UI based on the `UIEngine` components.
+1.  **Implement the Filter Engine**: Create a `FilterManager` cabinet to process raw ADC voltages into clean, stable signals using the two-stage filtering logic.
+2.  **Implement the Calibration Engine**: Create a `CalibrationManager` to convert the filtered voltages into final, calibrated pH and EC values using the quadratic model.
+3.  **Enhance `telemetryTask`**: Update the telemetry output to report the final, scientifically accurate pH and EC values.
+4.  **Develop the `StatusIndicatorController`**: Implement the logic to drive the physical LEDs and on-screen status icons based on system state.
+5.  **Develop the `ConnectivityManager` and API Layer**: Implement the Wi-Fi/BLE connection management and the remote control API.
+6.  **Implement the Full UI**: Build out the user interface screens based on the `UIEngine` components.
