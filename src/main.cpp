@@ -17,6 +17,7 @@
 #include <SdManager.h>
 #include <INA219_Driver.h>
 #include <PowerMonitor.h>
+#include <FilterManager.h> // --- NEW: Include the new FilterManager cabinet ---
 
 // =================================================================
 // Global Objects
@@ -28,9 +29,16 @@ AdcManager adcManager;
 SdManager sdManager;
 INA219_Driver ina219Driver;
 PowerMonitor powerMonitor;
+FilterManager filterManager; // --- NEW: Create a global instance of the FilterManager ---
 
 SPIClass* vspi = nullptr;
 SemaphoreHandle_t spiMutex = nullptr;
+
+// --- NEW: Global variables to hold the latest filtered sensor data ---
+// These variables will be updated by the sensorTask and read by the telemetryTask.
+double filtered_ph_voltage = 0.0;
+double filtered_ec_voltage = 0.0;
+
 
 // =================================================================
 // FreeRTOS Task Prototypes
@@ -45,7 +53,7 @@ void telemetryTask(void* pvParameters);
 void setup() {
   Serial.begin(115200);
   delay(1000);
-  LOG_BOOT("SpHEC Meter v2.2.0 Booting...");
+  LOG_BOOT("SpHEC Meter v2.3.0 Booting...");
 
   // --- Initialize Core Systems & Buses ---
   spiMutex = xSemaphoreCreateMutex();
@@ -87,6 +95,13 @@ void setup() {
   LOG_BOOT("Initializing ConfigManager...");
   configManager.begin(faultHandler);
   LOG_BOOT("ConfigManager Initialized.");
+  
+  // --- NEW: Initialize the FilterManager ---
+  LOG_BOOT("Initializing FilterManager...");
+  if (!filterManager.begin(faultHandler, configManager)) {
+      faultHandler.trigger_fault("FILTER_INIT_FAIL", "FilterManager failed to init", __FILE__, __LINE__);
+  }
+  LOG_BOOT("FilterManager Initialized.");
 
   LOG_BOOT("Initializing INA219_Driver...");
   if (!ina219Driver.begin(faultHandler)) {
@@ -110,7 +125,7 @@ void setup() {
 
   LOG_BOOT("Creating FreeRTOS tasks...");
   xTaskCreate(i2cTask, "i2cTask", 2048, NULL, TASK_PRIORITY_LOW, NULL);
-  xTaskCreate(sensorTask, "sensorTask", 2048, NULL, TASK_PRIORITY_NORMAL, NULL);
+  xTaskCreate(sensorTask, "sensorTask", 4096, NULL, TASK_PRIORITY_NORMAL, NULL); // Increased stack for filter logic
   xTaskCreate(telemetryTask, "telemetryTask", 2048, NULL, TASK_PRIORITY_LOW, NULL);
   LOG_BOOT("Initialization Complete. Handing over to RTOS.");
 }
@@ -137,36 +152,43 @@ void i2cTask(void* pvParameters) {
 }
 
 /**
- * @brief FreeRTOS task for handling periodic raw sensor data acquisition.
+ * @brief FreeRTOS task for sensor data acquisition and processing.
+ * --- MODIFIED: This task now reads raw ADC values and processes them through the FilterManager.
  */
 void sensorTask(void* pvParameters) {
     for (;;) {
-        // This task is now the designated place for reading raw sensor values
-        // that will later be processed and calibrated.
-        adcManager.getVoltage(0); // Read pH sensor ADC
-        adcManager.getVoltage(1); // Read EC sensor ADC
+        // --- Step 1: Acquire raw data from ADCs ---
+        double raw_ph_voltage = adcManager.getVoltage(0);
+        double raw_ec_voltage = adcManager.getVoltage(1);
 
-        vTaskDelay(pdMS_TO_TICKS(1000));
+        // --- Step 2: Process raw data through the FilterManager ---
+        // The global variables are updated here, making the clean data available
+        // to other tasks like the telemetryTask.
+        filtered_ph_voltage = filterManager.process(raw_ph_voltage);
+        filtered_ec_voltage = filterManager.process(raw_ec_voltage);
+
+        // The task now runs at a higher frequency to feed the filters more data.
+        vTaskDelay(pdMS_TO_TICKS(100));
     }
 }
 
 /**
  * @brief FreeRTOS task for gathering and reporting telemetry data.
+ * --- MODIFIED: This task now reports the clean, filtered voltages.
  */
 void telemetryTask(void* pvParameters) {
     for (;;) {
-        // Gather data from all relevant managers
-        double ph_voltage = adcManager.getVoltage(0);
-        double ec_voltage = adcManager.getVoltage(1);
+        // Gather data from all relevant managers and global variables
         float soc = powerMonitor.getSOC();
         float soh = powerMonitor.getSOH();
         bool charging = powerMonitor.isCharging();
 
-        // Print a formatted telemetry string to the serial monitor
+        // Print a formatted telemetry string to the serial monitor.
+        // This now shows the final, filtered values from the sensorTask.
         Serial.printf(
-            "[TELEMETRY] pH_mV: %.2f, EC_mV: %.2f, SOC: %.1f%%, SOH: %.1f%%, Charging: %s\n",
-            ph_voltage,
-            ec_voltage,
+            "[TELEMETRY] pH_mV_filtered: %.2f, EC_mV_filtered: %.2f, SOC: %.1f%%, SOH: %.1f%%, Charging: %s\n",
+            filtered_ph_voltage,
+            filtered_ec_voltage,
             soc,
             soh,
             charging ? "YES" : "NO"

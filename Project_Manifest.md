@@ -4,6 +4,13 @@ This document tracks the development progress, current tasks, and future roadmap
 
 ## Changelog (What Was Done)
 
+* **v2.3.0 (2025-07-27):**
+    * **Status:** Complete.
+    * **Milestone:** Successfully implemented and integrated the `FilterManager` cabinet.
+    * **Feature:** Created the core `PI_Filter` class, encapsulating the Median and Stateful PI filtering logic as per the user manual and architectural blueprint.
+    * **Feature:** Created the `FilterManager` cabinet to manage the two-stage (HF/LF) filtering pipeline.
+    * **Fix:** Debugged and corrected a subtle logic flaw in the `PI_Filter`'s median calculation, enabling the unit test to pass and validating the filter's core functionality.
+    * **Integration:** Integrated the `FilterManager` into `main.cpp`, routing raw ADC data through the new filtering pipeline and updating the `telemetryTask` to report the clean, filtered voltage.
 * **v2.2.0 (2025-07-26):**
     * **Status:** Complete.
     * **Milestone:** Successfully integrated the `PowerMonitor` cabinet and its `INA219_Driver` HAL into the main application.
@@ -97,7 +104,7 @@ This document tracks the development progress, current tasks, and future roadmap
 
 ## Current Task (What We Are Doing)
 
-* **Session Complete.** We have successfully integrated the `PowerMonitor` and established the core application tasks (`sensorTask`, `i2cTask`, `telemetryTask`). The system is stable and producing live data.
+* **Session Complete.** We have successfully created and validated the `FilterManager`. The system is ready for the next stage of development.
 
 
 
@@ -109,9 +116,8 @@ This document tracks the development progress, current tasks, and future roadmap
 
 ## Roadmap (What Is to Come)
 
-1.  **Implement the Filter Engine**: Create a `FilterManager` cabinet to process raw ADC voltages into clean, stable signals using the two-stage filtering logic.
-2.  **Implement the Calibration Engine**: Create a `CalibrationManager` to convert the filtered voltages into final, calibrated pH and EC values using the quadratic model.
-3.  **Enhance `telemetryTask`**: Update the telemetry output to report the final, scientifically accurate pH and EC values.
-4.  **Develop the `StatusIndicatorController`**: Implement the logic to drive the physical LEDs and on-screen status icons based on system state.
-5.  **Develop the `ConnectivityManager` and API Layer**: Implement the Wi-Fi/BLE connection management and the remote control API.
-6.  **Implement the Full UI**: Build out the user interface screens based on the `UIEngine` components.
+1.  **Implement the Calibration Engine**: Create a `CalibrationManager` cabinet to process filtered voltages into final, calibrated pH and EC values using the quadratic model.
+2.  **Enhance `telemetryTask`**: Update the telemetry output to report the final, scientifically accurate pH and EC values.
+3.  **Develop the `StatusIndicatorController`**: Implement the logic to drive the physical LEDs and on-screen status icons based on system state.
+4.  **Develop the `ConnectivityManager` and API Layer**: Implement the Wi-Fi/BLE connection management and the remote control API.
+5.  **Implement the Full UI**: Build out the user interface screens based on the `UIEngine` components.
