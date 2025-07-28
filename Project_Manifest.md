@@ -4,6 +4,21 @@ This document tracks the development progress, current tasks, and future roadmap
 
 ## Changelog (What Was Done)
 
+* **v2.5.0 (2025-07-27):**
+    * **Status:** Complete.
+    * **Milestone:** The back-end calibration engine is feature-complete and validated.
+    * **Feature:** Implemented the full KPI calculation logic within the `CalibrationManager`, including "Calibration Quality Score %" (based on R-squared and slope analysis) and "Sensor Drift %" (based on integrated deviation).
+    * **Unit Test:** Updated and passed the unit test for `CalibrationManager` to validate the correctness of the new KPI calculations.
+    * **Integration:** Created a temporary "Serial Calibration Wizard" task to allow for a full 3-point calibration via the serial monitor, proving the entire workflow from data entry to model calculation and saving to the SD card.
+* **v2.4.0 (2025-07-27):**
+    * **Status:** Complete.
+    * **Milestone:** Successfully implemented the core `CalibrationManager` cabinet and integrated it into the main data pipeline.
+    * **Feature:** Created the `CalibrationManager` cabinet to perform quadratic regression, converting filtered voltages into scientific values (pH/EC).
+    * **Feature:** Implemented temperature compensation logic for both pH and EC measurements.
+    * **Feature:** Enhanced the `AdcManager` with "Smart ADC" logic, allowing probes to be put into a low-power dormant state by manipulating the ADC's single-shot and continuous modes.
+    * **Unit Test:** Created and passed a comprehensive unit test for the `CalibrationManager`, validating its mathematical accuracy.
+    * **Integration:** Updated `main.cpp` to create a full data pipeline: Raw ADC -> `FilterManager` -> `CalibrationManager` -> Final Compensated Value.
+    * **Integration:** Enhanced the `telemetryTask` to display the output of every stage of the data pipeline, providing a powerful tool for live integration testing.
 * **v2.3.0 (2025-07-27):**
     * **Status:** Complete.
     * **Milestone:** Successfully implemented and integrated the `FilterManager` cabinet.
@@ -104,7 +119,9 @@ This document tracks the development progress, current tasks, and future roadmap
 
 ## Current Task (What We Are Doing)
 
-* **Session Complete.** We have successfully created and validated the `FilterManager`. The system is ready for the next stage of development.
+* **Session Complete.** We have successfully implemented and validated the entire back-end calibration engine. The system is now ready for UI development.
+
+
 
 
 
@@ -116,8 +133,6 @@ This document tracks the development progress, current tasks, and future roadmap
 
 ## Roadmap (What Is to Come)
 
-1.  **Implement the Calibration Engine**: Create a `CalibrationManager` cabinet to process filtered voltages into final, calibrated pH and EC values using the quadratic model.
-2.  **Enhance `telemetryTask`**: Update the telemetry output to report the final, scientifically accurate pH and EC values.
-3.  **Develop the `StatusIndicatorController`**: Implement the logic to drive the physical LEDs and on-screen status icons based on system state.
-4.  **Develop the `ConnectivityManager` and API Layer**: Implement the Wi-Fi/BLE connection management and the remote control API.
-5.  **Implement the Full UI**: Build out the user interface screens based on the `UIEngine` components.
+1.  **Develop the User Interface**: Begin creating the UI screens for the calibration wizard and the main measurement display, building upon the now-complete back-end engine.
+2.  **Implement the `StatusIndicatorController`**: Implement the logic to drive the physical LEDs and on-screen status icons based on system state (e.g., probe warming up, calibration needed).
+3.  **Develop the `ConnectivityManager` and API Layer**: Implement the Wi-Fi/BLE connection management and the remote control API.
