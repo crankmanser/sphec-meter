@@ -4,6 +4,21 @@ This document tracks the development progress, current tasks, and future roadmap
 
 ## Changelog (What Was Done)
 
+* **v2.9.2 (2025-07-28):**
+    * **Status:** Complete.
+    * **Milestone:** The entire back-end sensor and calibration engine is now feature-complete, stable, and validated on hardware.
+    * **Fix:** Resolved the persistent, erratic raw voltage readings by re-implementing the critical **"Priming Read"** timing requirement in the `AdcManager`, where two consecutive ADC reads are performed and the first is discarded to ensure a stable signal.
+    * **Feature:** Added a comprehensive **Hardware Calibration Wizard** via the serial monitor to guide the user through the physical adjustment of the PH-4502C module's offset potentiometer.
+    * **Feature:** Enhanced the `CalibrationManager`'s diagnostics by adding the **"Zero-Point Drift" KPI**, which tracks the hardware's neutral voltage offset over time to monitor long-term probe health.
+    * **Enhancement:** Made all serial wizard interactions fully blocking to improve user experience.
+* **v2.8.0 (2025-07-28):**
+    * **Status:** Complete.
+    * **Milestone:** All hardware sensors are now online and integrated into the firmware's data processing pipeline.
+    * **Feature:** Created the `TempManager` cabinet and `oneWireTask` to bring the DS18B20 and DHT11 temperature sensors online.
+    * **Feature:** Implemented a simple moving average filter in the `PowerMonitor` to smooth the noisy current readings from the INA219.
+    * **Feature:** Enhanced the `AdcManager` to read from specific ADC channels, enabling the monitoring of the 3.3V and 5.0V system busses.
+    * **Feature:** Added dedicated `FilterManager` instances for all new analog inputs.
+    * **Integration:** Updated the `sensorTask` and `telemetryTask` to process and display data from every sensor on the board.
 * **v2.5.0 (2025-07-27):**
     * **Status:** Complete.
     * **Milestone:** The back-end calibration engine is feature-complete and validated.
@@ -119,7 +134,7 @@ This document tracks the development progress, current tasks, and future roadmap
 
 ## Current Task (What We Are Doing)
 
-* **Session Complete.** We have successfully implemented and validated the entire back-end calibration engine. The system is now ready for UI development.
+* **Session Complete.** We have successfully implemented, debugged, and validated the entire back-end firmware. All sensors are online, the data pipelines are stable, and the calibration engine is fully functional.
 
 
 

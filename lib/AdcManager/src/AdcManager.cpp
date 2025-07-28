@@ -60,15 +60,17 @@ double AdcManager::getVoltage(uint8_t adcIndex, uint8_t inputs) {
 
         _vspi->beginTransaction(SPISettings(ADS1118::SCLK, MSBFIRST, SPI_MODE1));
         
-        // --- FIX: Pass the desired input channel to the driver ---
+        // --- FIX: Implement the "Priming Read" as per legacy code ---
+        // The first read stabilizes the ADC's internal sampling. Its result is discarded.
+        adc->getMilliVolts(inputs); 
+        
+        // The second read is the actual, stable measurement.
         double voltage = adc->getMilliVolts(inputs);
 
         _vspi->endTransaction();
         xSemaphoreGive(_spiMutex);
 
-        // --- FIX: Account for 10k+10k voltage divider on probe outputs ---
-        // The voltage at the ADC is half the actual sensor output.
-        // We only apply this correction if it's a differential probe reading.
+        // Account for 10k+10k voltage divider on probe outputs
         if(inputs == ADS1118::DIFF_0_1) {
             voltage *= 2.0;
         }
