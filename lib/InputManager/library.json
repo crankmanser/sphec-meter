@@ -1,0 +1,12 @@
+// File Path: /lib/InputManager/library.json
+// NEW FILE
+
+{
+    "name": "InputManager",
+    "version": "1.0.0",
+    "build": {
+        "flags": [
+            "-I ../../include"
+        ]
+    }
+}

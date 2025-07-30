@@ -1,4 +1,5 @@
 // File Path: /lib/PowerMonitor/src/PowerMonitor.cpp
+// MODIFIED FILE
 
 #include "PowerMonitor.h"
 #include <Arduino.h>
@@ -33,7 +34,7 @@ bool PowerMonitor::begin(FaultHandler& faultHandler, INA219_Driver& ina219, I_St
 }
 
 void PowerMonitor::update() {
-    if (!_initialized) return;
+    if (!_initialized || !_ina219) return;
 
     unsigned long now = millis();
     if (now - _last_update_ms < 1000) return;
@@ -43,7 +44,6 @@ void PowerMonitor::update() {
 
     _voltage_V = _ina219->getBusVoltage();
     
-    // --- FIX: Implement moving average filter for current ---
     _currentBuffer[_currentBufferIndex] = _ina219->getCurrent_mA();
     _currentBufferIndex = (_currentBufferIndex + 1) % CURRENT_FILTER_WINDOW_SIZE;
     
@@ -83,12 +83,13 @@ float PowerMonitor::getSOC() {
     return constrain((_state.remainingEnergyWh / max_capacity_wh) * 100.0f, 0.0f, 100.0f);
 }
 
-// ... (Rest of PowerMonitor.cpp is unchanged) ...
 float PowerMonitor::getSOH() { return _state.stateOfHealthPercent; }
 bool PowerMonitor::isCharging() { return _is_charging; }
 float PowerMonitor::getVoltage() { return _voltage_V; }
 float PowerMonitor::getCurrent() { return _current_mA; }
+
 void PowerMonitor::reconcileStateFromOCV() {
+    if (!_ina219) return;
     float ocv_voltage = _ina219->getBusVoltage();
     for (int i = 0; i < 4; i++) {
         delay(50);
@@ -99,9 +100,10 @@ void PowerMonitor::reconcileStateFromOCV() {
     _state.remainingEnergyWh = max_capacity_wh * (true_soc / 100.0f);
     saveState();
 }
+
 void PowerMonitor::loadState() {
     StaticJsonDocument<256> doc;
-    if (_storage->loadJson("/power_state.json", doc)) {
+    if (_storage && _storage->loadJson("/power_state.json", doc)) {
         _state.stateOfHealthPercent = doc["soh"] | 100.0f;
         _state.chargeCycles = doc["cycles"] | 0.0;
         _state.accumulatedDischargeWh = doc["accumulatedDischarge"] | 0.0;
@@ -110,7 +112,9 @@ void PowerMonitor::loadState() {
         saveState();
     }
 }
+
 void PowerMonitor::saveState() {
+    if (!_storage) return;
     StaticJsonDocument<256> doc;
     doc["soh"] = _state.stateOfHealthPercent;
     doc["cycles"] = _state.chargeCycles;
@@ -118,6 +122,7 @@ void PowerMonitor::saveState() {
     doc["remainingEnergy"] = _state.remainingEnergyWh;
     _storage->saveJson("/power_state.json", doc);
 }
+
 float PowerMonitor::getSocFromVoltage(float voltage) {
     if (voltage >= OCV_SOC_TABLE.back().first) return OCV_SOC_TABLE.back().second;
     if (voltage <= OCV_SOC_TABLE.front().first) return OCV_SOC_TABLE.front().second;
@@ -132,6 +137,7 @@ float PowerMonitor::getSocFromVoltage(float voltage) {
     }
     return 0.0f;
 }
+
 float PowerMonitor::getSohFromCycles() {
     float cycles = _state.chargeCycles;
     if (cycles <= SOH_CYCLE_TABLE.front().first) return SOH_CYCLE_TABLE.front().second;

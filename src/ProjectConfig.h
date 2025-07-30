@@ -38,9 +38,12 @@
 // --- User Input ---
 #define ENCODER_PIN_A 25
 #define ENCODER_PIN_B 26
-#define BTN_OLED1_PIN 34 // Bottom Button
-#define BTN_OLED2_PIN 39 // Middle Button
-#define BTN_OLED3_PIN 36 // Top Button
+// Top Physical Button
+#define BTN_BACK_PIN 36
+// Middle Physical Button
+#define BTN_ENTER_PIN 39
+// Bottom Physical Button
+#define BTN_DOWN_PIN 34
 
 // --- LEDs ---
 // Note: Pin mapping corrected based on "Bi-Color (Red/Blue)" description

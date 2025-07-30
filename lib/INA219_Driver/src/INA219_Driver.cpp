@@ -1,4 +1,5 @@
 // File Path: /lib/INA219_Driver/src/INA219_Driver.cpp
+// MODIFIED FILE
 
 #include "INA219_Driver.h"
 
@@ -12,7 +13,8 @@
 INA219_Driver::INA219_Driver() : 
     _faultHandler(nullptr), 
     _ina219(INA219_I2C_ADDRESS), 
-    _initialized(false) 
+    _initialized(false),
+    _i2cMutex(nullptr)
 {}
 
 /**
@@ -24,23 +26,25 @@ INA219_Driver::INA219_Driver() :
  * helps confirm that the sensor is connected and functioning.
  *
  * @param faultHandler A reference to the global fault handler for error reporting.
+ * @param i2cMutex A handle to the mutex protecting the I2C bus.
  * @return True if initialization is successful, false otherwise.
  */
-bool INA219_Driver::begin(FaultHandler& faultHandler) {
+bool INA219_Driver::begin(FaultHandler& faultHandler, SemaphoreHandle_t i2cMutex) {
     _faultHandler = &faultHandler;
+    _i2cMutex = i2cMutex;
     
     // The Adafruit library's begin() method initializes the I2C communication.
-    _ina219.begin();
+    // We wrap it in our mutex to ensure thread safety.
+    if (xSemaphoreTake(_i2cMutex, portMAX_DELAY) == pdTRUE) {
+        _ina219.begin();
+        xSemaphoreGive(_i2cMutex);
+    }
 
     // Perform a simple check to see if the device is responsive.
-    // If the bus voltage is greater than 0, it's a good sign that the
-    // sensor is connected and providing data.
-    if (_ina219.getBusVoltage_V() > 0) {
+    if (getBusVoltage() > 0) {
         _initialized = true;
         return true;
     } else {
-        // If the check fails, we do not set the initialized flag.
-        // This prevents other methods from trying to read from a non-existent sensor.
         _initialized = false;
         return false;
     }
@@ -56,10 +60,15 @@ bool INA219_Driver::begin(FaultHandler& faultHandler) {
  * @return The bus voltage in Volts, or 0.0 if not initialized.
  */
 float INA219_Driver::getBusVoltage() {
-    if (!_initialized) {
+    if (!_initialized || _i2cMutex == nullptr) {
         return 0.0f;
     }
-    return _ina219.getBusVoltage_V();
+    float voltage = 0.0f;
+    if (xSemaphoreTake(_i2cMutex, portMAX_DELAY) == pdTRUE) {
+        voltage = _ina219.getBusVoltage_V();
+        xSemaphoreGive(_i2cMutex);
+    }
+    return voltage;
 }
 
 /**
@@ -72,8 +81,13 @@ float INA219_Driver::getBusVoltage() {
  * @return The current in Milliamps, or 0.0 if not initialized.
  */
 float INA219_Driver::getCurrent_mA() {
-    if (!_initialized) {
+    if (!_initialized || _i2cMutex == nullptr) {
         return 0.0f;
     }
-    return _ina219.getCurrent_mA();
+    float current = 0.0f;
+    if (xSemaphoreTake(_i2cMutex, portMAX_DELAY) == pdTRUE) {
+        current = _ina219.getCurrent_mA();
+        xSemaphoreGive(_i2cMutex);
+    }
+    return current;
 }

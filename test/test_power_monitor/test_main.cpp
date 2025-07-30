@@ -1,4 +1,5 @@
 // File Path: /test/test_power_monitor/test_main.cpp
+// MODIFIED FILE
 
 #include <Arduino.h>
 #include <unity.h>
@@ -11,6 +12,9 @@
 // A global instance of FaultHandler for the test environment.
 FaultHandler testFaultHandler;
 
+// --- FIX: Add a null handle for the new mutex parameter ---
+SemaphoreHandle_t testI2cMutex = nullptr;
+
 // --- MOCK OBJECTS ---
 
 class MockINA219 : public INA219_Driver {
@@ -18,7 +22,10 @@ public:
     float mockVoltage = 8.4f;
     float mockCurrent = 0.0f;
 
-    bool begin(FaultHandler& faultHandler) override { return true; }
+    // --- FIX: Update the signature to match the base class virtual method ---
+    bool begin(FaultHandler& faultHandler, SemaphoreHandle_t i2cMutex) override { return true; }
+    
+    // These methods don't need the mutex as they return mock data.
     float getBusVoltage() override { return mockVoltage; }
     float getCurrent_mA() override { return mockCurrent; }
 };
@@ -46,6 +53,8 @@ MockINA219 mockIna219;
 MockStorage mockStorage;
 
 void setUp(void) {
+    // The mockIna219 doesn't need to be initialized with begin() for this test,
+    // as the PowerMonitor itself will be tested.
     powerMonitor.begin(testFaultHandler, mockIna219, mockStorage);
 }
 

@@ -1,4 +1,5 @@
 // File Path: /test/test_display_manager/test_main.cpp
+// MODIFIED FILE
 
 #include <Arduino.h>
 #include <unity.h>
@@ -6,6 +7,9 @@
 #include <FaultHandler.h>
 
 FaultHandler testFaultHandler;
+
+// --- FIX: Add a null handle for the new mutex parameter ---
+SemaphoreHandle_t testI2cMutex = nullptr;
 
 void setUp(void) {}
 void tearDown(void) {}
@@ -27,7 +31,8 @@ void test_display_manager_initialization() {
     // where the I2C hardware is not actually connected. However, the underlying
     // Adafruit library returns true. The important part is that this call
     // does not crash the system.
-    displayManager.begin(testFaultHandler);
+    // --- FIX: Pass the null mutex to the begin() method ---
+    displayManager.begin(testFaultHandler, testI2cMutex);
 
     // ASSERT
     // The success of this test is that the code runs without a fault.

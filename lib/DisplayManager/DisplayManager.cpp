@@ -1,22 +1,18 @@
 // File Path: /lib/DisplayManager/DisplayManager.cpp
+// MODIFIED FILE
 
 #include "DisplayManager.h"
+// --- FIX: Use a relative path to include the header from the src directory ---
+#include "../../src/DebugConfig.h" // For LOG_BOOT
 
-//
-// --- CONSTRUCTOR ---
-//
-DisplayManager::DisplayManager() : 
-    _faultHandler(nullptr), 
+DisplayManager::DisplayManager() :
+    _faultHandler(nullptr),
     _initialized(false),
-    // Initialize display objects with their dimensions and the Wire library.
     _display1(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1),
     _display2(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1),
     _display3(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1)
 {}
 
-//
-// --- I2C MULTIPLEXER CHANNEL SELECTION ---
-//
 void DisplayManager::selectTCAChannel(uint8_t channel) {
     if (channel > 7) return;
     Wire.beginTransmission(TCA_ADDRESS);
@@ -24,32 +20,25 @@ void DisplayManager::selectTCAChannel(uint8_t channel) {
     Wire.endTransmission();
 }
 
-//
-// --- INITIALIZATION ---
-//
 bool DisplayManager::begin(FaultHandler& faultHandler) {
     _faultHandler = &faultHandler;
 
-    // Initialize the I2C bus itself
     Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN);
-
     bool success = true;
 
-    // Initialize Display 1 (Top)
+    LOG_BOOT("DisplayManager: Initializing TOP display (obj _display1) on TCA Channel %d", OLED3_TCA_CHANNEL);
     selectTCAChannel(OLED3_TCA_CHANNEL);
     if (!_display1.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
-        // In a real scenario, you might use the fault handler here.
-        // For now, we'll just track success.
         success = false;
     }
 
-    // Initialize Display 2 (Middle)
+    LOG_BOOT("DisplayManager: Initializing MIDDLE display (obj _display2) on TCA Channel %d", OLED2_TCA_CHANNEL);
     selectTCAChannel(OLED2_TCA_CHANNEL);
     if (!_display2.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
         success = false;
     }
 
-    // Initialize Display 3 (Bottom)
+    LOG_BOOT("DisplayManager: Initializing BOTTOM display (obj _display3) on TCA Channel %d", OLED1_TCA_CHANNEL);
     selectTCAChannel(OLED1_TCA_CHANNEL);
     if (!_display3.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
         success = false;
@@ -59,22 +48,17 @@ bool DisplayManager::begin(FaultHandler& faultHandler) {
     return success;
 }
 
-//
-// --- PUBLIC METHODS ---
-//
 void DisplayManager::showBootScreen() {
     if (!_initialized) return;
-
     Adafruit_SSD1306* displays[] = {&_display1, &_display2, &_display3};
     uint8_t channels[] = {OLED3_TCA_CHANNEL, OLED2_TCA_CHANNEL, OLED1_TCA_CHANNEL};
-
     for (int i = 0; i < 3; ++i) {
         selectTCAChannel(channels[i]);
         displays[i]->clearDisplay();
         displays[i]->setTextSize(1);
         displays[i]->setTextColor(SSD1306_WHITE);
         displays[i]->setCursor(0, 10);
-        displays[i]->println("SpHEC Meter v2.1.0");
+        displays[i]->println("SpHEC Meter v2.9.3");
         displays[i]->println("Booting...");
         displays[i]->display();
     }

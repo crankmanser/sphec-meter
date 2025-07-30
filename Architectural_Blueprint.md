@@ -59,7 +59,7 @@ The system uses a dual-core FreeRTOS architecture to ensure UI responsiveness an
 * **Purpose:** To provide an accurate, KPI-driven view of battery state and health.
 * **Hardware:** Uses an INA219 for bidirectional current sensing.
 * **Hybrid Model:**
-    * **Coulomb Counting:** Precisively tracks energy (Watt-hours) flowing into and out of the battery. A **moving average filter** is applied to the raw current readings to smooth high-frequency fluctuations from the ESP32's radio, improving accuracy.
+    * **Coulomb Counting:** Precisely tracks energy (Watt-hours) flowing into and out of the battery. A **moving average filter** is applied to the raw current readings to smooth high-frequency fluctuations from the ESP32's radio, improving accuracy.
     * **Voltage Reconciliation:** Uses Open-Circuit Voltage (OCV) to correct for drift after power-off events.
     * **Stateful Learning:** An automated, long-term **SOH Recalibration Cycle** measures the battery's true capacity, making the SOH value progressively more accurate.
 * **Storage:** The power monitor's state is persisted to the SD card via the `StorageEngine`.
@@ -70,25 +70,39 @@ The system uses a dual-core FreeRTOS architecture to ensure UI responsiveness an
 * **Atomic Writes:** To prevent data corruption, the engine uses an atomic write procedure: `write to .tmp` -> `delete .bak` -> `rename .json to .bak` -> `rename .tmp to .json`.
 * **"Limp Mode":** The storage layer is abstracted via an `I_StorageProvider` interface to handle SD card failure by redirecting file operations to a remote source.
 
-### 2.5. UI & Status System
+## 3. User Interface Architecture
 
-* **`UIEngine` (Atelier):** A cabinet of modular, reusable UI components that enforce a standard theme.
-* **`StatusIndicatorController`:** A central cabinet that manages the device's overall state via physical LEDs and an on-screen "State Stack".
-* **System Tray:** A non-persistent status bar showing the health of background components.
-* **State Stack:** A persistent, prioritized icon stack providing visual context for the Status LED's behavior.
+The User Interface is built upon a declarative, modular, and event-driven architecture, drawing inspiration from the successful patterns of the legacy `v1.6.6` firmware while being implemented within the new, stable "Cabinet" model.
 
-### 2.6. Connectivity
+### 3.1. Dual-Boot System
 
-* **`ConnectivityManager`:** A cabinet that manages the connection state according to the hierarchy: **Wi-Fi Station (STA)** -> **BLE** -> **Wi-Fi Access Point (AP)**.
-* **API Layer:** The device exposes a remote control API over HTTP and BLE GATT services.
+The firmware features a dual-boot system to separate normal operation from diagnostics. A menu is presented to the user on power-up, allowing them to select one of two modes:
+* **Normal Mode**: The main application mode. All managers and RTOS tasks are created and the UI boots to the main application menu.
+* **pBios Mode**: A diagnostics and tuning environment. Only a minimal set of managers and tasks are created to ensure a "quiet" system, free from the potential interference of background processes. The UI boots to a dedicated pBios menu.
 
-## 3. Adopted Refinements (Critiques)
+### 3.2. Core UI Philosophy: Block-Based Assembly
+
+The UI is built on the principle that **screens do not draw themselves**. A screen's only responsibility is to act as a state machine. To render, it populates a shared data structure (`UIRenderProps`) that describes which reusable **UI Blocks** to display (e.g., `MenuBlock`, `GraphBlock`). The `UIManager` is the sole rendering engine that interprets this data structure and calls the appropriate drawing functions for each block.
+
+### 3.3. Event-Driven Input
+
+To ensure a "silky-smooth" and responsive user experience, all physical user input is handled in a high-priority, dedicated `InputManager` task. This task uses hardware interrupts for the rotary encoder and debouncing for buttons. It places clean input events (e.g., `ENCODER_INCREMENT`, `BUTTON_PRESS`) onto a FreeRTOS queue. The main `uiTask` reads from this queue, ensuring that input handling is completely decoupled from the rendering loop and preventing UI jitter.
+
+### 3.4. The Four-Core UI Engines
+
+The architecture is composed of four distinct, cooperative systems:
+1.  **GUI Engine (The "Canvas")**: The foundational rendering pipeline, orchestrated by the `uiTask` and comprising the `StateManager` (screen ownership) and `UIManager` (rendering).
+2.  **Stateful Status System (The "Dashboard")**: A system responsible for managing the globally visible status bars (System Tray and State Stack) independently of the main screen content.
+3.  **Wizard Engine (The "Director")**: A reusable framework for creating multi-step, guided workflows (e.g., calibration) from modular `Wizard` and `WizardStep` components.
+4.  **Graphing & Trending Engine (The "Chartist")**: The system responsible for all data visualization, using reusable `GraphBlock` components.
+
+## 4. Adopted Refinements (Critiques)
 
 1.  **Unified `ConfigManager`:** A new cabinet will be created to provide a single interface for all configuration data.
 2.  **Centralized Fault Handling:** A global `FaultHandler` will be implemented to centralize error logging and reporting.
 3.  **Commitment to Unit Testing:** The modular "Cabinet" architecture will be leveraged by using PlatformIO's unit testing framework to test each module in isolation.
 
-## 4. We will integrate testing directly into our development process.
+## 5. We will integrate testing directly into our development process.
 
 1. **Develop a Cabinet First:** Before adding a new manager to main.cpp or creating an RTOS task for it, we first build the cabinet's class structure (.h and .cpp files).
 

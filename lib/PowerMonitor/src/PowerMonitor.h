@@ -1,4 +1,5 @@
 // File Path: /lib/PowerMonitor/src/PowerMonitor.h
+// MODIFIED FILE
 
 #ifndef POWER_MONITOR_H
 #define POWER_MONITOR_H
@@ -40,8 +41,7 @@ private:
     float _current_mA;
     bool _is_charging;
     unsigned long _last_update_ms;
-
-    // --- NEW: Buffer for moving average filter on current ---
+    
     float _currentBuffer[CURRENT_FILTER_WINDOW_SIZE];
     int _currentBufferIndex;
 

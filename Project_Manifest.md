@@ -4,6 +4,15 @@ This document tracks the development progress, current tasks, and future roadmap
 
 ## Changelog (What Was Done)
 
+* **v2.9.4 (2025-07-29):**
+    * **Status:** Complete.
+    * **Milestone:** Successfully completed **Phase 1 of the UI implementation**. The foundational back-end for the user interface is now in place and stable.
+    * **Feature:** Created the `InputManager`, `StateManager`, and `UIManager` cabinets, establishing the core plumbing for an event-driven, declarative UI.
+    * **Feature:** Implemented the main `uiTask`, which orchestrates input handling, state management, and rendering on its own RTOS task pinned to Core 1.
+    * **Fix:** Resolved a critical `Guru Meditation Error` (IllegalInstruction) by re-architecting the UI initialization sequence to be RTOS-safe. The `uiTask` is now responsible for setting its own initial state, resolving the race condition that caused the crash.
+* **v2.9.3 (2025-07-28):**
+    * **Status:** Planning Complete.
+    * **Milestone:** Finalized a comprehensive, four-phase development plan for implementing the graphical user interface, building upon the stable back-end architecture. The plan includes a dual-boot pBios system, an event-driven input manager, and a declarative, block-based rendering engine.
 * **v2.9.2 (2025-07-28):**
     * **Status:** Complete.
     * **Milestone:** The entire back-end sensor and calibration engine is now feature-complete, stable, and validated on hardware.
@@ -68,7 +77,6 @@ This document tracks the development progress, current tasks, and future roadmap
         1.  Added SPI transaction control (`beginTransaction`/`endTransaction`) to the `AdcManager` to fix the `0.00 mV` readings, as required by the custom driver.
         2.  Performed a "dummy read" after initializing the `AdcManager` to properly prime the SPI bus, which allowed the `SdManager` to initialize successfully.
     * **Milestone:** The firmware now correctly initializes all foundational hardware components, respects the "SPI Bus Precedence Rule", and successfully reads data from the ADCs. The primary goal of this session is now complete.
-## Changelog (What Was Done)
 * **v2.1.22 (2025-07-25):**
     * **Status:** Complete.
     * **Fix:** Resolved a critical `Guru Meditation Error` (LoadProhibited) that was causing a fatal crash on boot. The issue was a null pointer dereference in the `AdcManager` caused by an incorrect initialization order. The fix involved changing the `ADS1118` objects to pointers and creating them dynamically after the SPI bus was initialized.
@@ -132,9 +140,12 @@ This document tracks the development progress, current tasks, and future roadmap
 
 
 
+
+
+
 ## Current Task (What We Are Doing)
 
-* **Session Complete.** We have successfully implemented, debugged, and validated the entire back-end firmware. All sensors are online, the data pipelines are stable, and the calibration engine is fully functional.
+* **UI Development - Phase 2: Boot Selection Logic (BLOCKED)**. The project is currently blocked by a persistent compilation error related to header include paths for the `InputManager` library. Multiple attempts to resolve this via relative paths and `library.json` manifests have been unsuccessful. The immediate goal is to resolve this build system issue before proceeding.
 
 
 
@@ -148,6 +159,8 @@ This document tracks the development progress, current tasks, and future roadmap
 
 ## Roadmap (What Is to Come)
 
-1.  **Develop the User Interface**: Begin creating the UI screens for the calibration wizard and the main measurement display, building upon the now-complete back-end engine.
-2.  **Implement the `StatusIndicatorController`**: Implement the logic to drive the physical LEDs and on-screen status icons based on system state (e.g., probe warming up, calibration needed).
-3.  **Develop the `ConnectivityManager` and API Layer**: Implement the Wi-Fi/BLE connection management and the remote control API.
+1.  **UI - Phase 2: Boot Selection Logic (CONTINUE)**: Once unblocked, continue the implementation of the dual-boot selection menu.
+2.  **UI - Phase 3: pBios Boot UI**: Build the dedicated user interface for the pBios diagnostics and tuning environment.
+3.  **UI - Phase 4: Normal Boot UI**: Build the main application's user interface, including the main menu, live measurement screens, and the full graphical calibration wizard.
+4.  **Implement the `StatusIndicatorController`**: Implement the logic to drive the physical LEDs and on-screen status icons based on system state.
+5.  **Develop the `ConnectivityManager` and API Layer**: Implement the Wi-Fi/BLE connection management and the remote control API.
