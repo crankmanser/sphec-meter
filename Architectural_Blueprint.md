@@ -72,29 +72,40 @@ The system uses a dual-core FreeRTOS architecture to ensure UI responsiveness an
 
 ## 3. User Interface Architecture
 
-The User Interface is built upon a declarative, modular, and event-driven architecture, drawing inspiration from the successful patterns of the legacy `v1.6.6` firmware while being implemented within the new, stable "Cabinet" model.
+The User Interface is built upon a robust, modular, and stable architecture designed to ensure responsiveness and prevent the instability issues of the legacy system. It is composed of three distinct, isolated UI systems.
 
-### 3.1. Dual-Boot System
+### 3.1. The Three UI Engines
 
-The firmware features a dual-boot system to separate normal operation from diagnostics. A menu is presented to the user on power-up, allowing them to select one of two modes:
-* **Normal Mode**: The main application mode. All managers and RTOS tasks are created and the UI boots to the main application menu.
-* **pBios Mode**: A diagnostics and tuning environment. Only a minimal set of managers and tasks are created to ensure a "quiet" system, free from the potential interference of background processes. The UI boots to a dedicated pBios menu.
+The firmware's UI is not a single monolithic entity but is divided into three purpose-built systems:
+
+1.  **The Boot UI (Self-Contained Bootloader):**
+    * **Location:** `src/boot/boot_sequence.cpp`
+    * **Responsibility:** To handle the initial boot animation and the critical `NORMAL` vs. `PBIOS` mode selection.
+    * **Architecture:** This is not a full "engine" but a simple, self-contained, blocking `while` loop. It performs its own direct, low-level polling of the input pins and draws directly to the screen via the `DisplayManager`. It has **no dependencies** on the main application's RTOS tasks or UI cabinets (`InputManager`, `StateManager`). This extreme simplicity guarantees maximum stability during the critical startup phase.
+
+2.  **The pBIOS UI Engine (Diagnostics Mode):**
+    * **Location:** `main.cpp`, within the `else` block after boot mode selection.
+    * **Responsibility:** To provide a user interface for the diagnostics (pBios) mode.
+    * **Architecture:** A simple, blocking `while` loop that runs directly on Core 0 after `setup()` completes. It instantiates its own `InputManager` for a consistent user feel but does **not** use the `StateManager` or a dedicated `uiTask`. It directly creates and manages its own screen instances (e.g., `pBiosMenuScreen`) and orchestrates the input and rendering loop itself. This keeps it lightweight and isolated from the main application's complexity.
+
+3.  **The Main UI Engine (Normal Mode):**
+    * **Location:** Orchestrated by the `uiTask` created in `main.cpp`.
+    * **Responsibility:** To run the full, feature-rich user interface for the main application.
+    * **Architecture:** This is the full, multi-threaded UI engine. It consists of:
+        * A dedicated `uiTask` pinned to **Core 1** to guarantee responsiveness.
+        * The `InputManager` cabinet, which uses an ISR for the encoder and provides a simple polling interface.
+        * The `StateManager` cabinet, which owns all screen objects and manages transitions.
+        * The `UIManager` cabinet, which acts as the central rendering engine.
+        * A collection of reusable **UI Blocks** (`MenuBlock`, `ButtonBlock`) located in `src/ui/blocks/`.
+        * A collection of **Screens** (`MainMenuScreen`, etc.) located in `src/ui/screens/`.
 
 ### 3.2. Core UI Philosophy: Block-Based Assembly
 
-The UI is built on the principle that **screens do not draw themselves**. A screen's only responsibility is to act as a state machine. To render, it populates a shared data structure (`UIRenderProps`) that describes which reusable **UI Blocks** to display (e.g., `MenuBlock`, `GraphBlock`). The `UIManager` is the sole rendering engine that interprets this data structure and calls the appropriate drawing functions for each block.
+The `pBIOS` and `Main` UI engines are both built on the principle that **screens do not draw themselves**. A screen's only responsibility is to act as a state machine. To render, it populates a shared data structure (`UIRenderProps`) that describes which reusable **UI Blocks** to display. The `UIManager` (in Normal mode) or the main loop (in pBios mode) is the sole rendering engine that interprets this data structure and calls the appropriate drawing functions for each block.
 
-### 3.3. Event-Driven Input
+### 3.3. Input Handling
 
-To ensure a "silky-smooth" and responsive user experience, all physical user input is handled in a high-priority, dedicated `InputManager` task. This task uses hardware interrupts for the rotary encoder and debouncing for buttons. It places clean input events (e.g., `ENCODER_INCREMENT`, `BUTTON_PRESS`) onto a FreeRTOS queue. The main `uiTask` reads from this queue, ensuring that input handling is completely decoupled from the rendering loop and preventing UI jitter.
-
-### 3.4. The Four-Core UI Engines
-
-The architecture is composed of four distinct, cooperative systems:
-1.  **GUI Engine (The "Canvas")**: The foundational rendering pipeline, orchestrated by the `uiTask` and comprising the `StateManager` (screen ownership) and `UIManager` (rendering).
-2.  **Stateful Status System (The "Dashboard")**: A system responsible for managing the globally visible status bars (System Tray and State Stack) independently of the main screen content.
-3.  **Wizard Engine (The "Director")**: A reusable framework for creating multi-step, guided workflows (e.g., calibration) from modular `Wizard` and `WizardStep` components.
-4.  **Graphing & Trending Engine (The "Chartist")**: The system responsible for all data visualization, using reusable `GraphBlock` components.
+To ensure a "silky-smooth" and responsive user experience, all physical user input is handled by the `InputManager` cabinet. This cabinet uses a hardware interrupt for the rotary encoder to guarantee no rotation is ever missed. The main UI loop (either in `uiTask` or the `pBios` loop) calls `inputManager.update()` on every frame to get the latest debounced button states and the processed encoder "velocity engine" output.
 
 ## 4. Adopted Refinements (Critiques)
 

@@ -1,4 +1,4 @@
-// File Path: /lib/UIManager/src/blocks/MenuBlock.h
+// File Path: /src/ui/blocks/MenuBlock.h
 // NEW FILE
 
 #ifndef MENU_BLOCK_H

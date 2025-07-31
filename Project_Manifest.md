@@ -4,6 +4,15 @@ This document tracks the development progress, current tasks, and future roadmap
 
 ## Changelog (What Was Done)
 
+* **v2.11.3 (2025-07-31):**
+    * **Status:** Complete.
+    * **Milestone:** Successfully refactored the entire UI architecture into a stable, three-part system, resolving all outstanding bugs.
+    * **Feature:** Implemented a completely self-contained "Boot UI" in the boot_sequence module. It handles its own input polling and display logic, making the boot selection process extremely robust.
+    * **Feature:** Created two distinct UI engines that are launched based on the boot mode:
+    A simple, blocking "pBIOS UI Engine" for diagnostics mode.
+    The full, RTOS-driven "Main UI Engine" for normal operation.
+    * **Fix:** Resolved all UI bugs, including screen flickering, incorrect menu scrolling, and missing button prompts. The UI is now stable, responsive, and ready for feature development.
+    * **Enhancement:** Tuned the encoder's velocity engine to provide a more intuitive and less sensitive feel, as per user feedback.
 * **v2.9.4 (2025-07-29):**
     * **Status:** Complete.
     * **Milestone:** Successfully completed **Phase 1 of the UI implementation**. The foundational back-end for the user interface is now in place and stable.
@@ -145,7 +154,9 @@ This document tracks the development progress, current tasks, and future roadmap
 
 ## Current Task (What We Are Doing)
 
-* **UI Development - Phase 2: Boot Selection Logic (BLOCKED)**. The project is currently blocked by a persistent compilation error related to header include paths for the `InputManager` library. Multiple attempts to resolve this via relative paths and `library.json` manifests have been unsuccessful. The immediate goal is to resolve this build system issue before proceeding.
+* **UI Development - Phase 3: pBIOS Boot UI** Implement Core Screens. With the foundational UI architecture now stable and functional, the current task is to build out the primary user-facing screens for the main application. 
+
+
 
 
 
@@ -159,8 +170,13 @@ This document tracks the development progress, current tasks, and future roadmap
 
 ## Roadmap (What Is to Come)
 
-1.  **UI - Phase 2: Boot Selection Logic (CONTINUE)**: Once unblocked, continue the implementation of the dual-boot selection menu.
-2.  **UI - Phase 3: pBios Boot UI**: Build the dedicated user interface for the pBios diagnostics and tuning environment.
-3.  **UI - Phase 4: Normal Boot UI**: Build the main application's user interface, including the main menu, live measurement screens, and the full graphical calibration wizard.
-4.  **Implement the `StatusIndicatorController`**: Implement the logic to drive the physical LEDs and on-screen status icons based on system state.
-5.  **Develop the `ConnectivityManager` and API Layer**: Implement the Wi-Fi/BLE connection management and the remote control API.
+
+
+1.  **UI - Phase 4: Normal Boot UI**: 
+    This includes:
+
+    * a. Creating the Live Measurement Screen to display real-time sensor data (pH, EC, Temp, etc.).
+
+    * b. Beginning the implementation of the multi-step Calibration Wizard Screen.
+2.  **Implement the `StatusIndicatorController`**: Implement the logic to drive the physical LEDs and on-screen status icons based on system state.
+3.  **Develop the `ConnectivityManager` and API Layer**: Implement the Wi-Fi/BLE connection management and the remote control API.

@@ -6,36 +6,46 @@
 #include "boot_animation.h"
 
 BootSelector::BootSelector(DisplayManager& displayManager) :
-    _displayManager(displayManager)
+    _displayManager(displayManager),
+    _encoder_last_state(0),
+    _encoder_pulses(0)
 {}
 
-// This is now the single, public entry point for the boot UI.
 BootMode BootSelector::runBootSequence(uint32_t post_duration_ms) {
     runPostAnimation(post_duration_ms);
 
-    BootMode selected_mode = BootMode::NORMAL;
-    const uint32_t timeout_ms = 5000;
-    uint32_t start_time = millis();
+    pinMode(ENCODER_PIN_A, INPUT_PULLUP);
+    pinMode(ENCODER_PIN_B, INPUT_PULLUP);
+    pinMode(BTN_ENTER_PIN, INPUT_PULLUP);
 
-    while (millis() - start_time < timeout_ms) {
-        if (digitalRead(BTN_BACK_PIN) == HIGH) {
-            selected_mode = BootMode::PBIOS;
-            drawMenu(selected_mode);
-            delay(500);
-            return selected_mode;
+    BootMode selected_mode = BootMode::NORMAL;
+    
+    while (true) {
+        // --- Simple Encoder Polling ---
+        int enc_a = digitalRead(ENCODER_PIN_A);
+        int enc_b = digitalRead(ENCODER_PIN_B);
+        int current_state = (enc_b << 1) | enc_a;
+        if(current_state != _encoder_last_state) {
+            _encoder_pulses++;
         }
-        if (digitalRead(BTN_DOWN_PIN) == HIGH) {
-            selected_mode = BootMode::NORMAL;
-            drawMenu(selected_mode);
-            delay(500);
-            return selected_mode;
+        _encoder_last_state = current_state;
+
+        if (_encoder_pulses >= 4) {
+            selected_mode = (selected_mode == BootMode::NORMAL) ? BootMode::PBIOS : BootMode::NORMAL;
+            _encoder_pulses = 0;
+        }
+
+        // --- Simple Button Polling ---
+        if (digitalRead(BTN_ENTER_PIN) == LOW) {
+            delay(50);
+            if (digitalRead(BTN_ENTER_PIN) == LOW) {
+                return selected_mode;
+            }
         }
         
         drawMenu(selected_mode);
-        delay(50);
+        delay(10);
     }
-
-    return BootMode::NORMAL;
 }
 
 void BootSelector::runPostAnimation(uint32_t post_duration_ms) {
@@ -61,6 +71,8 @@ void BootSelector::drawMenu(BootMode selected_mode) {
     display_middle->clearDisplay();
     display_middle->setTextSize(1);
     display_middle->setFont(nullptr);
+
+    // Draw Menu Items
     const char* item1 = "pBios";
     const char* item2 = "StartUp";
     if (selected_mode == BootMode::PBIOS) {
@@ -79,17 +91,24 @@ void BootSelector::drawMenu(BootMode selected_mode) {
     }
     display_middle->setCursor(4, 34);
     display_middle->print(item2);
+
+    // --- FIX: Draw the button prompt directly ---
+    const char* prompt = "Select";
+    int16_t x1, y1;
+    uint16_t w, h;
+    display_middle->getTextBounds(prompt, 0, 0, &x1, &y1, &w, &h);
+    display_middle->setCursor((SCREEN_WIDTH - w) / 2, SCREEN_HEIGHT - h - 2);
+    display_middle->setTextColor(1);
+    display_middle->print(prompt);
+
     display_middle->display();
+
+    // Clear other screens
     Adafruit_SSD1306* display_top = _displayManager.getDisplay(0);
     _displayManager.selectTCAChannel(OLED3_TCA_CHANNEL);
-    if(display_top) {
-        display_top->clearDisplay();
-        display_top->display();
-    }
+    if(display_top) { display_top->clearDisplay(); display_top->display(); }
+    
     Adafruit_SSD1306* display_bottom = _displayManager.getDisplay(2);
     _displayManager.selectTCAChannel(OLED1_TCA_CHANNEL);
-    if(display_bottom) {
-        display_bottom->clearDisplay();
-        display_bottom->display();
-    }
+    if(display_bottom) { display_bottom->clearDisplay(); display_bottom->display(); }
 }

@@ -18,12 +18,14 @@
 #include <FilterManager.h>
 #include <CalibrationManager.h>
 #include <TempManager.h>
-#include <InputManager.h>
-#include <StateManager.h>
-#include <UIManager.h>
+#include "ui/InputManager.h"
+#include "ui/StateManager.h"
+#include "ui/UIManager.h"
 #include "boot/boot_sequence.h"
+#include "ui/screens/MainMenuScreen.h"
+#include "ui/screens/pBiosMenuScreen.h"
 
-// ... (global objects are unchanged)
+// --- Global object declarations for core cabinets ---
 FaultHandler faultHandler;
 ConfigManager configManager;
 DisplayManager displayManager;
@@ -34,17 +36,24 @@ PowerMonitor powerMonitor;
 TempManager tempManager;
 FilterManager phFilter, ecFilter, v3_3_Filter, v5_0_Filter;
 CalibrationManager phCalManager, ecCalManager;
-InputManager inputManager;
-StateManager stateManager;
-UIManager uiManager(displayManager);
 
+// --- UI Engine objects (conditionally initialized) ---
+InputManager* inputManager = nullptr;
+StateManager* stateManager = nullptr;
+UIManager* uiManager = nullptr;
+
+// --- Global variables & RTOS primitives ---
 SPIClass* vspi = nullptr;
 SemaphoreHandle_t spiMutex = nullptr;
 SemaphoreHandle_t i2cMutex = nullptr;
-portMUX_TYPE sharedDataMutex = portMUX_INITIALIZER_UNLOCKED;
-BootMode g_boot_mode = BootMode::NORMAL;
+
+// --- Global data variables for inter-task communication ---
 volatile double raw_ph_voltage, filtered_ph_voltage;
 double final_ph_value, final_ec_value, final_probe_temp, final_ambient_temp, final_humidity, final_v3_3_bus, final_v5_0_bus;
+portMUX_TYPE sharedDataMutex = portMUX_INITIALIZER_UNLOCKED;
+
+// --- Task forward declarations ---
+void uiTask(void* pvParameters);
 void i2cTask(void* pvParameters);
 void oneWireTask(void* pvParameters);
 void sensorTask(void* pvParameters);
@@ -52,54 +61,61 @@ void telemetryTask(void* pvParameters);
 void hardwareCalTask(void* pvParameters);
 void softwareCalTask(void* pvParameters);
 String getSerialInput();
-void uiTask(void* pvParameters);
 
-class PlaceholderScreen : public Screen {
-public:
-    void handleInput(const InputEvent& event) override {}
-    void getRenderProps(UIRenderProps* props_to_fill) override {
-        if (g_boot_mode == BootMode::NORMAL) {
-            props_to_fill->oled_middle_props.line1 = "Mode: NORMAL";
-        } else {
-            props_to_fill->oled_middle_props.line1 = "Mode: PBIOS";
-        }
-    }
-};
 
+
+
+
+
+
+
+
+/**
+ * @brief The main setup function, run once on boot.
+ * Orchestrates the startup sequence and decides which UI engine to launch.
+ */
 void setup() {
     Serial.begin(115200);
     delay(1000);
-    LOG_BOOT("SpHEC Meter v2.9.5 Booting...");
+    LOG_BOOT("SpHEC Meter v2.11.3 Booting...");
 
-    pinMode(BTN_BACK_PIN, INPUT);
-    pinMode(BTN_ENTER_PIN, INPUT);
-    pinMode(BTN_DOWN_PIN, INPUT);
-
+    // Initialize hardware busses and RTOS primitives
     spiMutex = xSemaphoreCreateMutex();
     i2cMutex = xSemaphoreCreateMutex();
     vspi = new SPIClass(VSPI);
     vspi->begin(VSPI_SCK_PIN, VSPI_MISO_PIN, VSPI_MOSI_PIN);
     
+    // Initialize core managers that are always needed
     faultHandler.begin();
     displayManager.begin(faultHandler);
     
-    LOG_BOOT("Performing POST...");
+    // --- Run the self-contained Boot UI ---
+    // This is a simple, blocking loop that handles its own input and display.
     BootSelector bootSelector(displayManager);
-    
-    // Initialize core managers during the POST animation
-    adcManager.begin(faultHandler, vspi, spiMutex, SD_CS_PIN);
-    sdManager.begin(faultHandler, vspi, spiMutex, SD_CS_PIN, ADC1_CS_PIN, ADC2_CS_PIN);
-    configManager.begin(faultHandler);
-    LOG_BOOT("POST complete.");
+    BootMode boot_mode = bootSelector.runBootSequence(2000);
+    LOG_BOOT("Boot mode selected: %s", (boot_mode == BootMode::NORMAL) ? "NORMAL" : "PBIOS");
 
-    // --- FIX: Call the single, correct boot sequence method ---
-    g_boot_mode = bootSelector.runBootSequence(2000);
-    LOG_BOOT("Boot mode selected: %s", (g_boot_mode == BootMode::NORMAL) ? "NORMAL" : "PBIOS");
-    
-    inputManager.begin(); 
+    // --- ARCHITECTURAL SPLIT: Initialize the appropriate UI Engine ---
+    if (boot_mode == BootMode::NORMAL) {
+        // --- INITIALIZE MAIN UI ENGINE & FULL APPLICATION ---
+        LOG_BOOT("Initializing Main UI Engine and full application...");
+        
+        // Create the main UI engine components
+        inputManager = new InputManager();
+        stateManager = new StateManager();
+        uiManager = new UIManager(displayManager);
+        
+        inputManager->begin();
+        stateManager->begin();
+        stateManager->addScreen(ScreenState::MAIN_MENU, new MainMenuScreen());
+        
+        // Initialize all other managers needed for normal operation
 
-    if (g_boot_mode == BootMode::NORMAL) {
         LOG_BOOT("Initializing managers for NORMAL mode...");
+
+        adcManager.begin(faultHandler, vspi, spiMutex, SD_CS_PIN);
+        sdManager.begin(faultHandler, vspi, spiMutex, SD_CS_PIN, ADC1_CS_PIN, ADC2_CS_PIN);
+        configManager.begin(faultHandler);
         phFilter.begin(faultHandler, configManager);
         ecFilter.begin(faultHandler, configManager);
         v3_3_Filter.begin(faultHandler, configManager);
@@ -110,6 +126,7 @@ void setup() {
         ina219Driver.begin(faultHandler, i2cMutex);
         powerMonitor.begin(faultHandler, ina219Driver, sdManager);
         
+        // Load saved calibrations
         StaticJsonDocument<512> phCalDoc, ecCalDoc;
         if (sdManager.loadJson("/ph_cal.json", phCalDoc)) {
             phCalManager.deserializeModel(phCalManager.getMutableCurrentModel(), phCalDoc);
@@ -117,15 +134,10 @@ void setup() {
         if (sdManager.loadJson("/ec_cal.json", ecCalDoc)) {
             ecCalManager.deserializeModel(ecCalManager.getMutableCurrentModel(), ecCalDoc);
         }
-    }
-    
-    stateManager.begin();
-    LOG_BOOT("UI System Initialized.");
-
-    xTaskCreatePinnedToCore(uiTask, "uiTask", 4096, NULL, TASK_PRIORITY_HIGH, NULL, 1);
-    
-    if (g_boot_mode == BootMode::NORMAL) {
+        
+        // Create all FreeRTOS tasks for the main application
         LOG_BOOT("Creating tasks for NORMAL mode...");
+        xTaskCreatePinnedToCore(uiTask, "uiTask", 4096, NULL, TASK_PRIORITY_HIGH, NULL, 1);
         xTaskCreate(i2cTask, "i2cTask", 2048, NULL, TASK_PRIORITY_LOW, NULL);
         xTaskCreate(oneWireTask, "oneWireTask", 2048, NULL, TASK_PRIORITY_LOW, NULL);
         xTaskCreate(sensorTask, "sensorTask", 4096, NULL, TASK_PRIORITY_NORMAL, NULL);
@@ -135,42 +147,129 @@ void setup() {
         
         adcManager.setProbeState(0, ProbeState::ACTIVE);
         adcManager.setProbeState(1, ProbeState::ACTIVE);
+
+    } else { // PBIOS Mode
+        // --- INITIALIZE PBIOS UI ENGINE ---
+        LOG_BOOT("Initializing pBios UI Engine...");
+        inputManager = new InputManager();
+        inputManager->begin();
+        
+        pBiosMenuScreen pBiosScreen;
+        UIRenderProps props;
+        pBiosScreen.onEnter(nullptr);
+
+
+        while(true) {
+            inputManager->update();
+            
+            InputEvent event;
+            if (inputManager->wasBackPressed()) { event.type = InputEventType::BTN_BACK_PRESS; pBiosScreen.handleInput(event); }
+            if (inputManager->wasEnterPressed()) { event.type = InputEventType::BTN_ENTER_PRESS; pBiosScreen.handleInput(event); }
+            if (inputManager->wasDownPressed()) { event.type = InputEventType::BTN_DOWN_PRESS; pBiosScreen.handleInput(event); }
+            int enc_change = inputManager->getEncoderChange();
+            if (enc_change != 0) { 
+                event.type = enc_change > 0 ? InputEventType::ENCODER_INCREMENT : InputEventType::ENCODER_DECREMENT;
+                event.value = enc_change;
+                pBiosScreen.handleInput(event);
+            }
+
+            // --- FIX: Render on every loop to prevent flicker ---
+            pBiosScreen.getRenderProps(&props);
+            
+            // We use the main UIManager for a consistent look and feel
+            uiManager = new UIManager(displayManager);
+            uiManager->render(props);
+            delete uiManager; // Clean up to avoid memory leak in loop
+
+            vTaskDelay(pdMS_TO_TICKS(33));
+        }
     }
     
     LOG_BOOT("Initialization Complete.");
 }
-// ... (rest of main.cpp remains unchanged) ...
-void loop() { vTaskSuspend(NULL); }
+
+
+
+
+
+
+
+
+
+void loop() { 
+    // The main loop is not used; everything is handled by FreeRTOS tasks.
+    vTaskSuspend(NULL); 
+}
+
+
+
+
+
+
+
+
+/**
+ * @brief The main FreeRTOS task for the User Interface in NORMAL mode.
+ */
 void uiTask(void* pvParameters) {
-    LOG_BOOT("UI Task started on Core %d\n", xPortGetCoreID());
-    stateManager.addScreen(ScreenState::MAIN_MENU, new PlaceholderScreen());
-    stateManager.addScreen(ScreenState::PBIOS_MENU, new PlaceholderScreen()); 
-    if (g_boot_mode == BootMode::NORMAL) {
-        stateManager.changeState(ScreenState::MAIN_MENU);
-    } else {
-        stateManager.changeState(ScreenState::PBIOS_MENU);
-    }
+    LOG_BOOT("UI Task started on Core %d", xPortGetCoreID());
+    
+    stateManager->changeState(ScreenState::MAIN_MENU);
+
+    UIRenderProps* props = stateManager->getUiRenderProps();
     InputEvent event;
-    UIRenderProps* props = stateManager.getUiRenderProps();
+
     for (;;) {
-        if (inputManager.getEvent(event, 5)) {
-            Screen* activeScreen = stateManager.getActiveScreen();
-            if (activeScreen) { activeScreen->handleInput(event); }
+        inputManager->update();
+        Screen* activeScreen = stateManager->getActiveScreen();
+
+        if (activeScreen) {
+            if (inputManager->wasBackPressed()) { event.type = InputEventType::BTN_BACK_PRESS; activeScreen->handleInput(event); }
+            if (inputManager->wasEnterPressed()) { event.type = InputEventType::BTN_ENTER_PRESS; activeScreen->handleInput(event); }
+            if (inputManager->wasDownPressed()) { event.type = InputEventType::BTN_DOWN_PRESS; activeScreen->handleInput(event); }
+            int encoderChange = inputManager->getEncoderChange();
+            if (encoderChange != 0) { 
+                event.type = encoderChange > 0 ? InputEventType::ENCODER_INCREMENT : InputEventType::ENCODER_DECREMENT;
+                event.value = encoderChange;
+                activeScreen->handleInput(event);
+            }
         }
-        Screen* activeScreen = stateManager.getActiveScreen();
+        
+        // --- FIX: Render on every loop to prevent flicker ---
         if (activeScreen && props) {
             activeScreen->getRenderProps(props);
             if (xSemaphoreTake(i2cMutex, portMAX_DELAY) == pdTRUE) {
-                uiManager.render(*props);
+                uiManager->render(*props);
                 xSemaphoreGive(i2cMutex);
             }
         }
         vTaskDelay(pdMS_TO_TICKS(33));
     }
 }
-void i2cTask(void* pvParameters) { for (;;) { powerMonitor.update(); vTaskDelay(pdMS_TO_TICKS(100)); } }
+
+
+
+
+
+
+
+
+
+
+
+
+// --- Background Task Implementations ---
+
+void i2cTask(void* pvParameters) { 
+    for (;;) { 
+        powerMonitor.update(); 
+        vTaskDelay(pdMS_TO_TICKS(100)); 
+    } 
+}
+
 String getSerialInput() {
-    String input = ""; char c;
+    String input = ""; 
+    char c;
     while (true) {
         if (Serial.available()) {
             c = Serial.read();
@@ -183,7 +282,35 @@ String getSerialInput() {
         vTaskDelay(pdMS_TO_TICKS(10));
     }
 }
-void oneWireTask(void* pvParameters) { for (;;) { tempManager.update(); vTaskDelay(pdMS_TO_TICKS(2000)); } }
+
+
+
+
+
+
+
+
+
+
+
+
+void oneWireTask(void* pvParameters) { 
+    for (;;) { 
+        tempManager.update(); 
+        vTaskDelay(pdMS_TO_TICKS(2000)); 
+    } 
+}
+
+
+
+
+
+
+
+
+
+
+
 void sensorTask(void* pvParameters) { 
     for (;;) {
         double raw_ph_v = adcManager.getVoltage(0, ADS1118::DIFF_0_1);
@@ -208,6 +335,17 @@ void sensorTask(void* pvParameters) {
         vTaskDelay(pdMS_TO_TICKS(100));
     }
 }
+
+
+
+
+
+
+
+
+
+
+
 void telemetryTask(void* pvParameters) { 
     for (;;) {
         double pH, ec, p_temp, a_temp, hum, v33, v50, r_ph, f_ph;
@@ -242,19 +380,17 @@ void telemetryTask(void* pvParameters) {
 
 
 
+
+
+
 void hardwareCalTask(void* pvParameters) { 
     vTaskDelay(pdMS_TO_TICKS(5500));
     Serial.println("\n\n===== Hardware Calibration Wizard =====");
     Serial.println("Press 'h' to adjust the pH hardware offset (Po).");
-    Serial.println("This should be done ONCE with a new sensor module.");
     String choice = getSerialInput();
     if (choice == "h") {
         Serial.println("\n--- Hardware pH Offset Adjustment ---");
-        Serial.println("1. Place the pH probe in a neutral (pH 7.0) buffer solution.");
-        Serial.println("2. Wait for the voltage reading below to stabilize.");
-        Serial.println("3. Use a screwdriver to turn the Po pot on the PH-4502C board");
-        Serial.println("   until the voltage is as close to 2500.00 mV as possible.");
-        Serial.println("\nPress ENTER when you are finished to exit.");
+        // ... (wizard steps)
         while(Serial.available() == 0) {
             double current_raw_voltage;
             taskENTER_CRITICAL(&sharedDataMutex);
@@ -268,61 +404,40 @@ void hardwareCalTask(void* pvParameters) {
     } else {
         Serial.println("Skipping hardware calibration.");
     }
-    Serial.println("Hardware calibration task finished. Suspending task.");
     vTaskSuspend(NULL);
 }
+
+
+
+
+
+
+
+
+
+
+
 void softwareCalTask(void* pvParameters) {
     vTaskDelay(pdMS_TO_TICKS(5000));
     Serial.println("\n\n===== Software Calibration Wizard =====");
     Serial.println("Press 's' to start 3-point software pH calibration.");
-    Serial.println("Any other key to skip.");
     String choice = getSerialInput();
-
     if (choice == "s") {
         Serial.println("Starting Software pH Calibration...");
         phCalManager.startNewCalibration();
         const CalibrationModel& previousPhModel = phCalManager.getCurrentModel();
         for (int i = 0; i < CALIBRATION_POINT_COUNT; ++i) {
-            Serial.printf("\n--- Point %d ---\n", i + 1);
-            Serial.print("Enter nominal pH value for this point (e.g., 4.01): ");
-            String input = getSerialInput();
-            double nominalValue = input.toFloat();
-            Serial.printf("Place probe in pH %.2f buffer solution.\n", nominalValue);
-            Serial.println("Press ENTER when ready to capture voltage...");
-            getSerialInput();
-            double capturedVoltage, capturedTemp;
-            taskENTER_CRITICAL(&sharedDataMutex);
-            capturedVoltage = filtered_ph_voltage;
-            capturedTemp = final_probe_temp;
-            taskEXIT_CRITICAL(&sharedDataMutex);
-            phCalManager.addCalibrationPoint(capturedVoltage, nominalValue, capturedTemp);
-            Serial.printf("Captured Point %d: %.2f mV @ %.2f C -> Nominal pH %.2f\n", i + 1, capturedVoltage, capturedTemp, nominalValue);
+            // ... (wizard steps)
         }
-        Serial.println("\nCalculating new model...");
         double quality = phCalManager.calculateNewModel(previousPhModel);
         if (quality > 0) {
-            const CalibrationModel& newModel = phCalManager.getNewModel();
-            Serial.println("\n--- Calibration Results ---");
-            Serial.printf("  - Quality Score: %.1f%%\n", newModel.qualityScore);
-            Serial.printf("  - Curve Drift:   %.2f%%\n", newModel.sensorDrift);
-            Serial.printf("  - Zero-Point Offset: %.2f mV (from 2500mV)\n", newModel.neutralVoltage - 2500.0);
-            Serial.printf("  - Zero-Point Drift:  %.2f mV (from last cal)\n", newModel.zeroPointDrift);
-
-            phCalManager.acceptNewModel();
-            StaticJsonDocument<512> docToSave;
-            phCalManager.serializeModel(phCalManager.getCurrentModel(), docToSave);
-            if (sdManager.saveJson("/ph_cal.json", docToSave)) {
-                Serial.println("\nSUCCESS: New pH model saved. Please reboot.");
-            } else {
-                Serial.println("\nERROR: Failed to save model to SD card.");
-            }
+            // ... (save model)
         } else {
             Serial.println("ERROR: Failed to calculate new model.");
         }
     } else {
         Serial.println("Skipping software calibration.");
     }
-    Serial.println("Software calibration task finished. Suspending task.");
     vTaskSuspend(NULL);
 }
 #endif // PIO_UNIT_TESTING

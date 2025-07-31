@@ -6,22 +6,23 @@
 
 #include "DisplayManager.h"
 
+// This enum is now also used by main.cpp to direct traffic
 enum class BootMode {
     NORMAL,
     PBIOS
 };
 
+/**
+ * @class BootSelector
+ * @brief A completely self-contained module for the boot animation and mode selection.
+ *
+ * This class has no dependencies on the main UI engine (InputManager, etc.).
+ * It performs its own simple, direct input polling, making the boot process
+ * extremely robust and isolated.
+ */
 class BootSelector {
 public:
     BootSelector(DisplayManager& displayManager);
-
-    /**
-     * @brief Runs the entire unified boot sequence.
-     * This single public method handles both the POST animation and the
-     * interactive boot selection menu.
-     * @param post_duration_ms The time to run the POST animation.
-     * @return The selected BootMode.
-     */
     BootMode runBootSequence(uint32_t post_duration_ms);
 
 private:
@@ -29,6 +30,10 @@ private:
     void runPostAnimation(uint32_t post_duration_ms);
 
     DisplayManager& _displayManager;
+    
+    // Internal state for simple input polling
+    int _encoder_last_state;
+    long _encoder_pulses;
 };
 
 #endif // BOOT_SEQUENCE_H
