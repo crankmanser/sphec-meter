@@ -4,33 +4,39 @@
 #include "InputManager.h"
 #include <ProjectConfig.h>
 
-volatile int InputManager::_encoder_raw_pulses = 0;
+// --- MIGRATED FROM LEGACY: Initialization of static ISR members ---
+volatile long InputManager::_encoder_raw_pulses = 0;
+volatile uint8_t InputManager::_last_AB_state = 0;
+const int8_t InputManager::_qem_decode_table[] = {0, -1, 1, 0, 1, 0, 0, -1, -1, 0, 0, 1, 0, 1, -1, 0};
 
-// --- Encoder Velocity Engine Tuning ---
+// --- MIGRATED FROM LEGACY: Velocity Engine Tuning Constants ---
 namespace EncoderTuning {
-    // --- FIX: Using your exact, tested tuning values ---
-    constexpr int PULSES_PER_DETENT = 70;
-    constexpr int PULSES_PER_STEP_SLOW = PULSES_PER_DETENT * 24;
-    constexpr int PULSES_PER_STEP_MEDIUM = PULSES_PER_DETENT * 12;
-    constexpr int PULSES_PER_STEP_FAST = PULSES_PER_DETENT * 6;
-    constexpr int SPEED_THRESHOLD_MEDIUM = 20;
-    constexpr int SPEED_THRESHOLD_FAST = 40;
+    const int PULSES_PER_STEP_FINE = 433;
+    const int PULSES_PER_STEP_MEDIUM = 161;
+    const int PULSES_PER_STEP_FAST = 77;
+    const int SPEED_THRESHOLD_SLOW_MAX = 55;
+    const int SPEED_THRESHOLD_MEDIUM_MAX = 165;
 }
 
+// --- MIGRATED FROM LEGACY: The proven Interrupt Service Routine ---
 void IRAM_ATTR InputManager::encoderISR() {
-    static uint8_t last_state = 0;
-    static const int8_t QEM_DECODE_TABLE[] = {0, -1, 1, 0, 1, 0, 0, -1, -1, 0, 0, 1, 0, 1, -1, 0};
-    uint8_t current_state = (digitalRead(ENCODER_PIN_B) << 1) | digitalRead(ENCODER_PIN_A);
-    _encoder_raw_pulses += QEM_DECODE_TABLE[(last_state << 2) | current_state];
-    last_state = current_state;
+    uint8_t pinA = digitalRead(ENCODER_PIN_A);
+    uint8_t pinB = digitalRead(ENCODER_PIN_B);
+    uint8_t currentState = (pinB << 1) | pinA;
+    
+    if (currentState != _last_AB_state) {
+        _encoder_raw_pulses += _qem_decode_table[(_last_AB_state << 2) | currentState];
+        _last_AB_state = currentState;
+    }
 }
 
 InputManager::InputManager() :
+    _accumulated_pulses(0),
     _back_pressed(false), _enter_pressed(false), _down_pressed(false),
+    _encoder_change(0),
     _back_last_state(false), _back_last_debounce_time(0),
     _enter_last_state(false), _enter_last_debounce_time(0),
-    _down_last_state(false), _down_last_debounce_time(0),
-    _encoder_change(0)
+    _down_last_state(false), _down_last_debounce_time(0)
 {}
 
 void InputManager::begin() {
@@ -40,66 +46,58 @@ void InputManager::begin() {
     pinMode(BTN_ENTER_PIN, INPUT_PULLUP);
     pinMode(BTN_DOWN_PIN, INPUT_PULLUP);
 
+    uint8_t pinA = digitalRead(ENCODER_PIN_A);
+    uint8_t pinB = digitalRead(ENCODER_PIN_B);
+    _last_AB_state = (pinB << 1) | pinA;
+
     attachInterrupt(digitalPinToInterrupt(ENCODER_PIN_A), encoderISR, CHANGE);
     attachInterrupt(digitalPinToInterrupt(ENCODER_PIN_B), encoderISR, CHANGE);
 }
 
 void InputManager::update() {
+    // --- Encoder Velocity Engine ported from legacy code ---
+    noInterrupts();
+    long pulsesSinceLastCheck = _encoder_raw_pulses;
+    _encoder_raw_pulses = 0;
+    interrupts();
+
+    _encoder_change = 0;
+    if (pulsesSinceLastCheck != 0) {
+        _accumulated_pulses += pulsesSinceLastCheck;
+        long turn_speed = abs(pulsesSinceLastCheck);
+        int effectivePulsesPerStep;
+
+        if (turn_speed < EncoderTuning::SPEED_THRESHOLD_SLOW_MAX) {
+            effectivePulsesPerStep = EncoderTuning::PULSES_PER_STEP_FINE;
+        } else if (turn_speed < EncoderTuning::SPEED_THRESHOLD_MEDIUM_MAX) {
+            effectivePulsesPerStep = EncoderTuning::PULSES_PER_STEP_MEDIUM;
+        } else {
+            effectivePulsesPerStep = EncoderTuning::PULSES_PER_STEP_FAST;
+        }
+
+        if (abs(_accumulated_pulses) >= effectivePulsesPerStep) {
+            _encoder_change = _accumulated_pulses / effectivePulsesPerStep;
+            _accumulated_pulses %= effectivePulsesPerStep;
+        }
+    }
+
+    // --- Button Debouncing logic (unchanged) ---
     uint32_t now = millis();
     _back_pressed = false;
     _enter_pressed = false;
     _down_pressed = false;
-    _encoder_change = 0;
-
-    // --- FIX: Robust edge-detection for button presses (active LOW) ---
+    
     bool back_reading = (digitalRead(BTN_BACK_PIN) == LOW);
-    if (back_reading && !_back_last_state) {
-        if (now - _back_last_debounce_time > 100) { // Debounce
-            _back_pressed = true;
-            _back_last_debounce_time = now;
-        }
-    }
+    if (back_reading && !_back_last_state) { if (now - _back_last_debounce_time > 100) { _back_pressed = true; _back_last_debounce_time = now; } }
     _back_last_state = back_reading;
 
     bool enter_reading = (digitalRead(BTN_ENTER_PIN) == LOW);
-    if (enter_reading && !_enter_last_state) {
-        if (now - _enter_last_debounce_time > 100) {
-            _enter_pressed = true;
-            _enter_last_debounce_time = now;
-        }
-    }
+    if (enter_reading && !_enter_last_state) { if (now - _enter_last_debounce_time > 100) { _enter_pressed = true; _enter_last_debounce_time = now; } }
     _enter_last_state = enter_reading;
 
     bool down_reading = (digitalRead(BTN_DOWN_PIN) == LOW);
-    if (down_reading && !_down_last_state) {
-        if (now - _down_last_debounce_time > 100) {
-            _down_pressed = true;
-            _down_last_debounce_time = now;
-        }
-    }
+    if (down_reading && !_down_last_state) { if (now - _down_last_debounce_time > 100) { _down_pressed = true; _down_last_debounce_time = now; } }
     _down_last_state = down_reading;
-
-    static long pulse_accumulator = 0;
-    noInterrupts();
-    int pulses_since_last_update = _encoder_raw_pulses;
-    _encoder_raw_pulses = 0;
-    interrupts();
-    if (pulses_since_last_update != 0) {
-        pulse_accumulator += pulses_since_last_update;
-        long turn_speed = abs(pulses_since_last_update);
-        int pulses_per_step;
-        if (turn_speed < EncoderTuning::SPEED_THRESHOLD_MEDIUM) {
-            pulses_per_step = EncoderTuning::PULSES_PER_STEP_SLOW;
-        } else if (turn_speed < EncoderTuning::SPEED_THRESHOLD_FAST) {
-            pulses_per_step = EncoderTuning::PULSES_PER_STEP_MEDIUM;
-        } else {
-            pulses_per_step = EncoderTuning::PULSES_PER_STEP_FAST;
-        }
-        if (abs(pulse_accumulator) >= pulses_per_step) {
-            _encoder_change = pulse_accumulator / pulses_per_step;
-            pulse_accumulator %= pulses_per_step;
-        }
-    }
 }
 
 bool InputManager::wasBackPressed() { return _back_pressed; }

@@ -1,12 +1,11 @@
 // File Path: /src/ui/InputManager.h
-// NEW FILE
+// MODIFIED FILE
 
 #ifndef INPUT_MANAGER_H
 #define INPUT_MANAGER_H
 
 #include <Arduino.h>
 
-// Defines all possible user input events.
 enum class InputEventType {
     BTN_BACK_PRESS,
     BTN_ENTER_PRESS,
@@ -15,7 +14,6 @@ enum class InputEventType {
     ENCODER_DECREMENT
 };
 
-// A structure to hold a single, processed input event.
 struct InputEvent {
     InputEventType type;
     int value = 0;
@@ -33,22 +31,25 @@ public:
     int getEncoderChange();
 
 private:
+    // --- MIGRATED FROM LEGACY: The exact ISR implementation from the working code ---
     static void IRAM_ATTR encoderISR();
+    static volatile long _encoder_raw_pulses;
+    static volatile uint8_t _last_AB_state;
+    static const int8_t _qem_decode_table[];
+    
+    long _accumulated_pulses;
 
+    // --- Button debouncing state (unchanged) ---
     bool _back_pressed;
     bool _enter_pressed;
     bool _down_pressed;
     int _encoder_change;
-
-    // Internal state for debouncing
     bool _back_last_state;
     uint32_t _back_last_debounce_time;
     bool _enter_last_state;
     uint32_t _enter_last_debounce_time;
     bool _down_last_state;
     uint32_t _down_last_debounce_time;
-
-    static volatile int _encoder_raw_pulses;
 };
 
 #endif // INPUT_MANAGER_H

@@ -1,4 +1,4 @@
-# SpHEC Meter - Architectural Blueprint v2.1.0
+# SpHEC Meter - Architectural Blueprint v2.2.0
 
 This document is the "genesis document" and official architectural summary for the SpHEC Meter firmware. It encapsulates all design decisions made during our initial planning phase and serves as the foundational context for all future development.
 
@@ -22,7 +22,7 @@ The system uses a dual-core FreeRTOS architecture to ensure UI responsiveness an
 ### 1.2. Inter-Task Communication
 
 * **Asynchronous Request Queues:** Used for slow or blocking operations. The `sdTask` uses a queue to receive file requests, decoupling other tasks from slow SD card I/O.
-* **Mutex-Protected Shared Data:** A central `g_processed_data` struct, protected by a mutex, holds the latest aggregated and processed sensor data for the UI to consume.
+* **Mutex-Protected Shared Data:** A central `GlobalDataModel` struct, protected by a FreeRTOS mutex, will hold the latest aggregated and processed sensor data for thread-safe access by any task. This prevents race conditions and is superior to critical sections for inter-task resource sharing.
 
 ### 1.3. Key Constraints
 
@@ -39,6 +39,10 @@ The system uses a dual-core FreeRTOS architecture to ensure UI responsiveness an
 * **Filter 2 (Low-Frequency):** A Median filter followed by a PI filter, designed to smooth slower signal drift (<2min).
 * **Tuning:** Filter tuning (`Settle Threshold`, `Lock Smoothing`, etc.) is performed **exclusively** in the **Diagnostics Mode** UI. In Normal Mode, the filters run "headlessly" using parameters loaded from internal flash.
 * **Storage:** Filter parameters are stored in the ESP32's internal flash (NVS) via the `ConfigManager` for fast boot-time access.
+* **Tuning KPIs:** The filter provides real-time KPIs for data-driven tuning:
+    * **F_std (Filtered Standard Deviation):** A quantitative measure of the filtered signal's noise. The primary goal of tuning is to minimize this value.
+    * **R_std (Raw Standard Deviation):** A baseline measure of the hardware's inherent noise level.
+    * **Stab % (Stability):** A real-time percentage (0-100%) indicating noise reduction efficiency.
 
 ### 2.2. Calibration Engine ("Smart Calibration")
 
@@ -52,7 +56,7 @@ The system uses a dual-core FreeRTOS architecture to ensure UI responsiveness an
     * **Sensor Drift %:** Measures long-term probe aging by comparing new and previous calibration curves.
     * **Calibration Health %:** Measures short-term drift via a 1-point voltage check.
     * **Zero-Point Drift (mV):** Measures the long-term drift of the hardware's physical offset by tracking the neutral voltage reading across multiple calibrations.
-* **Storage:** The rich calibration models are saved to the SD card via the `StorageEngine`.
+    * **Settling Time (s):** A new KPI that measures the time taken for a probe's signal to become stable after being activated, providing another metric for probe health.
 
 ### 2.3. Power Monitor ("Intelligent Power Monitor")
 
@@ -87,6 +91,10 @@ The firmware's UI is not a single monolithic entity but is divided into three pu
     * **Location:** `main.cpp`, within the `else` block after boot mode selection.
     * **Responsibility:** To provide a user interface for the diagnostics (pBios) mode.
     * **Architecture:** A simple, blocking `while` loop that runs directly on Core 0 after `setup()` completes. It instantiates its own `InputManager` for a consistent user feel but does **not** use the `StateManager` or a dedicated `uiTask`. It directly creates and manages its own screen instances (e.g., `pBiosMenuScreen`) and orchestrates the input and rendering loop itself. This keeps it lightweight and isolated from the main application's complexity.
+    * **Live Filter Tuning UI:** The LFT screen will utilize all three OLEDs to provide a comprehensive, data-rich tuning experience:
+        * **Top OLED:** Displays the real-time HF Domain graph (pre- and post-filter signals) and its associated real-time KPIs (`F_std`, `Stab %`).
+        * **Middle OLED:** Displays a single, scrollable menu for all HF and LF tunable parameters, as well as historical/contextual KPIs (`Sensor Drift`, `Zero-Point Drift`).
+        * **Bottom OLED:** Displays the real-time LF Domain graph (pre- and post-filter signals) and its associated KPIs.
 
 3.  **The Main UI Engine (Normal Mode):**
     * **Location:** Orchestrated by the `uiTask` created in `main.cpp`.
@@ -107,16 +115,16 @@ The `pBIOS` and `Main` UI engines are both built on the principle that **screens
 
 To ensure a "silky-smooth" and responsive user experience, all physical user input is handled by the `InputManager` cabinet. This cabinet uses a hardware interrupt for the rotary encoder to guarantee no rotation is ever missed. The main UI loop (either in `uiTask` or the `pBios` loop) calls `inputManager.update()` on every frame to get the latest debounced button states and the processed encoder "velocity engine" output.
 
-## 4. Adopted Refinements (Critiques)
+## 4. Adopted Refinements & Planned Architecture Enhancements
 
-1.  **Unified `ConfigManager`:** A new cabinet will be created to provide a single interface for all configuration data.
-2.  **Centralized Fault Handling:** A global `FaultHandler` will be implemented to centralize error logging and reporting.
-3.  **Commitment to Unit Testing:** The modular "Cabinet" architecture will be leveraged by using PlatformIO's unit testing framework to test each module in isolation.
+1.  **Unified `ConfigManager`:** A new cabinet will be created to provide a single interface for all configuration data. It will abstract the underlying storage medium (NVS vs. SD card) from the rest of the application.
+2.  **Centralized Fault & Status Handling:** A global `FaultHandler` will continue to manage critical errors. This will be supplemented by a `SystemStatus` manager to track and report non-fatal warnings (e.g., "SD Card missing"), allowing the system to operate in a degraded "Limp Mode" and provide richer feedback to the user.
+3.  **Commitment to Unit Testing:** The modular "Cabinet" architecture will be leveraged by using PlatformIO's unit testing framework to test each module in isolation. We will continue to follow a "Test-Driven Development" approach where possible.
 
 ## 5. We will integrate testing directly into our development process.
 
-1. **Develop a Cabinet First:** Before adding a new manager to main.cpp or creating an RTOS task for it, we first build the cabinet's class structure (.h and .cpp files).
+1.  **Develop a Cabinet First:** Before adding a new manager to main.cpp or creating an RTOS task for it, we first build the cabinet's class structure (.h and .cpp files).
 
-2. **Write Tests for the Cabinet:** We then immediately create a corresponding test folder in the test directory. We write a series of tests to validate all of its core logic.
+2.  **Write Tests for the Cabinet:** We then immediately create a corresponding test folder in the test directory. We write a series of tests to validate all of its core logic.
 
-3. **Integrate Only After Passing:** Only after the cabinet passes all of its unit tests do we integrate it into the main firmware and its RTOS tasks.
+3.  **Integrate Only After Passing:** Only after the cabinet passes all of its unit tests do we integrate it into the main firmware and its RTOS tasks.

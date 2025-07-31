@@ -6,24 +6,21 @@
 
 #include "DisplayManager.h"
 
-// This enum is now also used by main.cpp to direct traffic
 enum class BootMode {
     NORMAL,
     PBIOS
 };
 
-/**
- * @class BootSelector
- * @brief A completely self-contained module for the boot animation and mode selection.
- *
- * This class has no dependencies on the main UI engine (InputManager, etc.).
- * It performs its own simple, direct input polling, making the boot process
- * extremely robust and isolated.
- */
+// --- CRITICAL FIX: Use RTC_NOINIT_ATTR instead of RTC_DATA_ATTR ---
+// This attribute places the variable in a section of RTC memory that is
+// explicitly NOT initialized by the bootloader. This is the correct way
+// to ensure a value survives a software reboot via ESP.restart().
+extern RTC_NOINIT_ATTR BootMode rtc_boot_mode;
+
 class BootSelector {
 public:
     BootSelector(DisplayManager& displayManager);
-    BootMode runBootSequence(uint32_t post_duration_ms);
+    void runBootSequence(uint32_t post_duration_ms);
 
 private:
     void drawMenu(BootMode selected_mode);
@@ -31,7 +28,6 @@ private:
 
     DisplayManager& _displayManager;
     
-    // Internal state for simple input polling
     int _encoder_last_state;
     long _encoder_pulses;
 };

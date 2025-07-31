@@ -1,5 +1,5 @@
 // File Path: /src/ui/UIManager.h
-// NEW FILE
+// MODIFIED FILE
 
 #ifndef UI_MANAGER_H
 #define UI_MANAGER_H
@@ -7,12 +7,14 @@
 #include "DisplayManager.h"
 #include "blocks/MenuBlock.h"
 #include "blocks/ButtonBlock.h"
+#include "blocks/GraphBlock.h" // <<< NEW: Include the new GraphBlock header
 
 struct OledProps {
     std::string line1;
     std::string line2;
     std::string line3;
     MenuBlockProps menu_props;
+    GraphBlockProps graph_props; // <<< NEW: Add graph properties
 };
 
 struct UIRenderProps {

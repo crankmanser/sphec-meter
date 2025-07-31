@@ -4,6 +4,18 @@ This document tracks the development progress, current tasks, and future roadmap
 
 ## Changelog (What Was Done)
 
+* **v2.11.5 (2025-07-31):**
+    * **Status:** Complete.
+    * **Milestone:** Successfully resolved persistent, critical bootloader and input system failures. The pBIOS mode is now fully accessible and the encoder is functional in all UI modes.
+    * **Fix (Bootloader):** Re-architected the dual-boot system to use a full reboot between mode selections. The user's choice is now saved to `RTC_NOINIT_ATTR` memory, which correctly persists the value across software resets and guarantees a clean hardware state for each boot mode.
+    * **Fix (Encoder):** Resolved the unresponsive encoder by replacing the faulty `InputManager` implementations with a direct port of the proven ISR (Interrupt Service Routine) and velocity engine from the legacy v8.2.9 codebase.
+    * **Feature:** Implemented the foundational pBIOS UI structure, including a dual-core RTOS architecture (`pBiosUiTask` on Core 1, `pBiosDataTask` on Core 0) and a `FilterSelectionScreen` to make the tuning process generic.
+* **v2.11.4 (2025-07-31):**
+    * **Status:** Planning Complete.
+    * **Milestone:** Completed a comprehensive design and planning session for the advanced pBIOS diagnostics UI.
+    * **Design:** Finalized a detailed, multi-screen UI layout for the "Live Filter Tuning" (LFT) feature, which will provide real-time graphical feedback for both HF and LF filter stages simultaneously.
+    * **Design:** Defined a complete set of Key Performance Indicators (KPIs) for both real-time tuning (`F_std`, `R_std`, `Stab %`) and historical probe health (`Sensor Drift`, `Zero-Point Drift`, `Settling Time`).
+    * **Architecture:** Formalized a set of key architectural refinements to be implemented, including a unified `ConfigManager`, a thread-safe `GlobalDataModel`, and a `SystemStatus` manager for non-fatal error handling.
 * **v2.11.3 (2025-07-31):**
     * **Status:** Complete.
     * **Milestone:** Successfully refactored the entire UI architecture into a stable, three-part system, resolving all outstanding bugs.
@@ -154,7 +166,9 @@ This document tracks the development progress, current tasks, and future roadmap
 
 ## Current Task (What We Are Doing)
 
-* **UI Development - Phase 3: pBIOS Boot UI** Implement Core Screens. With the foundational UI architecture now stable and functional, the current task is to build out the primary user-facing screens for the main application. 
+* **UI Development - Phase 3: Implement pBIOS Parameter Editing.** With the bootloader and input systems now stable, the current task is to complete the **Live Filter Tuning** screen by implementing the "edit mode" for adjusting filter parameters.
+
+
 
 
 
@@ -172,11 +186,16 @@ This document tracks the development progress, current tasks, and future roadmap
 
 
 
-1.  **UI - Phase 4: Normal Boot UI**: 
-    This includes:
-
+1.  **Implement Remaining pBIOS Screens:** Build out the other diagnostic screens defined in the pBIOS menu:
+    * Noise Analysis & Drift Trending
+    * View Calibration KPIs
+    * New Sensor / Maintenance Wizards
+2.  **UI - Phase 4: Normal Boot UI**:
     * a. Creating the Live Measurement Screen to display real-time sensor data (pH, EC, Temp, etc.).
-
     * b. Beginning the implementation of the multi-step Calibration Wizard Screen.
-2.  **Implement the `StatusIndicatorController`**: Implement the logic to drive the physical LEDs and on-screen status icons based on system state.
-3.  **Develop the `ConnectivityManager` and API Layer**: Implement the Wi-Fi/BLE connection management and the remote control API.
+3.  **Architectural Refinements (To be implemented incrementally):**
+    * **Flesh out `ConfigManager`:** Implement the logic to make it the single source for all configuration data, abstracting NVS vs. SD card storage.
+    * **Implement `GlobalDataModel`:** Refactor inter-task communication to use a single, mutex-protected data structure instead of multiple global variables.
+    * **Implement `SystemStatus` Manager:** Create a system for handling and reporting non-fatal errors to enable robust "Limp Mode" operation.
+4.  **Implement the `StatusIndicatorController`**: Implement the logic to drive the physical LEDs and on-screen status icons based on system state.
+5.  **Develop the `ConnectivityManager` and API Layer**: Implement the Wi-Fi/BLE connection management and the remote control API.

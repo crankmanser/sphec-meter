@@ -10,7 +10,7 @@ StateManager::StateManager() :
 {}
 
 StateManager::~StateManager() {
-    // --- FIX: Reverted to a C++11 compatible for loop to remove compiler warning ---
+    // FIX: Reverted to a C++11 compatible iterator loop to fix compile warning.
     for (std::map<ScreenState, Screen*>::iterator it = _screens.begin(); it != _screens.end(); ++it) {
         delete it->second;
     }
@@ -50,6 +50,10 @@ void StateManager::changeState(ScreenState new_state) {
 
 Screen* StateManager::getActiveScreen() {
     return _activeScreen;
+}
+
+ScreenState StateManager::getActiveScreenState() const {
+    return _currentState;
 }
 
 UIRenderProps* StateManager::getUiRenderProps() {
