@@ -192,8 +192,12 @@ This document tracks the development progress, current tasks, and future roadmap
 
 
 
-1.  **Implement Remaining pBIOS Screens:** Build out the other diagnostic screens defined in the pBIOS menu:
+1.  **Implement Remaining pBIOS Screens:** Build    
+    out the other diagnostic screens defined in the pBIOS menu:
     * Ensure the graphing works as intended
+    * Ensure the filter pipeline is implemented as  
+      intended
+    * implement the FFT and statistical analysis 
     * implement the live tuning KPIs
     * Noise Analysis & Drift Trending
     * View Calibration KPIs
