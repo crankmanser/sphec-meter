@@ -26,6 +26,7 @@
 #include "ui/screens/pBiosMenuScreen.h"
 #include "ui/screens/FilterSelectionScreen.h"
 #include "ui/screens/LiveFilterTuningScreen.h"
+#include "ui/screens/ParameterEditScreen.h"
 
 // --- Global object declarations for core cabinets ---
 FaultHandler faultHandler;
@@ -40,7 +41,7 @@ FilterManager phFilter, ecFilter, v3_3_Filter, v5_0_Filter;
 CalibrationManager phCalManager, ecCalManager;
 
 // --- UI Engine objects (conditionally initialized) ---
-InputManager* inputManager = nullptr;
+InputManager inputManager; 
 StateManager* mainStateManager = nullptr;
 StateManager* pBiosStateManager = nullptr;
 UIManager* uiManager = nullptr;
@@ -82,18 +83,20 @@ String getSerialInput();
  */
 
 
+
+
 void setup() {
     Serial.begin(115200);
-    delay(1000); // Wait for serial monitor to connect
-    printf("\n\n--- NEW BOOT ---\n");
-    
-    // --- DEBUG LOG ---
-    // Read the boot mode from RTC memory and print its raw integer value.
-    // This will tell us if the value survived the reboot.
-    BootMode selected_mode = rtc_boot_mode;
-    printf("[SETUP] Value read from RTC memory: %d (NORMAL=0, PBIOS=1)\n", (int)selected_mode);
+    delay(1000);
 
-    // --- Initialize hardware that is common to all modes ---
+    // --- Legacy Boot Mode Selection ---
+    // Initialize the button pin and check if it's held down on power-on.
+    // This provides a simple and robust way to enter diagnostics mode.
+    pinMode(BTN_ENTER_PIN, INPUT_PULLUP);
+    delay(50); // Small delay for the pin to stabilize
+    BootMode selected_mode = (digitalRead(BTN_ENTER_PIN) == LOW) ? BootMode::PBIOS : BootMode::NORMAL;
+
+    // --- Initialize hardware common to all modes ---
     spiMutex = xSemaphoreCreateMutex();
     i2cMutex = xSemaphoreCreateMutex();
     vspi = new SPIClass(VSPI);
@@ -101,67 +104,75 @@ void setup() {
     faultHandler.begin();
     displayManager.begin(faultHandler);
 
+    inputManager.begin();
+
+    // --- Show Boot Animation ---
+    // The BootSelector class is now just a simple animation runner.
+    BootSelector bootAnimator(displayManager);
+    bootAnimator.runBootSequence(); // This will show the animation and return.
+
     // --- Main Boot Logic ---
-    if (selected_mode != BootMode::NORMAL && selected_mode != BootMode::PBIOS) {
-        // --- First Boot or Unspecified: Show the Boot Selector UI ---
-        LOG_BOOT("SpHEC Meter v2.11.4 Booting... [First Time Setup]");
-        BootSelector bootSelector(displayManager);
-        bootSelector.runBootSequence(2000);
+    if (selected_mode == BootMode::PBIOS) {
+        // --- Boot directly into pBIOS mode ---
+        LOG_BOOT("SpHEC Meter v2.11.4 Booting... [pBIOS Mode]");
+        
+        pBiosContextMutex = xSemaphoreCreateMutex();
 
-    } else {
-        // A valid mode was selected on the previous boot.
-        rtc_boot_mode = BootMode::NORMAL; // Clear the one-time flag
+        // Initialize only the managers required for pBIOS diagnostics
+        adcManager.begin(faultHandler, vspi, spiMutex, SD_CS_PIN);
+        configManager.begin(faultHandler);
+        phFilter.begin(faultHandler, configManager);
+        ecFilter.begin(faultHandler, configManager);
+        v3_3_Filter.begin(faultHandler, configManager);
+        v5_0_Filter.begin(faultHandler, configManager);
 
-        if (selected_mode == BootMode::PBIOS) {
-            // --- Boot directly into pBIOS mode ---
-            // (This block is unchanged)
-            LOG_BOOT("SpHEC Meter v2.11.4 Booting... [pBIOS Mode]");
-            pBiosContextMutex = xSemaphoreCreateMutex();
-            adcManager.begin(faultHandler, vspi, spiMutex, SD_CS_PIN);
-            configManager.begin(faultHandler);
-            phFilter.begin(faultHandler, configManager);
-            ecFilter.begin(faultHandler, configManager);
-            v3_3_Filter.begin(faultHandler, configManager);
-            v5_0_Filter.begin(faultHandler, configManager);
-            xTaskCreatePinnedToCore(pBiosUiTask, "pBiosUiTask", 4096, NULL, TASK_PRIORITY_HIGH, NULL, 1);
-            xTaskCreatePinnedToCore(pBiosDataTask, "pBiosDataTask", 4096, NULL, TASK_PRIORITY_NORMAL, NULL, 0);
-            adcManager.setProbeState(0, ProbeState::ACTIVE);
-            adcManager.setProbeState(1, ProbeState::ACTIVE);
-        } else { // selected_mode == BootMode::NORMAL
-            // --- Boot directly into Normal Application mode ---
-            // (This block is unchanged)
-            LOG_BOOT("SpHEC Meter v2.11.4 Booting... [Normal Mode]");
-            inputManager = new InputManager();
-            mainStateManager = new StateManager();
-            uiManager = new UIManager(displayManager);
-            inputManager->begin();
-            mainStateManager->begin();
-            mainStateManager->addScreen(ScreenState::MAIN_MENU, new MainMenuScreen());
-            adcManager.begin(faultHandler, vspi, spiMutex, SD_CS_PIN);
-            sdManager.begin(faultHandler, vspi, spiMutex, SD_CS_PIN, ADC1_CS_PIN, ADC2_CS_PIN);
-            configManager.begin(faultHandler);
-            phFilter.begin(faultHandler, configManager);
-            ecFilter.begin(faultHandler, configManager);
-            v3_3_Filter.begin(faultHandler, configManager);
-            v5_0_Filter.begin(faultHandler, configManager);
-            phCalManager.begin(faultHandler);
-            ecCalManager.begin(faultHandler);
-            tempManager.begin(faultHandler);
-            ina219Driver.begin(faultHandler, i2cMutex);
-            powerMonitor.begin(faultHandler, ina219Driver, sdManager);
-            StaticJsonDocument<512> phCalDoc, ecCalDoc;
-            if (sdManager.loadJson("/ph_cal.json", phCalDoc)) { phCalManager.deserializeModel(phCalManager.getMutableCurrentModel(), phCalDoc); }
-            if (sdManager.loadJson("/ec_cal.json", ecCalDoc)) { ecCalManager.deserializeModel(ecCalManager.getMutableCurrentModel(), ecCalDoc); }
-            xTaskCreatePinnedToCore(uiTask, "uiTask", 4096, NULL, TASK_PRIORITY_HIGH, NULL, 1);
-            xTaskCreate(i2cTask, "i2cTask", 2048, NULL, TASK_PRIORITY_LOW, NULL);
-            xTaskCreate(oneWireTask, "oneWireTask", 2048, NULL, TASK_PRIORITY_LOW, NULL);
-            xTaskCreate(sensorTask, "sensorTask", 4096, NULL, TASK_PRIORITY_NORMAL, NULL);
-            xTaskCreate(telemetryTask, "telemetryTask", 4096, NULL, TASK_PRIORITY_LOW, NULL);
-            xTaskCreate(hardwareCalTask, "hardwareCalTask", 4096, NULL, TASK_PRIORITY_LOW, NULL);
-            xTaskCreate(softwareCalTask, "softwareCalTask", 4096, NULL, TASK_PRIORITY_LOW, NULL);
-            adcManager.setProbeState(0, ProbeState::ACTIVE);
-            adcManager.setProbeState(1, ProbeState::ACTIVE);
-        }
+        // Create the dedicated RTOS tasks for the pBIOS engine
+        xTaskCreatePinnedToCore(pBiosUiTask, "pBiosUiTask", 4096, NULL, TASK_PRIORITY_HIGH, NULL, 1);
+        xTaskCreatePinnedToCore(pBiosDataTask, "pBiosDataTask", 4096, NULL, TASK_PRIORITY_NORMAL, NULL, 0);
+
+        // Activate probes to get live data for tuning
+        adcManager.setProbeState(0, ProbeState::ACTIVE);
+        adcManager.setProbeState(1, ProbeState::ACTIVE);
+
+    } else { // BootMode::NORMAL
+        // --- Boot directly into the full Normal Application mode ---
+        LOG_BOOT("SpHEC Meter v2.11.4 Booting... [Normal Mode]");
+        
+        // Initialize all application managers
+        mainStateManager = new StateManager();
+        uiManager = new UIManager(displayManager);
+        mainStateManager->begin();
+        mainStateManager->addScreen(ScreenState::MAIN_MENU, new MainMenuScreen());
+        
+        adcManager.begin(faultHandler, vspi, spiMutex, SD_CS_PIN);
+        sdManager.begin(faultHandler, vspi, spiMutex, SD_CS_PIN, ADC1_CS_PIN, ADC2_CS_PIN);
+        configManager.begin(faultHandler);
+        phFilter.begin(faultHandler, configManager);
+        ecFilter.begin(faultHandler, configManager);
+        v3_3_Filter.begin(faultHandler, configManager);
+        v5_0_Filter.begin(faultHandler, configManager);
+        phCalManager.begin(faultHandler);
+        ecCalManager.begin(faultHandler);
+        tempManager.begin(faultHandler);
+        ina219Driver.begin(faultHandler, i2cMutex);
+        powerMonitor.begin(faultHandler, ina219Driver, sdManager);
+        
+        // Load saved calibrations from the SD card
+        StaticJsonDocument<512> phCalDoc, ecCalDoc;
+        if (sdManager.loadJson("/ph_cal.json", phCalDoc)) { phCalManager.deserializeModel(phCalManager.getMutableCurrentModel(), phCalDoc); }
+        if (sdManager.loadJson("/ec_cal.json", ecCalDoc)) { ecCalManager.deserializeModel(ecCalManager.getMutableCurrentModel(), ecCalDoc); }
+        
+        // Create all FreeRTOS tasks for the main application
+        xTaskCreatePinnedToCore(uiTask, "uiTask", 4096, NULL, TASK_PRIORITY_HIGH, NULL, 1);
+        xTaskCreate(i2cTask, "i2cTask", 2048, NULL, TASK_PRIORITY_LOW, NULL);
+        xTaskCreate(oneWireTask, "oneWireTask", 2048, NULL, TASK_PRIORITY_LOW, NULL);
+        xTaskCreate(sensorTask, "sensorTask", 4096, NULL, TASK_PRIORITY_NORMAL, NULL);
+        xTaskCreate(telemetryTask, "telemetryTask", 4096, NULL, TASK_PRIORITY_LOW, NULL);
+        xTaskCreate(hardwareCalTask, "hardwareCalTask", 4096, NULL, TASK_PRIORITY_LOW, NULL);
+        xTaskCreate(softwareCalTask, "softwareCalTask", 4096, NULL, TASK_PRIORITY_LOW, NULL);
+        
+        adcManager.setProbeState(0, ProbeState::ACTIVE);
+        adcManager.setProbeState(1, ProbeState::ACTIVE);
     }
     
     LOG_BOOT("Initialization Complete.");
@@ -177,13 +188,14 @@ void uiTask(void* pvParameters) {
     UIRenderProps* props = mainStateManager->getUiRenderProps();
     InputEvent event;
     for (;;) {
-        inputManager->update();
+        // --- FIX: Use the '.' operator for a direct object instance ---
+        inputManager.update();
         Screen* activeScreen = mainStateManager->getActiveScreen();
         if (activeScreen) {
-            if (inputManager->wasBackPressed()) { event.type = InputEventType::BTN_BACK_PRESS; activeScreen->handleInput(event); }
-            if (inputManager->wasEnterPressed()) { event.type = InputEventType::BTN_ENTER_PRESS; activeScreen->handleInput(event); }
-            if (inputManager->wasDownPressed()) { event.type = InputEventType::BTN_DOWN_PRESS; activeScreen->handleInput(event); }
-            int encoderChange = inputManager->getEncoderChange();
+            if (inputManager.wasBackPressed()) { event.type = InputEventType::BTN_BACK_PRESS; activeScreen->handleInput(event); }
+            if (inputManager.wasEnterPressed()) { event.type = InputEventType::BTN_ENTER_PRESS; activeScreen->handleInput(event); }
+            if (inputManager.wasDownPressed()) { event.type = InputEventType::BTN_DOWN_PRESS; activeScreen->handleInput(event); }
+            int encoderChange = inputManager.getEncoderChange();
             if (encoderChange != 0) { 
                 event.type = encoderChange > 0 ? InputEventType::ENCODER_INCREMENT : InputEventType::ENCODER_DECREMENT;
                 event.value = encoderChange;
@@ -201,34 +213,52 @@ void uiTask(void* pvParameters) {
     }
 }
 
+
+
+
+// File Path: /src/main.cpp
+
 void pBiosUiTask(void* pvParameters) {
     LOG_BOOT("pBios UI Task started on Core %d", xPortGetCoreID());
-    inputManager = new InputManager();
     uiManager = new UIManager(displayManager);
     pBiosStateManager = new StateManager();
-    inputManager->begin();
     
-    // --- FIX: Pass the shared context to the screen constructors ---
+    // Create instances of all pBIOS screens
+    ParameterEditScreen* paramEditScreen = new ParameterEditScreen(&pBiosContext);
+    LiveFilterTuningScreen* tuningScreen = new LiveFilterTuningScreen(&adcManager, &pBiosContext);
+
     pBiosStateManager->addScreen(ScreenState::PBIOS_MENU, new pBiosMenuScreen());
     pBiosStateManager->addScreen(ScreenState::FILTER_SELECTION, new FilterSelectionScreen(&pBiosContext));
-    pBiosStateManager->addScreen(ScreenState::LIVE_FILTER_TUNING, new LiveFilterTuningScreen(&adcManager, &pBiosContext));
+    pBiosStateManager->addScreen(ScreenState::LIVE_FILTER_TUNING, tuningScreen);
+    pBiosStateManager->addScreen(ScreenState::PARAMETER_EDIT, paramEditScreen);
     
     pBiosStateManager->changeState(ScreenState::PBIOS_MENU);
 
     for (;;) {
-        inputManager->update();
+        inputManager.update();
         Screen* activeScreen = pBiosStateManager->getActiveScreen();
         if (activeScreen) {
+            // --- FIX: Corrected the final -> to a . ---
+            if (pBiosStateManager->getActiveScreenState() == ScreenState::LIVE_FILTER_TUNING &&
+                inputManager.wasEnterPressed()) {
+                
+                paramEditScreen->setParameterToEdit(
+                    tuningScreen->getSelectedParamName(), 
+                    tuningScreen->getSelectedParamIndex()
+                );
+            }
+
             InputEvent event;
-            if (inputManager->wasBackPressed()) { event.type = InputEventType::BTN_BACK_PRESS; activeScreen->handleInput(event); }
-            if (inputManager->wasEnterPressed()) { event.type = InputEventType::BTN_ENTER_PRESS; activeScreen->handleInput(event); }
-            if (inputManager->wasDownPressed()) { event.type = InputEventType::BTN_DOWN_PRESS; activeScreen->handleInput(event); }
-            int enc_change = inputManager->getEncoderChange();
+            if (inputManager.wasBackPressed()) { event.type = InputEventType::BTN_BACK_PRESS; activeScreen->handleInput(event); }
+            if (inputManager.wasEnterPressed()) { event.type = InputEventType::BTN_ENTER_PRESS; activeScreen->handleInput(event); }
+            if (inputManager.wasDownPressed()) { event.type = InputEventType::BTN_DOWN_PRESS; activeScreen->handleInput(event); }
+            int enc_change = inputManager.getEncoderChange();
             if (enc_change != 0) { 
                 event.type = enc_change > 0 ? InputEventType::ENCODER_INCREMENT : InputEventType::ENCODER_DECREMENT;
                 event.value = enc_change;
                 activeScreen->handleInput(event);
             }
+            
             UIRenderProps props;
             activeScreen->getRenderProps(&props);
             uiManager->render(props);

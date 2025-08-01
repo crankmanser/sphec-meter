@@ -10,14 +10,12 @@ The firmware is built on a **"Cabinet" philosophy**. Each major component (e.g.,
 
 The system uses a dual-core FreeRTOS architecture to ensure UI responsiveness and operational stability.
 
-| Task          | Core | Priority | Purpose                                                      |
-|---------------|:----:|:--------:|--------------------------------------------------------------|
-| `uiTask`      | 1    | 3 (High) | Manages all user input, screen state, and display updates.   |
-| `adcTask`     | 0    | 2 (Norm) | Dedicated to reading SPI ADCs (ADS1118) to ensure stability. |
-| `sdTask`      | 0    | 2 (Norm) | Handles all asynchronous file I/O requests via a queue.      |
-| `i2cTask`     | 1    | 1 (Low)  | Periodically reads all I2C sensors (RTC, INA219).            |
-| `oneWireTask` | 0    | 1 (Low)  | Periodically reads all 1-Wire sensors (DS18B20, DHT11).      |
-| `sensorTask`  | 0    | 1 (Low)  | **Data Aggregator**: Centralizes raw data from other tasks.    |
+| Task | Core | Priority | Purpose |
+|---|---|---|---|
+| `uiTask` / `pBiosUiTask` | 1 | 3 (High) | Manages all user input, screen state, and display updates. |
+| `sensorTask` / `pBiosDataTask` | 0 | 2 (Norm) | Handles all data acquisition and processing. |
+| `i2cTask`, `oneWireTask`, `sdTask` | 0 | 1 (Low) | Handle other peripheral communication. |
+
 
 ### 1.2. Inter-Task Communication
 
@@ -76,44 +74,34 @@ The system uses a dual-core FreeRTOS architecture to ensure UI responsiveness an
 
 ## 3. User Interface Architecture
 
-The User Interface is built upon a robust, modular, and stable architecture designed to ensure responsiveness and prevent the instability issues of the legacy system. It is composed of three distinct, isolated UI systems.
+The UI is built on a robust, modular architecture designed for stability and responsiveness. It utilizes a single, globally initialized `InputManager` and separates the application into two distinct boot modes.
 
-### 3.1. The Three UI Engines
+### 3.1. Dual-Boot System
 
-The firmware's UI is not a single monolithic entity but is divided into three purpose-built systems:
+The firmware uses a simple, reliable method to select the operating mode on power-up, mirroring the stable legacy implementation.
+* **Mode Selection:** The boot mode is determined by checking if the **middle ("Enter") button** is held down during the initial boot sequence.
+* **Normal Boot:** If no button is pressed, the device proceeds to launch the main application.
+* **pBIOS Boot:** If the button is held down, the device launches the pBIOS diagnostics suite.
+* **Stability:** This approach eliminates the complexities of RTC memory and software reboots, guaranteeing a clean hardware state for each mode.
 
-1.  **The Boot UI (Self-Contained Bootloader):**
-    * **Location:** `src/boot/boot_sequence.cpp`
-    * **Responsibility:** To handle the initial boot animation and the critical `NORMAL` vs. `PBIOS` mode selection.
-    * **Architecture:** This is not a full "engine" but a simple, self-contained, blocking `while` loop. It performs its own direct, low-level polling of the input pins and draws directly to the screen via the `DisplayManager`. It has **no dependencies** on the main application's RTOS tasks or UI cabinets (`InputManager`, `StateManager`). This extreme simplicity guarantees maximum stability during the critical startup phase.
+### 3.2. The Two UI Engines
 
-2.  **The pBIOS UI Engine (Diagnostics Mode):**
-    * **Location:** `main.cpp`, within the `else` block after boot mode selection.
-    * **Responsibility:** To provide a user interface for the diagnostics (pBios) mode.
-    * **Architecture:** A simple, blocking `while` loop that runs directly on Core 0 after `setup()` completes. It instantiates its own `InputManager` for a consistent user feel but does **not** use the `StateManager` or a dedicated `uiTask`. It directly creates and manages its own screen instances (e.g., `pBiosMenuScreen`) and orchestrates the input and rendering loop itself. This keeps it lightweight and isolated from the main application's complexity.
-    * **Live Filter Tuning UI:** The LFT screen will utilize all three OLEDs to provide a comprehensive, data-rich tuning experience:
-        * **Top OLED:** Displays the real-time HF Domain graph (pre- and post-filter signals) and its associated real-time KPIs (`F_std`, `Stab %`).
-        * **Middle OLED:** Displays a single, scrollable menu for all HF and LF tunable parameters, as well as historical/contextual KPIs (`Sensor Drift`, `Zero-Point Drift`).
-        * **Bottom OLED:** Displays the real-time LF Domain graph (pre- and post-filter signals) and its associated KPIs.
+1.  **The pBIOS UI Engine (Diagnostics Mode):**
+    * **Architecture:** A dedicated, dual-core RTOS system (`pBiosUiTask` on Core 1, `pBiosDataTask` on Core 0) that is launched when pBIOS mode is selected. It provides a lightweight but powerful interface for all diagnostic functions.
+    * **Live Filter Tuning UI:** The LFT workflow is a key feature:
+        1.  The user first enters a `FilterSelectionScreen` to choose which sensor to tune.
+        2.  They are then taken to the `LiveFilterTuningScreen`, which uses all three OLEDs:
+            * **Top/Bottom OLEDs:** Display real-time graphs for the HF and LF filter stages.
+            * **Middle OLED:** Displays a status area at the top showing the selected parameter's live value, with a menu list below for navigation.
+        3.  Selecting a parameter takes the user to a dedicated `ParameterEditScreen` for a focused editing experience.
 
-3.  **The Main UI Engine (Normal Mode):**
-    * **Location:** Orchestrated by the `uiTask` created in `main.cpp`.
-    * **Responsibility:** To run the full, feature-rich user interface for the main application.
-    * **Architecture:** This is the full, multi-threaded UI engine. It consists of:
-        * A dedicated `uiTask` pinned to **Core 1** to guarantee responsiveness.
-        * The `InputManager` cabinet, which uses an ISR for the encoder and provides a simple polling interface.
-        * The `StateManager` cabinet, which owns all screen objects and manages transitions.
-        * The `UIManager` cabinet, which acts as the central rendering engine.
-        * A collection of reusable **UI Blocks** (`MenuBlock`, `ButtonBlock`) located in `src/ui/blocks/`.
-        * A collection of **Screens** (`MainMenuScreen`, etc.) located in `src/ui/screens/`.
+2.  **The Main UI Engine (Normal Mode):**
+    * **Architecture:** The full, multi-threaded UI engine orchestrated by the main `uiTask` on Core 1. It manages the complete user experience for measurement, calibration, and settings.
 
-### 3.2. Core UI Philosophy: Block-Based Assembly
+### 3.3. Core UI Philosophy: Block-Based Assembly
 
-The `pBIOS` and `Main` UI engines are both built on the principle that **screens do not draw themselves**. A screen's only responsibility is to act as a state machine. To render, it populates a shared data structure (`UIRenderProps`) that describes which reusable **UI Blocks** to display. The `UIManager` (in Normal mode) or the main loop (in pBios mode) is the sole rendering engine that interprets this data structure and calls the appropriate drawing functions for each block.
+Both UI engines are built on the principle that **screens do not draw themselves**. A screen's role is to manage state and populate a `UIRenderProps` data structure. The central `UIManager` is the sole rendering engine that interprets this structure and calls the draw functions for reusable **UI Blocks** (`MenuBlock`, `GraphBlock`, `ButtonBlock`).
 
-### 3.3. Input Handling
-
-To ensure a "silky-smooth" and responsive user experience, all physical user input is handled by the `InputManager` cabinet. This cabinet uses a hardware interrupt for the rotary encoder to guarantee no rotation is ever missed. The main UI loop (either in `uiTask` or the `pBios` loop) calls `inputManager.update()` on every frame to get the latest debounced button states and the processed encoder "velocity engine" output.
 
 ## 4. Adopted Refinements & Planned Architecture Enhancements
 

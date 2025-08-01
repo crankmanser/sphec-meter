@@ -4,6 +4,15 @@ This document tracks the development progress, current tasks, and future roadmap
 
 ## Changelog (What Was Done)
 
+* **v2.11.6 (2025-08-01):**
+    * **Status:** Complete.
+    * **Milestone:** The foundational pBIOS UI is now feature-complete, stable, and visually polished. All critical bootloader and input system failures have been resolved.
+    * **Feature:** Implemented a complete, generic "Live Filter Tuning" workflow, allowing the user to select any of the four sensor filters and tune its parameters in real-time.
+    * **Feature:** Created a dedicated `ParameterEditScreen` for a focused, user-friendly editing experience, as per the refined UI design.
+    * **UI Polish:** Refined the pBIOS UI layout by moving menus to create better visual separation, implementing inverse-color button prompts for clarity, and creating a dedicated status area on the tuning screen.
+    * **Fix (Bootloader):** Re-architected the dual-boot system to use the stable, legacy method of checking for a button press on power-up. This completely resolves the hardware state conflicts and instability of the previous reboot-based approach.
+    * **Fix (Encoder):** The encoder is now fully functional in all modes. The boot menu uses simple polling, and the main/pBIOS applications use a robust, globally initialized `InputManager` based on the proven legacy ISR code.
+
 * **v2.11.5 (2025-07-31):**
     * **Status:** Complete.
     * **Milestone:** Successfully resolved persistent, critical bootloader and input system failures. The pBIOS mode is now fully accessible and the encoder is functional in all UI modes.
@@ -166,10 +175,7 @@ This document tracks the development progress, current tasks, and future roadmap
 
 ## Current Task (What We Are Doing)
 
-* **UI Development - Phase 3: Implement pBIOS Parameter Editing.** With the bootloader and input systems now stable, the current task is to complete the **Live Filter Tuning** screen by implementing the "edit mode" for adjusting filter parameters.
-
-
-
+* **UI Development - Phase 3: Implement Remaining pBIOS Screens.** With the Live Filter Tuning screen complete and stable, the current task is to build out the other diagnostic screens defined in the pBIOS menu, starting with **"Noise Analysis"**.
 
 
 
@@ -187,6 +193,8 @@ This document tracks the development progress, current tasks, and future roadmap
 
 
 1.  **Implement Remaining pBIOS Screens:** Build out the other diagnostic screens defined in the pBIOS menu:
+    * Ensure the graphing works as intended
+    * implement the live tuning KPIs
     * Noise Analysis & Drift Trending
     * View Calibration KPIs
     * New Sensor / Maintenance Wizards

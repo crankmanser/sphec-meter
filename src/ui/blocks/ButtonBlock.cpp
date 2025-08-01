@@ -22,13 +22,21 @@ void ButtonBlock::draw(DisplayManager& displayManager, const ButtonBlockProps& p
         int cursor_x = (SCREEN_WIDTH - w) / 2;
         int cursor_y = SCREEN_HEIGHT - h - 2;
 
-        display->setTextColor(SSD1306_WHITE);
+        // --- NEW: Draw an inverse rectangle across the full width of the bottom ---
+        int rect_y = SCREEN_HEIGHT - h - 4;
+        int rect_h = h + 4;
+        display->fillRect(0, rect_y, SCREEN_WIDTH, rect_h, SSD1306_WHITE);
+
+        display->setTextColor(SSD1306_BLACK); // Set text to black for inverse effect
         display->setCursor(cursor_x, cursor_y);
         display->print(text.c_str());
     };
 
-    // --- Enforce the Standard Layout ---
-    draw_single_prompt(2, OLED1_TCA_CHANNEL, props.back_text);
+    // --- FIX: Corrected mapping to align prompts with physical buttons ---
+    // Top Button (Back/Up) -> Top OLED (display_index 0)
+    // Middle Button (Enter) -> Middle OLED (display_index 1)
+    // Bottom Button (Down) -> Bottom OLED (display_index 2)
+    draw_single_prompt(0, OLED3_TCA_CHANNEL, props.back_text);
     draw_single_prompt(1, OLED2_TCA_CHANNEL, props.enter_text);
-    draw_single_prompt(0, OLED3_TCA_CHANNEL, props.down_text);
+    draw_single_prompt(2, OLED1_TCA_CHANNEL, props.down_text);
 }

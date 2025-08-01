@@ -51,24 +51,52 @@ void UIManager::drawOledContent(Adafruit_SSD1306* display, const OledProps& prop
     if (!display) {
         return;
     }
+    
+    // --- NEW: Custom drawing for the bordered status area ---
+    // This logic is specific to the LiveFilterTuningScreen, identified by a non-empty line2
+    if (!props.line2.empty() && props.menu_props.is_enabled) {
+        display->setTextSize(1);
+        display->setFont(nullptr);
 
-    // Call the draw methods for each UI block
-    MenuBlock::draw(display, props.menu_props);
-    GraphBlock::draw(display, props.graph_props); // <<< NEW
-
-    // Draw simple text lines if provided
-    display->setTextSize(1);
-    display->setTextColor(SSD1306_WHITE);
-    if (!props.line1.empty()) {
+        // Draw the parameter name
         display->setCursor(4, 2);
+        display->setTextColor(SSD1306_WHITE);
         display->print(props.line1.c_str());
-    }
-    if (!props.line2.empty()) {
-        display->setCursor(4, 12);
+
+        // Draw the value in an inverse box
+        int16_t x1, y1;
+        uint16_t w, h;
+        display->getTextBounds(props.line2.c_str(), 0, 0, &x1, &y1, &w, &h);
+        int value_x = 80;
+        int value_y = 2;
+        display->fillRect(value_x - 2, value_y - 2, w + 4, h + 4, SSD1306_WHITE);
+        display->setCursor(value_x, value_y);
+        display->setTextColor(SSD1306_BLACK);
         display->print(props.line2.c_str());
+
+        // Draw the borderline
+        display->drawFastHLine(0, 16, 128, SSD1306_WHITE);
+    } 
+    // --- Fallback for simple text rendering ---
+    else {
+        display->setTextSize(1);
+        display->setTextColor(SSD1306_WHITE);
+        if (!props.line1.empty()) {
+            display->setCursor(4, 2);
+            display->print(props.line1.c_str());
+        }
+        if (!props.line2.empty()) {
+            display->setCursor(4, 12);
+            display->print(props.line2.c_str());
+        }
+        if (!props.line3.empty()) {
+            display->setCursor(4, 22);
+            display->print(props.line3.c_str());
+        }
     }
-    if (!props.line3.empty()) {
-        display->setCursor(4, 22);
-        display->print(props.line3.c_str());
-    }
+
+
+    // Call the draw methods for other UI blocks
+    MenuBlock::draw(display, props.menu_props);
+    GraphBlock::draw(display, props.graph_props);
 }

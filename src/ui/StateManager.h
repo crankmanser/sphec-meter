@@ -15,7 +15,8 @@ enum class ScreenState {
     MAIN_MENU,
     PBIOS_MENU,
     FILTER_SELECTION,
-    LIVE_FILTER_TUNING
+    LIVE_FILTER_TUNING,
+    PARAMETER_EDIT 
 };
 
 class Screen {

@@ -18,27 +18,28 @@ void MenuBlock::draw(Adafruit_GFX* display, const MenuBlockProps& props) {
         return;
     }
 
-    const int y_top = 22;
-    const int y_middle = 34;
-    const int y_bottom = 46;
+    // --- FIX: Y positions moved down to create space for the status area above ---
+    const int y_top = 28;
+    const int y_middle = 40;
+    const int y_bottom = 52;
+    const int highlight_height = 12;
 
-    // Draw Selected Item (Always in the middle, highlighted)
-    display->fillRect(0, y_middle - 2, 128, 12, 1);
+    // Draw Selected Item
+    display->fillRect(0, y_middle - (highlight_height / 2) - 2, 128, highlight_height, 1);
     display->setTextColor(0);
-    display->setCursor(4, y_middle);
+    display->setCursor(4, y_middle - 4);
     display->print(props.items[props.selected_index].c_str());
     display->setTextColor(1);
 
     // Draw Item Above Selection
     if (props.selected_index > 0) {
-        display->setCursor(4, y_top);
+        display->setCursor(4, y_top - 4);
         display->print(props.items[props.selected_index - 1].c_str());
     }
 
     // Draw Item Below Selection
-    // --- FIX: Corrected typo from "insex" to "index" ---
     if (props.selected_index < props.items.size() - 1) {
-        display->setCursor(4, y_bottom);
+        display->setCursor(4, y_bottom - 4);
         display->print(props.items[props.selected_index + 1].c_str());
     }
 }
