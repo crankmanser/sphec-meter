@@ -1,4 +1,5 @@
 // File Path: /lib/PI_Filter/src/PI_Filter.h
+// MODIFIED FILE
 
 #ifndef PI_FILTER_H
 #define PI_FILTER_H
@@ -8,17 +9,26 @@
 #include <algorithm>
 #include <numeric>
 
+// --- NEW: Define a shared constant for history size ---
+// This ensures the filter's internal buffers and the UI graph buffers are
+// always synchronized, fixing the graph scaling issue.
+#define FILTER_HISTORY_SIZE 128
+
 class PI_Filter {
 public:
     PI_Filter();
     double process(double rawValue);
 
-    // Getters
+    // Getters for KPIs
     double getFilteredValue() const;
     double getRawStandardDeviation() const;
     double getFilteredStandardDeviation() const;
     int getStabilityPercentage() const;
     bool isLocked() const;
+
+    // Getters for historical data
+    void getRawHistory(double* buffer, size_t size) const;
+    void getFilteredHistory(double* buffer, size_t size) const;
 
     // Tunable Parameters
     int medianWindowSize;
@@ -31,11 +41,12 @@ private:
     enum class FilterState { TRACKING, LOCKED };
     FilterState _currentState;
 
-    // --- FIX: Added a dedicated buffer for the median filter's sliding window ---
     std::vector<double> _medianHistoryBuffer; 
     
+    // These buffers now act as a circular history of the last FILTER_HISTORY_SIZE data points.
     std::vector<double> _rawBuffer;      
     std::vector<double> _filteredBuffer;
+    
     double _filteredValue;
     double _integralTerm;
     double _rawStdDev;

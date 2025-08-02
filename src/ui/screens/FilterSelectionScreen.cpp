@@ -2,9 +2,8 @@
 // MODIFIED FILE
 
 #include "FilterSelectionScreen.h"
-#include "pBiosContext.h" 
-#include "ADS1118.h"       
-
+#include "pBiosContext.h"      
+#include "ADS1118.h"           
 
 FilterSelectionScreen::FilterSelectionScreen(PBiosContext* context) : 
     _context(context),
@@ -22,14 +21,41 @@ void FilterSelectionScreen::handleInput(const InputEvent& event) {
     } else if (event.type == InputEventType::ENCODER_DECREMENT) {
         if (_selected_index > 0) _selected_index--;
     } 
-    // --- FIX: The "Select" action is now triggered by the BOTTOM button ---
     else if (event.type == InputEventType::BTN_DOWN_PRESS) {
         if (_stateManager && _context) {
-            // ... (context setting logic is unchanged) ...
+            
+            // --- CRITICAL FIX: Implement the missing context-setting logic ---
+            // This switch statement sets the shared context pointers based on the
+            // user's selection, which is the essential link that was missing.
+            // It tells the pBiosDataTask which filter to use and which ADC
+            // channel to read from.
+            switch (_selected_index) {
+                case 0: // pH Probe
+                    _context->selectedFilter = &phFilter;
+                    _context->selectedAdcIndex = 0;
+                    _context->selectedAdcInput = ADS1118::DIFF_0_1;
+                    break;
+                case 1: // EC Probe
+                    _context->selectedFilter = &ecFilter;
+                    _context->selectedAdcIndex = 1;
+                    _context->selectedAdcInput = ADS1118::DIFF_0_1;
+                    break;
+                case 2: // 3.3V Bus
+                    _context->selectedFilter = &v3_3_Filter;
+                    _context->selectedAdcIndex = 0;
+                    _context->selectedAdcInput = ADS1118::AIN_2;
+                    break;
+                case 3: // 5.0V Bus
+                    _context->selectedFilter = &v5_0_Filter;
+                    _context->selectedAdcIndex = 1;
+                    _context->selectedAdcInput = ADS1118::AIN_2;
+                    break;
+            }
+            
+            // Now that the context is set, we can transition to the tuning screen.
             _stateManager->changeState(ScreenState::LIVE_FILTER_TUNING);
         }
     } 
-    // The top button is now consistently "Back"
     else if (event.type == InputEventType::BTN_BACK_PRESS) {
         if (_stateManager) _stateManager->changeState(ScreenState::PBIOS_MENU);
     }
@@ -44,7 +70,6 @@ void FilterSelectionScreen::getRenderProps(UIRenderProps* props_to_fill) {
 
     props_to_fill->oled_bottom_props.line1 = "Select filter to tune.";
 
-    // --- Button Prompts Updated ---
     props_to_fill->button_props.back_text = "Back";
     props_to_fill->button_props.enter_text = "";
     props_to_fill->button_props.down_text = "Select";

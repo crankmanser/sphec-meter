@@ -7,14 +7,16 @@
 #include "DisplayManager.h"
 #include "blocks/MenuBlock.h"
 #include "blocks/ButtonBlock.h"
-#include "blocks/GraphBlock.h" // <<< NEW: Include the new GraphBlock header
+#include "blocks/GraphBlock.h"
+#include "blocks/ProgressBarBlock.h" // <<< NEW: Include the new ProgressBarBlock
 
 struct OledProps {
     std::string line1;
     std::string line2;
     std::string line3;
     MenuBlockProps menu_props;
-    GraphBlockProps graph_props; // <<< NEW: Add graph properties
+    GraphBlockProps graph_props;
+    ProgressBarProps progress_bar_props; // <<< NEW: Add progress bar properties
 };
 
 struct UIRenderProps {

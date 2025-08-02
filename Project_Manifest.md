@@ -1,9 +1,54 @@
+// File Path: /src/Project_Manifest.md
+// MODIFIED FILE
+
 # SpHEC Meter Project Manifest
 
 This document tracks the development progress, current tasks, and future roadmap for the SpHEC Meter firmware.
 
 ## Changelog (What Was Done)
 
+* **v2.11.14 (2025-08-02):**
+    * **Status:** Complete.
+    * **Milestone:** The pBIOS "Drift Trending" (FFT analysis) screen is now fully implemented and feature-complete. All major pBIOS diagnostic tools are now functional.
+    * **Feature:** Implemented the full background processing logic for the `DriftTrendingScreen`, including long-duration sampling, Hamming windowing, and FFT computation.
+    * **UI/UX:** The `DriftTrendingScreen` now displays the top 2 most dominant low-frequency peaks, providing actionable data for diagnosing slow signal drift.
+    * **Fix (Critical):** Resolved a system freeze/crash in the "Noise Analysis" screen by replacing the complex "smart" progress bar logic with a simpler, more robust sampling loop that correctly yields to the RTOS scheduler. This prevents watchdog timeouts and ensures system stability.
+* **v2.11.13 (2025-08-02):**
+    * **Status:** In Progress.
+    * **Milestone:** Began implementation of the pBIOS "NA Drift Trending" screen.
+    * **Feature:** Created the header and C++ files for the `DriftTrendingScreen`, defining its multi-step state machine (source select, duration select, sampling, analyzing, results) and data structures for storing FFT results. The UI for the configuration steps is complete.
+    * **Architecture:** Added a new `DRIFT_TRENDING` state to the `StateManager` to formally integrate the screen into the UI engine.
+* **v2.11.12 (2025-08-02):**
+    * **Status:** Complete.
+    * **Milestone:** The pBIOS boot sequence is now fully stable and reliable, mirroring the robust logic from the legacy firmware.
+    * **Fix (Critical):** Resolved a persistent "input bleed-through" bug by re-architecting the `setup()` sequence. The firmware now waits for the user to release the boot-combo button and explicitly clears the `InputManager`'s state before starting the main UI tasks.
+    * **UI/UX:** Redesigned the "Noise Analysis" results screen to display a clear statistical summary instead of a raw data graph, improving usability.
+* **v2.11.11 (2025-08-02):**
+    * **Status:** In Progress.
+    * **Fix:** Reverted the boot selection logic to a simple, reliable `digitalRead()` at power-on, resolving a critical bug that prevented pBIOS mode from being accessible. The `BootSelector` is now a simple animation runner again. *(Self-correction: This fix was insufficient and was superseded by v2.11.12)*.
+* **v2.11.10 (2025-08-02):**
+    * **Status:** Complete.
+    * **Milestone:** The bootloader has been re-architected to be a fully isolated, self-contained UI, resolving all input "bleed-through" and timing sensitivity issues.
+    * **Fix (Critical):** Implemented a blocking, pre-RTOS boot selection menu that polls for input directly, inspired by the robust legacy firmware. The main application and RTOS tasks are now only started *after* a boot mode has been explicitly selected.
+    * **Fix (Compiler):** Corrected a file path issue that prevented the `boot_sequence` module from finding the `InputManager` header.
+* **v2.11.9 (2025-08-02):**
+    * **Status:** Complete.
+    * **Milestone:** The pBIOS "Noise Analysis" screen is now functional, providing statistical analysis and a graphical view of the raw signal.
+    * **Feature:** Implemented a progress bar for the "Noise Analysis" sampling phase, providing better user feedback during the ~1 second data acquisition period. Created a new reusable `ProgressBarBlock` for this purpose.
+    * **Feature:** The "Noise Analysis" results screen now displays a graph of the captured raw signal, allowing for visual inspection of the noise.
+    * **Fix:** Corrected an issue where holding a button during boot to select a mode would cause that button press to be immediately registered by the UI. The firmware now waits for the button to be released before starting the UI task.
+    * **Fix:** Made the `GraphBlock` more robust; it can now correctly render a single data series without crashing.
+* **v2.11.8 (2025-08-02):**
+    * **Status:** Complete.
+    * **Milestone:** The foundational back-end for the pBIOS "Noise Analysis" screen is now implemented and integrated.
+    * **Fix (Linker Error):** Restored the `uiTask` function definition in `main.cpp`, which was accidentally deleted, resolving a critical linker error.
+    * **Feature:** The `pBiosDataTask` can now perform high-speed data sampling and statistical calculations when triggered by the `NoiseAnalysisScreen`.
+    * **Integration:** Fully integrated the `NoiseAnalysisScreen` into the pBIOS state machine.
+* **v2.11.7 (2025-08-02):**
+    * **Status:** Complete.
+    * **Milestone:** The Live Filter Tuning screen is now fully operational and correctly displaying live data.
+    * **Fix (Critical):** Resolved a major logic error where the `FilterSelectionScreen` was not setting the shared `pBiosContext`. This prevented any data from being processed or displayed on the tuning screen, resulting in a flat line graph and zeroed KPI values. The context is now correctly set, fully enabling the pBIOS data pipeline.
+    * **Feature:** Implemented the display of real-time filter KPIs (`R_std`, `F_std`, `Stab %`) on the `LiveFilterTuningScreen`, providing essential quantitative feedback for data-driven tuning as specified in the user manual.
 * **v2.11.6 (2025-08-01):**
     * **Status:** Complete.
     * **Milestone:** The foundational pBIOS UI is now feature-complete, stable, and visually polished. All critical bootloader and input system failures have been resolved.
@@ -192,12 +237,8 @@ This document tracks the development progress, current tasks, and future roadmap
 
 
 
-1.  **Implement Remaining pBIOS Screens:** Build    
-    out the other diagnostic screens defined in the pBIOS menu:
+1.  **Implement Remaining pBIOS Screens:** Build out the other diagnostic screens defined in the pBIOS menu:
     * Ensure the graphing works as intended
-    * Ensure the filter pipeline is implemented as  
-      intended
-    * implement the FFT and statistical analysis 
     * implement the live tuning KPIs
     * Noise Analysis & Drift Trending
     * View Calibration KPIs

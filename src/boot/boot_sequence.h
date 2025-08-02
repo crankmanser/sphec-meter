@@ -2,27 +2,36 @@
 // MODIFIED FILE
 
 #ifndef BOOT_SEQUENCE_H
-#define BOOT_SEQUENCE_H
+#define BO_SEQUENCE_H
 
 #include "DisplayManager.h"
 
-// The BootMode enum is still useful for the main logic
+// The BootMode enum is still used by the main application logic.
 enum class BootMode {
     NORMAL,
     PBIOS
 };
 
-// The RTC variable is no longer needed.
-
+/**
+ * @class BootSelector
+ * @brief Manages the boot-up animation display.
+ *
+ * This class has been simplified to have a single responsibility: rendering the
+ * boot-up animation. The complex logic for mode selection has been moved back
+ * into main.cpp and now uses a much more reliable, direct hardware read,
+ * mirroring the stable legacy implementation. This change resolves critical
+ * timing and input bleed-through issues.
+ */
 class BootSelector {
 public:
+    // --- FIX: The constructor no longer needs the InputManager ---
     BootSelector(DisplayManager& displayManager);
-    // The function is simplified, it no longer returns a value.
-    void runBootSequence();
+    
+    // --- FIX: This function no longer handles logic, it just shows the animation ---
+    void runBootAnimation();
 
 private:
-    // The menu drawing is no longer needed.
-    void runPostAnimation(uint32_t post_duration_ms);
+    void runAnimation(uint32_t duration_ms);
     DisplayManager& _displayManager;
 };
 

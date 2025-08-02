@@ -8,9 +8,6 @@ UIManager::UIManager(DisplayManager& displayManager) :
     _displayManager(displayManager)
 {}
 
-/**
- * @brief Renders the entire UI for one frame.
- */
 void UIManager::render(const UIRenderProps& props) {
     // Stage 1: Clear all display buffers
     Adafruit_SSD1306* display_top = _displayManager.getDisplay(0);
@@ -42,28 +39,18 @@ void UIManager::render(const UIRenderProps& props) {
     if (display_bottom) display_bottom->display();
 }
 
-/**
- * @brief Draws the content for a single OLED screen.
- * This function now calls the appropriate block-drawing functions based
- * on the properties provided.
- */
 void UIManager::drawOledContent(Adafruit_SSD1306* display, const OledProps& props) {
     if (!display) {
         return;
     }
     
-    // --- NEW: Custom drawing for the bordered status area ---
-    // This logic is specific to the LiveFilterTuningScreen, identified by a non-empty line2
+    // --- Custom drawing for the bordered status area ---
     if (!props.line2.empty() && props.menu_props.is_enabled) {
         display->setTextSize(1);
         display->setFont(nullptr);
-
-        // Draw the parameter name
         display->setCursor(4, 2);
         display->setTextColor(SSD1306_WHITE);
         display->print(props.line1.c_str());
-
-        // Draw the value in an inverse box
         int16_t x1, y1;
         uint16_t w, h;
         display->getTextBounds(props.line2.c_str(), 0, 0, &x1, &y1, &w, &h);
@@ -73,13 +60,12 @@ void UIManager::drawOledContent(Adafruit_SSD1306* display, const OledProps& prop
         display->setCursor(value_x, value_y);
         display->setTextColor(SSD1306_BLACK);
         display->print(props.line2.c_str());
-
-        // Draw the borderline
         display->drawFastHLine(0, 16, 128, SSD1306_WHITE);
     } 
     // --- Fallback for simple text rendering ---
     else {
         display->setTextSize(1);
+        display->setFont(nullptr);
         display->setTextColor(SSD1306_WHITE);
         if (!props.line1.empty()) {
             display->setCursor(4, 2);
@@ -95,8 +81,9 @@ void UIManager::drawOledContent(Adafruit_SSD1306* display, const OledProps& prop
         }
     }
 
-
     // Call the draw methods for other UI blocks
     MenuBlock::draw(display, props.menu_props);
     GraphBlock::draw(display, props.graph_props);
+    // --- NEW: Call the draw method for the progress bar block ---
+    ProgressBarBlock::draw(display, props.progress_bar_props);
 }

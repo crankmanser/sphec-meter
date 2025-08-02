@@ -16,14 +16,15 @@ enum class ScreenState {
     PBIOS_MENU,
     FILTER_SELECTION,
     LIVE_FILTER_TUNING,
-    PARAMETER_EDIT 
+    PARAMETER_EDIT,
+    NOISE_ANALYSIS,
+    DRIFT_TRENDING // <<< NEW: Add the new screen state
 };
 
+// ... (rest of StateManager.h is unchanged) ...
 class Screen {
 public:
     virtual ~Screen() {}
-    // The onEnter method now receives a pointer to the StateManager that owns it.
-    // This allows a screen to call back to the manager to change the state.
     virtual void onEnter(StateManager* stateManager) { _stateManager = stateManager; }
     virtual void onExit() {}
     virtual void handleInput(const InputEvent& event) = 0;
@@ -40,7 +41,7 @@ public:
     void addScreen(ScreenState state, Screen* screen);
     void changeState(ScreenState new_state);
     Screen* getActiveScreen();
-    ScreenState getActiveScreenState() const; // Getter for type-safe checks
+    ScreenState getActiveScreenState() const;
     UIRenderProps* getUiRenderProps();
 private:
     std::map<ScreenState, Screen*> _screens;

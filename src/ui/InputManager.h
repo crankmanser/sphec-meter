@@ -30,16 +30,17 @@ public:
     bool wasDownPressed();
     int getEncoderChange();
 
+    // --- NEW: Public method to clear the enter button's state ---
+    // This is called during boot-up to prevent input bleed-through.
+    void clearEnterButtonState();
+
 private:
-    // --- MIGRATED FROM LEGACY: The exact ISR implementation from the working code ---
+    // ... (private members are unchanged) ...
     static void IRAM_ATTR encoderISR();
     static volatile long _encoder_raw_pulses;
     static volatile uint8_t _last_AB_state;
     static const int8_t _qem_decode_table[];
-    
     long _accumulated_pulses;
-
-    // --- Button debouncing state (unchanged) ---
     bool _back_pressed;
     bool _enter_pressed;
     bool _down_pressed;
