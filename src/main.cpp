@@ -35,7 +35,14 @@
 #include "ui/screens/DriftTrendingScreen.h"
 #include <arduinoFFT.h>
 
-// ... (Global object declarations and setup function are unchanged) ...
+
+
+
+
+
+
+
+// Global object declarations
 FaultHandler faultHandler;
 ConfigManager configManager;
 DisplayManager displayManager;
@@ -63,6 +70,8 @@ SemaphoreHandle_t i2cMutex = nullptr;
 volatile double raw_ph_voltage, filtered_ph_voltage;
 double final_ph_value, final_ec_value, final_probe_temp, final_ambient_temp, final_humidity, final_v3_3_bus, final_v5_0_bus;
 portMUX_TYPE sharedDataMutex = portMUX_INITIALIZER_UNLOCKED;
+
+// Task forward declarations
 void uiTask(void* pvParameters);
 void i2cTask(void* pvParameters);
 void oneWireTask(void* pvParameters);
@@ -73,6 +82,18 @@ void softwareCalTask(void* pvParameters);
 void pBiosUiTask(void* pvParameters);
 void pBiosDataTask(void* pvParameters);
 String getSerialInput();
+
+
+
+
+
+
+
+
+
+
+
+
 
 void setup() {
     Serial.begin(115200);
@@ -107,21 +128,41 @@ void setup() {
     i2cMutex = xSemaphoreCreateMutex();
     vspi = new SPIClass(VSPI);
     vspi->begin(VSPI_SCK_PIN, VSPI_MISO_PIN, VSPI_MOSI_PIN);
+    
     if (selected_mode == BootMode::PBIOS) {
-        LOG_BOOT("SpHEC Meter v2.11.14 Booting... [pBIOS Mode]");
+        LOG_BOOT("SpHEC Meter v2.11.18 Booting... [pBIOS Mode]");
         pBiosContextMutex = xSemaphoreCreateMutex();
         adcManager.begin(faultHandler, vspi, spiMutex, SD_CS_PIN);
         configManager.begin(faultHandler);
+        sdManager.begin(faultHandler, vspi, spiMutex, SD_CS_PIN, ADC1_CS_PIN, ADC2_CS_PIN);
+        tempManager.begin(faultHandler);
+        phCalManager.begin(faultHandler);
+        ecCalManager.begin(faultHandler);
+        StaticJsonDocument<512> phCalDoc, ecCalDoc;
+        if (sdManager.loadJson("/ph_cal.json", phCalDoc)) { 
+            phCalManager.deserializeModel(phCalManager.getMutableCurrentModel(), phCalDoc); 
+            LOG_BOOT("pH calibration loaded successfully.");
+        } else {
+            LOG_BOOT("WARNING: Could not load pH calibration file.");
+        }
+        if (sdManager.loadJson("/ec_cal.json", ecCalDoc)) { 
+            ecCalManager.deserializeModel(ecCalManager.getMutableCurrentModel(), ecCalDoc); 
+            LOG_BOOT("EC calibration loaded successfully.");
+        } else {
+            LOG_BOOT("WARNING: Could not load EC calibration file.");
+        }
         phFilter.begin(faultHandler, configManager);
         ecFilter.begin(faultHandler, configManager);
         v3_3_Filter.begin(faultHandler, configManager);
         v5_0_Filter.begin(faultHandler, configManager);
         xTaskCreatePinnedToCore(pBiosUiTask, "pBiosUiTask", 8192, NULL, TASK_PRIORITY_HIGH, NULL, 1);
         xTaskCreatePinnedToCore(pBiosDataTask, "pBiosDataTask", 8192, NULL, TASK_PRIORITY_NORMAL, NULL, 0);
+        xTaskCreate(oneWireTask, "oneWireTask", 2048, NULL, TASK_PRIORITY_LOW, NULL);
         adcManager.setProbeState(0, ProbeState::ACTIVE);
         adcManager.setProbeState(1, ProbeState::ACTIVE);
-    } else { 
-        LOG_BOOT("SpHEC Meter v2.11.14 Booting... [Normal Mode]");
+
+    } else { // BootMode::NORMAL
+        LOG_BOOT("SpHEC Meter v2.11.18 Booting... [Normal Mode]");
         mainStateManager = new StateManager();
         uiManager = new UIManager(displayManager);
         mainStateManager->begin();
@@ -153,6 +194,7 @@ void setup() {
     }
     LOG_BOOT("Initialization Complete.");
 }
+
 
 
 
@@ -204,12 +246,25 @@ void uiTask(void* pvParameters) {
     }
 }
 
+
+
+
+
+
+
+
+
+
+
+
+
+
 void pBiosUiTask(void* pvParameters) {
     LOG_BOOT("pBios UI Task started on Core %d", xPortGetCoreID());
     uiManager = new UIManager(displayManager);
     pBiosStateManager = new StateManager();
     ParameterEditScreen* paramEditScreen = new ParameterEditScreen(&pBiosContext);
-    LiveFilterTuningScreen* tuningScreen = new LiveFilterTuningScreen(&adcManager, &pBiosContext);
+    LiveFilterTuningScreen* tuningScreen = new LiveFilterTuningScreen(&adcManager, &pBiosContext, &phCalManager, &ecCalManager, &tempManager);
     NoiseAnalysisScreen* noiseAnalysisScreen = new NoiseAnalysisScreen(&pBiosContext, &adcManager);
     DriftTrendingScreen* driftTrendingScreen = new DriftTrendingScreen(&pBiosContext, &adcManager);
     pBiosStateManager->addScreen(ScreenState::PBIOS_MENU, new pBiosMenuScreen());
@@ -225,17 +280,17 @@ void pBiosUiTask(void* pvParameters) {
         if (activeScreen) {
             InputEvent event;
             if (inputManager.wasBackPressed()) { event.type = InputEventType::BTN_BACK_PRESS; activeScreen->handleInput(event); }
-            if (inputManager.wasEnterPressed()) { 
-                event.type = InputEventType::BTN_ENTER_PRESS; 
-                activeScreen->handleInput(event); 
+            if (inputManager.wasEnterPressed()) { event.type = InputEventType::BTN_ENTER_PRESS; activeScreen->handleInput(event); }
+            if (inputManager.wasDownPressed()) { 
+                event.type = InputEventType::BTN_DOWN_PRESS;
                 if (pBiosStateManager->getActiveScreenState() == ScreenState::LIVE_FILTER_TUNING) {
                      paramEditScreen->setParameterToEdit(
                         tuningScreen->getSelectedParamName(), 
                         tuningScreen->getSelectedParamIndex()
                     );
                 }
+                activeScreen->handleInput(event);
             }
-            if (inputManager.wasDownPressed()) { event.type = InputEventType::BTN_DOWN_PRESS; activeScreen->handleInput(event); }
             int enc_change = inputManager.getEncoderChange();
             if (enc_change != 0) { 
                 event.type = enc_change > 0 ? InputEventType::ENCODER_INCREMENT : InputEventType::ENCODER_DECREMENT;
@@ -243,10 +298,16 @@ void pBiosUiTask(void* pvParameters) {
                 activeScreen->handleInput(event);
             }
             UIRenderProps props;
-            if (pBiosStateManager->getActiveScreenState() == ScreenState::LIVE_FILTER_TUNING) {
-                tuningScreen->update();
+            ScreenState currentState = pBiosStateManager->getActiveScreenState();
+            tuningScreen->update();
+            if (currentState == ScreenState::PARAMETER_EDIT) {
+                tuningScreen->getRenderProps(&props);
+            } else {
+                activeScreen->getRenderProps(&props);
             }
-            activeScreen->getRenderProps(&props);
+            if (currentState == ScreenState::PARAMETER_EDIT) {
+                paramEditScreen->getRenderProps(&props);
+            }
             uiManager->render(props);
         }
         vTaskDelay(pdMS_TO_TICKS(33));
@@ -258,9 +319,11 @@ void pBiosUiTask(void* pvParameters) {
 
 
 
-/**
- * @brief --- MODIFIED: The data processing task now includes logic for Drift Trending ---
- */
+
+
+
+
+
 void pBiosDataTask(void* pvParameters) {
     LOG_BOOT("pBios Data Task started on Core %d", xPortGetCoreID());
     for (;;) {
@@ -270,49 +333,49 @@ void pBiosDataTask(void* pvParameters) {
         }
         Screen* activeScreen = pBiosStateManager->getActiveScreen();
         ScreenState activeScreenType = pBiosStateManager->getActiveScreenState();
-
-        if (activeScreenType == ScreenState::LIVE_FILTER_TUNING) {
+        if (activeScreenType == ScreenState::LIVE_FILTER_TUNING || activeScreenType == ScreenState::PARAMETER_EDIT) {
             if (pBiosContext.selectedFilter != nullptr) {
                 double raw_voltage = adcManager.getVoltage(pBiosContext.selectedAdcIndex, pBiosContext.selectedAdcInput);
-                pBiosContext.selectedFilter->process(raw_voltage);
+                double filtered_voltage = pBiosContext.selectedFilter->process(raw_voltage);
+                double final_value = 0.0;
+                if (pBiosContext.selectedFilter == &phFilter) {
+                    double calibrated_ph = phCalManager.getCalibratedValue(filtered_voltage);
+                    final_value = phCalManager.getCompensatedValue(calibrated_ph, tempManager.getProbeTemp(), false);
+                } else if (pBiosContext.selectedFilter == &ecFilter) {
+                    double calibrated_ec = ecCalManager.getCalibratedValue(filtered_voltage);
+                    final_value = ecCalManager.getCompensatedValue(calibrated_ec, tempManager.getProbeTemp(), true);
+                } else {
+                    final_value = filtered_voltage;
+                }
+                Screen* tuningScreen = pBiosStateManager->getScreen(ScreenState::LIVE_FILTER_TUNING);
+                if (tuningScreen) {
+                    static_cast<LiveFilterTuningScreen*>(tuningScreen)->setCalibratedValue(final_value);
+                }
             }
         } 
         else if (activeScreenType == ScreenState::NOISE_ANALYSIS) {
             NoiseAnalysisScreen* naScreen = static_cast<NoiseAnalysisScreen*>(activeScreen);
-            
             if (naScreen && naScreen->isSampling()) {
                 LOG_BOOT("Noise Analysis triggered on Core %d", xPortGetCoreID());
-                
                 std::vector<double> samples;
                 samples.reserve(ANALYSIS_SAMPLE_COUNT);
-
-                // --- CRITICAL FIX: Reverted to a simple, stable sampling loop ---
-                // This loop ensures the task yields control to the RTOS scheduler
-                // after every single sample, preventing a watchdog timeout and system freeze.
                 for (int i = 0; i < ANALYSIS_SAMPLE_COUNT; ++i) {
                     samples.push_back(adcManager.getVoltage(pBiosContext.selectedAdcIndex, pBiosContext.selectedAdcInput));
-                    
-                    // Update progress periodically to avoid overwhelming the UI task.
                     if ((i + 1) % 16 == 0) {
                         int percent = (int)(((float)(i + 1) / ANALYSIS_SAMPLE_COUNT) * 100.0f);
                         naScreen->setSamplingProgress(percent);
                     }
-                    // This delay is critical for system stability.
                     vTaskDelay(pdMS_TO_TICKS(2)); 
                 }
-                
                 naScreen->setSamplingProgress(100);
-                
                 double sum = std::accumulate(samples.begin(), samples.end(), 0.0);
                 double mean = sum / ANALYSIS_SAMPLE_COUNT;
                 double min_val = *std::min_element(samples.begin(), samples.end());
                 double max_val = *std::max_element(samples.begin(), samples.end());
                 double pk_pk = max_val - min_val;
-                
                 double sq_sum = std::inner_product(samples.begin(), samples.end(), samples.begin(), 0.0);
                 double variance = sq_sum / ANALYSIS_SAMPLE_COUNT - mean * mean;
                 double std_dev = (variance > 0) ? std::sqrt(variance) : 0.0;
-
                 naScreen->setAnalysisResults(mean, min_val, max_val, pk_pk, std_dev, samples);
                 LOG_BOOT("Noise Analysis complete. Mean: %.2f mV, StdDev: %.2f mV", mean, std_dev);
             }
@@ -321,46 +384,82 @@ void pBiosDataTask(void* pvParameters) {
             DriftTrendingScreen* dtScreen = static_cast<DriftTrendingScreen*>(activeScreen);
             if (dtScreen && dtScreen->isSampling()) {
                 LOG_BOOT("Drift Trending Analysis triggered on Core %d", xPortGetCoreID());
-                
                 int duration_sec = dtScreen->getSelectedDurationSec();
                 float sample_rate_hz = (float)DRIFT_SAMPLE_COUNT / duration_sec;
                 uint32_t sample_interval_ms = 1000 / sample_rate_hz;
-
                 double vReal[DRIFT_SAMPLE_COUNT];
                 double vImag[DRIFT_SAMPLE_COUNT];
-
                 for (int i = 0; i < DRIFT_SAMPLE_COUNT; ++i) {
                     vReal[i] = adcManager.getVoltage(pBiosContext.selectedAdcIndex, pBiosContext.selectedAdcInput);
                     vImag[i] = 0.0;
                     dtScreen->setSamplingProgress((int)(((float)(i + 1) / DRIFT_SAMPLE_COUNT) * 100.0f));
                     vTaskDelay(pdMS_TO_TICKS(sample_interval_ms));
                 }
-                
                 dtScreen->setAnalyzing();
                 vTaskDelay(pdMS_TO_TICKS(50));
-
                 arduinoFFT FFT = arduinoFFT(vReal, vImag, DRIFT_SAMPLE_COUNT, sample_rate_hz);
                 FFT.Windowing(FFT_WIN_TYP_HAMMING, FFT_FORWARD);
                 FFT.Compute(FFT_FORWARD);
                 FFT.ComplexToMagnitude();
-
                 dtScreen->setAnalysisResults(vReal);
                 LOG_BOOT("Drift Trending Analysis complete.");
             }
         }
-        
         vTaskDelay(pdMS_TO_TICKS(10)); 
     }
 }
 
 
 
-void i2cTask(void* pvParameters) { for (;;) { powerMonitor.update(); vTaskDelay(pdMS_TO_TICKS(100)); } }
-void oneWireTask(void* pvParameters) { for (;;) { tempManager.update(); vTaskDelay(pdMS_TO_TICKS(2000)); } }
-String getSerialInput(){ String input = ""; char c; while (true) { if (Serial.available()) { c = Serial.read(); 
-    if (c == '\n' || c == '\r') 
-    { while(Serial.available() && (Serial.peek() == '\n' || Serial.peek() == '\r')) 
-        { Serial.read(); } return input; } input += c; } vTaskDelay(pdMS_TO_TICKS(10)); } return "";}
+
+
+
+
+
+void i2cTask(void* pvParameters) { 
+    
+    for (;;) 
+            { 
+                powerMonitor.update(); 
+                vTaskDelay(pdMS_TO_TICKS(100)); 
+            } 
+}
+
+
+
+
+
+
+
+void oneWireTask(void* pvParameters) { 
+
+    for (;;) 
+            { tempManager.update(); 
+                vTaskDelay(pdMS_TO_TICKS(2000)); 
+            }
+}
+
+String getSerialInput(){ String input = ""; 
+    char c; 
+    while (true) { if (Serial.available()) {
+        
+        c = Serial.read(); 
+        if (c == '\n' || c == '\r') { 
+            
+            while
+            (Serial.available() && (Serial.peek() == '\n' || Serial.peek() == '\r')) 
+            { Serial.read(); } return input; } input += c; 
+        } 
+        vTaskDelay(pdMS_TO_TICKS(10)); 
+    
+    } return "";}
+
+
+
+
+
+
+
 void sensorTask(void* pvParameters) { 
     for (;;) {
         double raw_ph_v = adcManager.getVoltage(0, ADS1118::DIFF_0_1);
@@ -385,6 +484,16 @@ void sensorTask(void* pvParameters) {
         vTaskDelay(pdMS_TO_TICKS(100));
     }
 }
+
+
+
+
+
+
+
+
+
+
 void telemetryTask(void* pvParameters) { 
     for (;;) {
         double pH, ec, p_temp, a_temp, hum, v33, v50, r_ph, f_ph;
@@ -411,6 +520,17 @@ void telemetryTask(void* pvParameters) {
         vTaskDelay(pdMS_TO_TICKS(2000));
     }
 }
+
+
+
+
+
+
+
+
+
+
+
 void hardwareCalTask(void* pvParameters) { 
     vTaskDelay(pdMS_TO_TICKS(5500));
     Serial.println("\n\n===== Hardware Calibration Wizard =====");
@@ -433,6 +553,14 @@ void hardwareCalTask(void* pvParameters) {
     }
     vTaskSuspend(NULL);
 }
+
+
+
+
+
+
+
+
 void softwareCalTask(void* pvParameters) {
     vTaskDelay(pdMS_TO_TICKS(5000));
     Serial.println("\n\n===== Software Calibration Wizard =====");
@@ -451,4 +579,4 @@ void softwareCalTask(void* pvParameters) {
     }
     vTaskSuspend(NULL);
 }
-#endif // PIO_UNIT_TESTING
+#endif

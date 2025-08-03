@@ -10,7 +10,6 @@ StateManager::StateManager() :
 {}
 
 StateManager::~StateManager() {
-    // FIX: Reverted to a C++11 compatible iterator loop to fix compile warning.
     for (std::map<ScreenState, Screen*>::iterator it = _screens.begin(); it != _screens.end(); ++it) {
         delete it->second;
     }
@@ -51,6 +50,20 @@ void StateManager::changeState(ScreenState new_state) {
 Screen* StateManager::getActiveScreen() {
     return _activeScreen;
 }
+
+/**
+ * @brief --- NEW: Safely retrieves a pointer to a registered screen ---
+ * @param state The state of the screen to retrieve.
+ * @return A pointer to the Screen object, or nullptr if not found.
+ */
+Screen* StateManager::getScreen(ScreenState state) {
+    auto it = _screens.find(state);
+    if (it != _screens.end()) {
+        return it->second;
+    }
+    return nullptr;
+}
+
 
 ScreenState StateManager::getActiveScreenState() const {
     return _currentState;

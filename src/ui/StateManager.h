@@ -18,10 +18,9 @@ enum class ScreenState {
     LIVE_FILTER_TUNING,
     PARAMETER_EDIT,
     NOISE_ANALYSIS,
-    DRIFT_TRENDING // <<< NEW: Add the new screen state
+    DRIFT_TRENDING
 };
 
-// ... (rest of StateManager.h is unchanged) ...
 class Screen {
 public:
     virtual ~Screen() {}
@@ -41,6 +40,8 @@ public:
     void addScreen(ScreenState state, Screen* screen);
     void changeState(ScreenState new_state);
     Screen* getActiveScreen();
+    // --- NEW: Add a getter to find a specific screen instance ---
+    Screen* getScreen(ScreenState state);
     ScreenState getActiveScreenState() const;
     UIRenderProps* getUiRenderProps();
 private:

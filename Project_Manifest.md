@@ -7,6 +7,31 @@ This document tracks the development progress, current tasks, and future roadmap
 
 ## Changelog (What Was Done)
 
+* **v2.11.18 (2025-08-03):**
+    * **Status:** Complete.
+    * **Milestone:** All major pBIOS diagnostic features are now implemented, stable, and feature-complete. The firmware is ready to begin development on the main application's user interface.
+    * **Fix (Critical):** Resolved all outstanding bugs in the "Live Filter Tuning" workflow.
+        * The pBIOS boot sequence now correctly initializes all required managers (`SdManager`, `TempManager`) and loads calibration files, fixing the `pH: -nan` error.
+        * The standard deviation calculation in the `PI_Filter` was replaced with a numerically stable two-pass algorithm, permanently fixing the missing "R" & "F" KPI labels.
+        * The data pipeline in `pBiosDataTask` now continues to run during parameter editing, ensuring the graphs on OLEDs #1 and #3 remain live and do not freeze.
+        * The `ParameterEditScreen` was re-architected to be a true "overlay," fixing all text-overlap issues on the top and bottom screens during editing.
+    * **Feature:** Implemented the complete "NA Drift Trending" screen, including a multi-step UI for configuration and a results screen that displays the top 3 dominant low-frequency peaks identified by an FFT analysis.
+    * **Feature:** Implemented the complete "Noise Analysis" screen, including a multi-step UI, a non-linear "smart" progress bar, and a redesigned, data-rich results screen.
+    * **Fix (Bootloader):** Re-architected the boot sequence to use a robust, legacy-inspired method that is immune to input "bleed-through" and timing sensitivity issues.
+* **v2.11.17 (2025-08-02):**
+    * **Status:** Complete.
+    * **Milestone:** The pBIOS "Live Filter Tuning" screen now correctly displays the live, calibrated pH value.
+    * **Fix (Critical):** Resolved a bug causing a "-nan" value to be displayed for pH during live tuning. The pBIOS boot sequence was failing to initialize the `SdManager` and `TempManager`, and did not load the calibration file from the SD card. These have been added to the pBIOS startup sequence, making the full data pipeline operational.
+* **v2.11.16 (2025-08-02):**
+    * **Status:** Complete.
+    * **Milestone:** The pBIOS UI now provides a seamless and responsive user experience during filter tuning.
+    * **Fix (Critical):** Resolved a major bug where the live graphs would freeze during parameter editing. Re-architected the main UI loop to ensure the graph data is updated every frame, and the edit screen is correctly rendered as an overlay, keeping all visual elements live and responsive.
+    * **UI/UX:** Redesigned the status display on the "Live Filter Tuning" screen to be a cleaner, single line of essential data, as per user feedback.
+* **v2.11.15 (2025-08-02):**
+    * **Status:** Complete.
+    * **Milestone:** The "Live Filter Tuning" workflow is now fully functional and feature-complete.
+    * **Fix (Critical):** Resolved a major UI logic bug that prevented filter parameter values from being edited. The logic to prepare the `ParameterEditScreen` was tied to the wrong button event in the main UI task. This has been corrected, and editing filter values now works as intended.
+    * **Enhancement:** The `pBiosDataTask` now includes the full data processing pipeline (Filter->Calibrate->Compensate) during live tuning, providing the final, human-readable value on the screen as described in the user manual.
 * **v2.11.14 (2025-08-02):**
     * **Status:** Complete.
     * **Milestone:** The pBIOS "Drift Trending" (FFT analysis) screen is now fully implemented and feature-complete. All major pBIOS diagnostic tools are now functional.
