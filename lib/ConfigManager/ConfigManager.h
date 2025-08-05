@@ -1,39 +1,45 @@
 // File Path: /lib/ConfigManager/ConfigManager.h
+// MODIFIED FILE
 
 #ifndef CONFIG_MANAGER_H
 #define CONFIG_MANAGER_H
 
 #include <ArduinoJson.h>
-#include <FaultHandler.h> // Depends on FaultHandler for error reporting.
+#include <FaultHandler.h>
+#include "FilterManager.h" // Now needs the full definition
+#include "SdManager.h"     // Needs the SdManager for file operations
 
-// Forward declaration for StorageEngine to avoid circular dependencies.
-// The ConfigManager will use the StorageEngine but doesn't need its full definition here.
-class StorageEngine; 
-
-/**
- * @class ConfigManager
- * @brief A unified cabinet for managing all device configurations.
- * * As per the architectural blueprint, this class provides a single interface
- * for all configuration data. It will internally decide whether to fetch data
- * from the fast internal flash (NVS) or from the SD card via the StorageEngine.
- *
- */
 class ConfigManager {
 public:
-    /**
-     * @brief Constructor for the ConfigManager.
-     */
     ConfigManager();
 
     /**
      * @brief Initializes the ConfigManager.
-     * @param faultHandler A reference to the global fault handler for error reporting.
+     * @param faultHandler A reference to the global fault handler.
+     * @param sdManager A reference to the SdManager for file operations.
      * @return True if initialization is successful, false otherwise.
      */
-    bool begin(FaultHandler& faultHandler);
+    bool begin(FaultHandler& faultHandler, SdManager& sdManager);
+
+    /**
+     * @brief Saves the settings of a FilterManager to a JSON file.
+     * @param filter The FilterManager instance to save.
+     * @param filterName The base name for the config file (e.g., "ph_filter").
+     * @return True if saving was successful, false otherwise.
+     */
+    bool saveFilterSettings(FilterManager& filter, const char* filterName);
+
+    /**
+     * @brief Loads the settings for a FilterManager from a JSON file.
+     * @param filter The FilterManager instance to load into.
+     * @param filterName The base name for the config file (e.g., "ph_filter").
+     * @return True if loading was successful, false otherwise.
+     */
+    bool loadFilterSettings(FilterManager& filter, const char* filterName);
 
 private:
-    FaultHandler* _faultHandler; // Pointer to the system fault handler.
+    FaultHandler* _faultHandler;
+    SdManager* _sdManager; // Pointer to the SD card manager
     bool _initialized;
 };
 

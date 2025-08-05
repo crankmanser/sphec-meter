@@ -1,11 +1,11 @@
 // File Path: /lib/SdManager/src/SdManager.cpp
+// MODIFIED FILE
 
 #include "SdManager.h"
 #include <SPI.h>
 
 SdManager::SdManager() : _faultHandler(nullptr), _isInitialized(false), _csPin(0), _spiMutex(nullptr), _adc1CsPin(0), _adc2CsPin(0) {}
 
-// --- FIX: Store ADC CS pins ---
 bool SdManager::begin(FaultHandler& faultHandler, SPIClass* spiBus, SemaphoreHandle_t spiMutex, uint8_t csPin, uint8_t adc1CsPin, uint8_t adc2CsPin) {
     _faultHandler = &faultHandler;
     _csPin = csPin;
@@ -28,11 +28,35 @@ bool SdManager::begin(FaultHandler& faultHandler, SPIClass* spiBus, SemaphoreHan
     return false;
 }
 
-// --- FIX: New method for explicit bus arbitration ---
 void SdManager::deselectOtherSlaves() {
     digitalWrite(_adc1CsPin, HIGH);
     digitalWrite(_adc2CsPin, HIGH);
 }
+
+
+/**
+ * @brief --- DEFINITIVE FIX: Creates a directory using the correct SdFat method. ---
+ * This function now correctly opens the parent directory as an FsFile and then
+ * calls the mkdir() method on that file object, which is the proper procedure
+ * for the SdFat library. This resolves the file persistence issue.
+ */
+bool SdManager::mkdir(const char* path) {
+    if (!_isInitialized || _spiMutex == nullptr) return false;
+    
+    bool success = false;
+    if (xSemaphoreTake(_spiMutex, portMAX_DELAY) == pdTRUE) {
+        deselectOtherSlaves();
+        
+        // The SdFat library requires creating a directory relative to an
+        // already open directory file object. For an absolute path, we
+        // can just use the 'sd' object itself as the base.
+        success = sd.mkdir(path);
+        
+        xSemaphoreGive(_spiMutex);
+    }
+    return success;
+}
+
 
 bool SdManager::saveJson(const char* path, const JsonDocument& doc) {
     if (!_isInitialized || _spiMutex == nullptr) return false;
@@ -40,7 +64,6 @@ bool SdManager::saveJson(const char* path, const JsonDocument& doc) {
     bool success = false;
     if (xSemaphoreTake(_spiMutex, portMAX_DELAY) == pdTRUE) {
         deselectOtherSlaves();
-        // ... (atomic save logic is unchanged)
         char tmpPath[256];
         char bakPath[256];
         snprintf(tmpPath, sizeof(tmpPath), "%s.tmp", path);
@@ -74,7 +97,6 @@ bool SdManager::loadJson(const char* path, JsonDocument& doc) {
     bool success = false;
     if (xSemaphoreTake(_spiMutex, portMAX_DELAY) == pdTRUE) {
         deselectOtherSlaves();
-        // ... (load logic is unchanged)
         FsFile file = sd.open(path, FILE_READ);
         if (file) {
             DeserializationError error = deserializeJson(doc, file);

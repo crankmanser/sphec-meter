@@ -24,35 +24,34 @@ void FilterSelectionScreen::handleInput(const InputEvent& event) {
     else if (event.type == InputEventType::BTN_DOWN_PRESS) {
         if (_stateManager && _context) {
             
-            // --- CRITICAL FIX: Implement the missing context-setting logic ---
-            // This switch statement sets the shared context pointers based on the
-            // user's selection, which is the essential link that was missing.
-            // It tells the pBiosDataTask which filter to use and which ADC
-            // channel to read from.
+            // --- MODIFIED: Set the filter name in the context ---
             switch (_selected_index) {
                 case 0: // pH Probe
                     _context->selectedFilter = &phFilter;
+                    _context->selectedFilterName = "ph_filter";
                     _context->selectedAdcIndex = 0;
                     _context->selectedAdcInput = ADS1118::DIFF_0_1;
                     break;
                 case 1: // EC Probe
                     _context->selectedFilter = &ecFilter;
+                    _context->selectedFilterName = "ec_filter";
                     _context->selectedAdcIndex = 1;
                     _context->selectedAdcInput = ADS1118::DIFF_0_1;
                     break;
                 case 2: // 3.3V Bus
                     _context->selectedFilter = &v3_3_Filter;
+                    _context->selectedFilterName = "v3_3_filter";
                     _context->selectedAdcIndex = 0;
                     _context->selectedAdcInput = ADS1118::AIN_2;
                     break;
                 case 3: // 5.0V Bus
                     _context->selectedFilter = &v5_0_Filter;
+                    _context->selectedFilterName = "v5_0_filter";
                     _context->selectedAdcIndex = 1;
                     _context->selectedAdcInput = ADS1118::AIN_2;
                     break;
             }
             
-            // Now that the context is set, we can transition to the tuning screen.
             _stateManager->changeState(ScreenState::LIVE_FILTER_TUNING);
         }
     } 

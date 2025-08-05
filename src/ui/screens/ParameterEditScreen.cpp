@@ -6,6 +6,19 @@
 #include <stdio.h>
 #include <Arduino.h>
 
+// --- NEW: A temporary struct to hold parameter values ---
+struct ParamSnapshot {
+    double settleThreshold;
+    double lockSmoothing;
+    double trackResponse;
+    double trackAssist;
+};
+
+// --- NEW: Two snapshots to store pre-edit values ---
+ParamSnapshot hf_snapshot;
+ParamSnapshot lf_snapshot;
+
+
 ParameterEditScreen::ParameterEditScreen(PBiosContext* context) :
     _context(context),
     _param_index(-1)
@@ -14,10 +27,47 @@ ParameterEditScreen::ParameterEditScreen(PBiosContext* context) :
 void ParameterEditScreen::setParameterToEdit(const std::string& name, int index) {
     _param_name = name;
     _param_index = index;
+
+    // --- NEW: Take a snapshot of parameters when entering the screen ---
+    if (_context && _context->selectedFilter) {
+        PI_Filter* hf = _context->selectedFilter->getFilter(0);
+        PI_Filter* lf = _context->selectedFilter->getFilter(1);
+        if (hf) {
+            hf_snapshot = {hf->settleThreshold, hf->lockSmoothing, hf->trackResponse, hf->trackAssist};
+        }
+        if (lf) {
+            lf_snapshot = {lf->settleThreshold, lf->lockSmoothing, lf->trackResponse, lf->trackAssist};
+        }
+    }
 }
 
 void ParameterEditScreen::handleInput(const InputEvent& event) {
-    if (event.type == InputEventType::BTN_BACK_PRESS || event.type == InputEventType::BTN_DOWN_PRESS) {
+    // --- MODIFIED: Handle "Cancel" button press ---
+    if (event.type == InputEventType::BTN_BACK_PRESS) {
+        // Restore the snapshot if the user cancels
+        if (_context && _context->selectedFilter) {
+            PI_Filter* hf = _context->selectedFilter->getFilter(0);
+            PI_Filter* lf = _context->selectedFilter->getFilter(1);
+            if (hf) {
+                hf->settleThreshold = hf_snapshot.settleThreshold;
+                hf->lockSmoothing = hf_snapshot.lockSmoothing;
+                hf->trackResponse = hf_snapshot.trackResponse;
+                hf->trackAssist = hf_snapshot.trackAssist;
+            }
+            if (lf) {
+                lf->settleThreshold = lf_snapshot.settleThreshold;
+                lf->lockSmoothing = lf_snapshot.lockSmoothing;
+                lf->trackResponse = lf_snapshot.trackResponse;
+                lf->trackAssist = lf_snapshot.trackAssist;
+            }
+        }
+        if (_stateManager) _stateManager->changeState(ScreenState::LIVE_FILTER_TUNING);
+        return;
+    }
+
+    // --- MODIFIED: Handle "Set" button press ---
+    // The actual saving is handled in main.cpp, this just transitions state.
+    if (event.type == InputEventType::BTN_DOWN_PRESS) {
         if (_stateManager) _stateManager->changeState(ScreenState::LIVE_FILTER_TUNING);
         return;
     }
@@ -28,10 +78,13 @@ void ParameterEditScreen::handleInput(const InputEvent& event) {
     if (!filter) return;
     
     int local_param_index = _param_index % 4;
-    float step = 0.01f; // Default step
-    if(local_param_index == 3) step = 0.001f; // Finer step for track assist
+    double step = 0.01;
+    if(local_param_index == 0) step = 0.01;
+    if(local_param_index == 1) step = 0.01;
+    if(local_param_index == 2) step = 0.01;
+    if(local_param_index == 3) step = 0.001;
 
-    float change = (event.type == InputEventType::ENCODER_INCREMENT) ? step : -step;
+    double change = (event.type == InputEventType::ENCODER_INCREMENT) ? step : -step;
 
     switch (local_param_index) {
         case 0: filter->settleThreshold += change; break;
@@ -41,28 +94,16 @@ void ParameterEditScreen::handleInput(const InputEvent& event) {
     }
 }
 
-/**
- * @brief --- STEP 3: Renders as a non-destructive overlay. ---
- * This function only modifies the properties for the middle OLED and buttons.
- * It leaves the top and bottom screens untouched, so the live graphs continue
- * to render without being frozen or overwritten.
- */
 void ParameterEditScreen::getRenderProps(UIRenderProps* props_to_fill) {
-    // --- Middle OLED: The editing UI ---
     OledProps& mid_props = props_to_fill->oled_middle_props;
-    mid_props = OledProps(); // Clear it
+    mid_props = OledProps();
     mid_props.line1 = "Editing: " + _param_name;
     mid_props.line2 = "New Value:";
-    mid_props.line3 = getParamValueString(); // This will be inverted by the UIManager
+    
+    char buffer[20];
+    snprintf(buffer, sizeof(buffer), "> %s <", getParamValueString().c_str());
+    mid_props.line3 = buffer;
 
-    // --- Bottom OLED: Contextual Help ---
-    // We only modify the text lines, leaving the graph props alone.
-    OledProps& bottom_props = props_to_fill->oled_bottom_props;
-    bottom_props.line1 = "Turn encoder to adjust.";
-    bottom_props.line2 = "";
-    bottom_props.line3 = "";
-
-    // --- Button Prompts ---
     props_to_fill->button_props.back_text = "Cancel";
     props_to_fill->button_props.down_text = "Set";
 }
@@ -78,11 +119,10 @@ std::string ParameterEditScreen::getParamValueString() {
     double val = 0;
     
     switch (param_index) {
-        case 0: val = filter->settleThreshold; break;
-        case 1: val = filter->lockSmoothing; break;
-        case 2: val = filter->trackResponse; break;
-        case 3: val = filter->trackAssist; break;
+        case 0: val = filter->settleThreshold; dtostrf(val, 4, 3, buffer); break;
+        case 1: val = filter->lockSmoothing; dtostrf(val, 4, 3, buffer); break;
+        case 2: val = filter->trackResponse; dtostrf(val, 4, 3, buffer); break;
+        case 3: val = filter->trackAssist; dtostrf(val, 4, 4, buffer); break;
     }
-    dtostrf(val, 4, 4, buffer);
     return std::string(buffer);
 }

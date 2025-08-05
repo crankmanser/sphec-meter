@@ -25,6 +25,7 @@
 #include "ui/screens/FilterSelectionScreen.h"
 #include "ui/screens/LiveFilterTuningScreen.h"
 #include "ui/screens/ParameterEditScreen.h"
+#include "pBiosContext.h"
 
 // Global objects
 FaultHandler faultHandler;
@@ -38,11 +39,7 @@ CalibrationManager phCalManager, ecCalManager;
 InputManager inputManager;
 StateManager* pBiosStateManager = nullptr;
 UIManager* uiManager = nullptr;
-struct PBiosContext {
-    FilterManager* selectedFilter = nullptr;
-    uint8_t selectedAdcIndex = 0;
-    uint8_t selectedAdcInput = 0;
-};
+
 PBiosContext pBiosContext;
 SPIClass* vspi = nullptr;
 SemaphoreHandle_t spiMutex = nullptr;
@@ -51,7 +48,7 @@ SemaphoreHandle_t i2cMutex = nullptr;
 // Task forward declarations
 void pBiosUiTask(void* pvParameters);
 void pBiosDataTask(void* pvParameters);
-void oneWireTask(void* pvParameters); // Forward declare the task
+void oneWireTask(void* pvParameters);
 
 void setup() {
     Serial.begin(115200);
@@ -76,13 +73,19 @@ void setup() {
     
     LOG_BOOT("SpHEC Meter Booting... [pBIOS Mode]");
     adcManager.begin(faultHandler, vspi, spiMutex, SD_CS_PIN);
-    configManager.begin(faultHandler);
+    
+    // --- MODIFIED: Pass SdManager to ConfigManager ---
     sdManager.begin(faultHandler, vspi, spiMutex, SD_CS_PIN, ADC1_CS_PIN, ADC2_CS_PIN);
+    configManager.begin(faultHandler, sdManager);
+    
     tempManager.begin(faultHandler);
-    phFilter.begin(faultHandler, configManager);
-    ecFilter.begin(faultHandler, configManager);
-    v3_3_Filter.begin(faultHandler, configManager);
-    v5_0_Filter.begin(faultHandler, configManager);
+
+    // --- MODIFIED: Pass names to FilterManager begin() ---
+    phFilter.begin(faultHandler, configManager, "ph_filter");
+    ecFilter.begin(faultHandler, configManager, "ec_filter");
+    v3_3_Filter.begin(faultHandler, configManager, "v3_3_filter");
+    v5_0_Filter.begin(faultHandler, configManager, "v5_0_filter");
+
     phCalManager.begin(faultHandler);
     ecCalManager.begin(faultHandler);
 
@@ -96,7 +99,6 @@ void setup() {
 
     xTaskCreatePinnedToCore(pBiosUiTask, "pBiosUiTask", 8192, NULL, 3, NULL, 1);
     xTaskCreatePinnedToCore(pBiosDataTask, "pBiosDataTask", 8192, NULL, 2, NULL, 0);
-    // --- DEFINITIVE FIX: Restore the oneWireTask to the pBIOS boot sequence ---
     xTaskCreate(oneWireTask, "oneWireTask", 2048, NULL, 1, NULL);
     
     adcManager.setProbeState(0, ProbeState::ACTIVE);
@@ -108,7 +110,6 @@ void loop() {
     vTaskSuspend(NULL); 
 }
 
-// ... (pBiosUiTask is unchanged) ...
 void pBiosUiTask(void* pvParameters) {
     LOG_BOOT("pBios UI Task started on Core %d", xPortGetCoreID());
     uiManager = new UIManager(displayManager);
@@ -128,17 +129,41 @@ void pBiosUiTask(void* pvParameters) {
         Screen* activeScreen = pBiosStateManager->getActiveScreen();
         if (activeScreen) {
             InputEvent event;
-            if (inputManager.wasBackPressed()) { event.type = InputEventType::BTN_BACK_PRESS; activeScreen->handleInput(event); }
+
+            // --- Handle Back Button ---
+            if (inputManager.wasBackPressed()) { 
+                event.type = InputEventType::BTN_BACK_PRESS; 
+                activeScreen->handleInput(event); 
+            }
+
+            // --- Handle Down/Action Button ---
             if (inputManager.wasDownPressed()) {
-                if (pBiosStateManager->getActiveScreenState() == ScreenState::LIVE_FILTER_TUNING) {
+                ScreenState currentState = pBiosStateManager->getActiveScreenState();
+
+                // If on tuning screen, prepare the edit screen
+                if (currentState == ScreenState::LIVE_FILTER_TUNING) {
                     paramEditScreen->setParameterToEdit(
                         tuningScreen->getSelectedParamName(),
                         tuningScreen->getSelectedParamIndex()
                     );
                 }
+                
+                // --- NEW: Save settings when "Set" is pressed on the edit screen ---
+                if (currentState == ScreenState::PARAMETER_EDIT) {
+                    if (pBiosContext.selectedFilter) {
+                        configManager.saveFilterSettings(
+                            *pBiosContext.selectedFilter, 
+                            pBiosContext.selectedFilterName.c_str()
+                        );
+                        // Optional: Add some visual feedback here
+                    }
+                }
+
                 event.type = InputEventType::BTN_DOWN_PRESS;
                 activeScreen->handleInput(event);
             }
+            
+            // --- Handle Encoder ---
             int enc_change = inputManager.getEncoderChange();
             if (enc_change != 0) { 
                 event.type = enc_change > 0 ? InputEventType::ENCODER_INCREMENT : InputEventType::ENCODER_DECREMENT;
@@ -146,6 +171,7 @@ void pBiosUiTask(void* pvParameters) {
             }
         }
 
+        // --- Update and Render Logic (Unchanged) ---
         tuningScreen->update();
 
         UIRenderProps props;
@@ -170,9 +196,7 @@ void pBiosDataTask(void* pvParameters) {
         if (pBiosContext.selectedFilter != nullptr) {
             double raw_voltage = adcManager.getVoltage(pBiosContext.selectedAdcIndex, pBiosContext.selectedAdcInput);
             double filtered_voltage = pBiosContext.selectedFilter->process(raw_voltage);
-
             double final_value = 0.0;
-            // Get the latest temperature, which will now be valid.
             float temp = tempManager.getProbeTemp();
 
             if (pBiosContext.selectedFilter == &phFilter) {
@@ -192,17 +216,11 @@ void pBiosDataTask(void* pvParameters) {
     }
 }
 
-/**
- * @brief --- DEFINITIVE FIX: The oneWireTask is now defined for pBIOS mode. ---
- * This task periodically reads the temperature sensors. Its absence was the
- * cause of the `pH: -nan` error.
- */
 void oneWireTask(void* pvParameters) { 
     for (;;) {
         tempManager.update(); 
         vTaskDelay(pdMS_TO_TICKS(2000)); 
     }
 }
-
 
 #endif

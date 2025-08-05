@@ -1,24 +1,97 @@
 // File Path: /lib/ConfigManager/ConfigManager.cpp
+// MODIFIED FILE
 
 #include "ConfigManager.h"
+#include "../../src/DebugConfig.h"
 
-//
-// --- CONSTRUCTOR ---
-//
-ConfigManager::ConfigManager() : _faultHandler(nullptr), _initialized(false) {
-    // Constructor intentionally left empty.
-    // Dependencies are injected via the begin() method.
+ConfigManager::ConfigManager() : 
+    _faultHandler(nullptr), 
+    _sdManager(nullptr),
+    _initialized(false) 
+{}
+
+bool ConfigManager::begin(FaultHandler& faultHandler, SdManager& sdManager) {
+    _faultHandler = &faultHandler;
+    _sdManager = &sdManager;
+    _initialized = true;
+    
+    // --- FIX: Ensure the configuration directory exists on the SD card ---
+    if (_sdManager) {
+        _sdManager->mkdir("/config");
+    }
+    
+    return true;
 }
 
-//
-// --- INITIALIZATION ---
-//
-bool ConfigManager::begin(FaultHandler& faultHandler) {
-    _faultHandler = &faultHandler;
+bool ConfigManager::saveFilterSettings(FilterManager& filter, const char* filterName) {
+    if (!_initialized || !_sdManager) return false;
 
-    // In the future, this is where we would initialize the NVS (Non-Volatile Storage)
-    // and verify that we can communicate with the StorageEngine.
+    StaticJsonDocument<512> doc;
 
-    _initialized = true;
-    return true; // Return true assuming initialization is successful for now.
+    // Serialize HF Filter
+    PI_Filter* hfFilter = filter.getFilter(0);
+    if (hfFilter) {
+        JsonObject hf = doc.createNestedObject("hf_filter");
+        hf["settleThreshold"] = hfFilter->settleThreshold;
+        hf["lockSmoothing"] = hfFilter->lockSmoothing;
+        hf["trackResponse"] = hfFilter->trackResponse;
+        hf["trackAssist"] = hfFilter->trackAssist;
+        hf["medianWindowSize"] = hfFilter->medianWindowSize;
+    }
+
+    // Serialize LF Filter
+    PI_Filter* lfFilter = filter.getFilter(1);
+    if (lfFilter) {
+        JsonObject lf = doc.createNestedObject("lf_filter");
+        lf["settleThreshold"] = lfFilter->settleThreshold;
+        lf["lockSmoothing"] = lfFilter->lockSmoothing;
+        lf["trackResponse"] = lfFilter->trackResponse;
+        lf["trackAssist"] = lfFilter->trackAssist;
+        lf["medianWindowSize"] = lfFilter->medianWindowSize;
+    }
+
+    char filepath[64];
+    snprintf(filepath, sizeof(filepath), "/config/%s.json", filterName);
+
+    LOG_STORAGE("Saving filter settings to %s", filepath);
+    return _sdManager->saveJson(filepath, doc);
+}
+
+bool ConfigManager::loadFilterSettings(FilterManager& filter, const char* filterName) {
+    if (!_initialized || !_sdManager) return false;
+
+    char filepath[64];
+    snprintf(filepath, sizeof(filepath), "/config/%s.json", filterName);
+
+    StaticJsonDocument<512> doc;
+    LOG_STORAGE("Loading filter settings from %s", filepath);
+    if (!_sdManager->loadJson(filepath, doc)) {
+        LOG_STORAGE("Failed to load %s, will save defaults.", filepath);
+        return false;
+    }
+
+    // Deserialize HF Filter
+    PI_Filter* hfFilter = filter.getFilter(0);
+    JsonObject hf = doc["hf_filter"];
+    if (hfFilter && !hf.isNull()) {
+        hfFilter->settleThreshold = hf["settleThreshold"];
+        hfFilter->lockSmoothing = hf["lockSmoothing"];
+        hfFilter->trackResponse = hf["trackResponse"];
+        hfFilter->trackAssist = hf["trackAssist"];
+        hfFilter->medianWindowSize = hf["medianWindowSize"];
+    }
+
+    // Deserialize LF Filter
+    PI_Filter* lfFilter = filter.getFilter(1);
+    JsonObject lf = doc["lf_filter"];
+    if (lfFilter && !lf.isNull()) {
+        lfFilter->settleThreshold = lf["settleThreshold"];
+        lfFilter->lockSmoothing = lf["lockSmoothing"];
+        lfFilter->trackResponse = lf["trackResponse"];
+        lfFilter->trackAssist = lf["trackAssist"];
+        lfFilter->medianWindowSize = lfFilter->medianWindowSize;
+    }
+    
+    LOG_STORAGE("Successfully loaded settings from %s", filepath);
+    return true;
 }
