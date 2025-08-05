@@ -30,13 +30,11 @@ The system uses a dual-core FreeRTOS architecture to ensure UI responsiveness an
 
 ## 2. System Cabinets & Engines
 
-### 2.1. Filter Engine
+### 2.1. Filter Engine: A Specialised Two-Stage Pipeline
 
-* **Design:** A sequential, two-stage filter pipeline processes all analog sensor data. `Raw Data` -> `Filter 1 (HF)` -> `Filter 2 (LF)` -> `Calibrated Output`.
-* **Filter 1 (High-Frequency):** A Median filter followed by a PI filter, designed to reject short-term spikes (<1s).
-* **Filter 2 (Low-Frequency):** A Median filter followed by a PI filter, designed to smooth slower signal drift (<2min).
-* **Tuning:** Filter tuning (`Settle Threshold`, `Lock Smoothing`, etc.) is performed **exclusively** in the **Diagnostics Mode** UI. In Normal Mode, the filters run "headlessly" using parameters loaded from internal flash.
-* **Storage:** Filter parameters are stored in the ESP32's internal flash (NVS) via the `ConfigManager` for fast boot-time access.
+* **Design:** A sequential, two-stage filter pipeline processes all analog sensor data: `Raw Data` -> `Filter 1 (HF)` -> `Filter 2 (LF)` -> `Calibrated Output`. The two stages are specialized for different noise domains.
+* **Filter 1 (High-Frequency "Spike Scraper"):** This stage is specialized for rejecting fast, sharp noise spikes (<1s). It uses a small median window and gentle PI smoothing parameters to "clip off" jagged peaks without distorting the underlying signal.
+* **Filter 2 (Low-Frequency "Smoothing Squeegee"):** This stage is specialized for smoothing long-term signal drift (<2min). It uses a large median window and aggressive PI smoothing parameters to heavily average the signal from the HF stage, flattening the slow wave and finding the true, stable center.
 * **Tuning KPIs:** The filter provides real-time KPIs for data-driven tuning:
     * **F_std (Filtered Standard Deviation):** A quantitative measure of the filtered signal's noise. The primary goal of tuning is to minimize this value.
     * **R_std (Raw Standard Deviation):** A baseline measure of the hardware's inherent noise level.
@@ -44,72 +42,63 @@ The system uses a dual-core FreeRTOS architecture to ensure UI responsiveness an
 
 ### 2.2. Calibration Engine ("Smart Calibration")
 
-* **Purpose:** To create a precise mathematical model translating filtered voltage into a scientific measurement (pH/EC), while also tracking probe health.
-* **Model:** Uses a **quadratic function (y = ax² + bx + c)** for a more accurate curve of best fit over 3 calibration points. This model is flexible enough to map the linear output of sensor modules (like the PH-4502C) while also capturing non-linearities from external interference.
+* **Purpose:** To create a precise mathematical model translating filtered voltage into a scientific measurement (pH/EC), while also tracking probe health. The calibration is performed on the **final, stable output of the LF filter**, ensuring any attenuation from the filter pipeline is automatically accounted for in the model.
+* **Model:** Uses a **quadratic function (y = ax² + bx + c)** for a more accurate curve of best fit over 3 calibration points.
 * **Hybrid Procedure:** A two-stage process is required for modules like the PH-4502C:
-    1.  **Hardware Calibration:** A one-time physical adjustment of the sensor module's offset potentiometer to set the output to 2500mV in a neutral pH 7.0 solution.
+    1.  **Hardware Calibration:** A one-time physical adjustment of the sensor module's offset potentiometer.
     2.  **Software Calibration:** The standard 3-point calibration wizard which builds the quadratic model.
-* **KPIs:** The engine calculates several Key Performance Indicators:
+* **KPIs (Read-Only Diagnostics):** The engine calculates several Key Performance Indicators which are presented to the user as a read-only "report card" on sensor health. The only way to improve these KPIs is to perform a new, high-quality calibration.
     * **Calibration Quality Score %:** Grades a new calibration's reliability based on goodness-of-fit (R-squared) and a slope sanity check.
     * **Sensor Drift %:** Measures long-term probe aging by comparing new and previous calibration curves.
-    * **Calibration Health %:** Measures short-term drift via a 1-point voltage check.
-    * **Zero-Point Drift (mV):** Measures the long-term drift of the hardware's physical offset by tracking the neutral voltage reading across multiple calibrations.
-    * **Settling Time (s):** A new KPI that measures the time taken for a probe's signal to become stable after being activated, providing another metric for probe health.
+    * **Zero-Point Drift (mV):** Measures the long-term drift of the hardware's physical offset.
 
 ### 2.3. Power Monitor ("Intelligent Power Monitor")
-
-* **Purpose:** To provide an accurate, KPI-driven view of battery state and health.
-* **Hardware:** Uses an INA219 for bidirectional current sensing.
-* **Hybrid Model:**
-    * **Coulomb Counting:** Precisely tracks energy (Watt-hours) flowing into and out of the battery. A **moving average filter** is applied to the raw current readings to smooth high-frequency fluctuations from the ESP32's radio, improving accuracy.
-    * **Voltage Reconciliation:** Uses Open-Circuit Voltage (OCV) to correct for drift after power-off events.
-    * **Stateful Learning:** An automated, long-term **SOH Recalibration Cycle** measures the battery's true capacity, making the SOH value progressively more accurate.
-* **Storage:** The power monitor's state is persisted to the SD card via the `StorageEngine`.
+* **(Design Unchanged)**
 
 ### 2.4. Storage, Backup, and "Limp Mode"
-
-* **`StorageEngine`:** The **sole, mandatory interface** for all persistent configuration data operations.
-* **Atomic Writes:** To prevent data corruption, the engine uses an atomic write procedure: `write to .tmp` -> `delete .bak` -> `rename .json to .bak` -> `rename .tmp to .json`.
-* **"Limp Mode":** The storage layer is abstracted via an `I_StorageProvider` interface to handle SD card failure by redirecting file operations to a remote source.
+* **Dual-Save Strategy:** To ensure robustness, the system uses a dual-save approach.
+    * **ESP32 NVS (Internal Flash):** Stores the essential operational data: the latest **Filter Setpoints** and the current **Calibration Model**. This allows the device to boot quickly and function perfectly even if the SD card is missing ("Limp Mode").
+    * **SD Card:** Stores detailed **Tuning Log Files** for the companion Android suite. Each log contains a snapshot of the noise analysis, the auto-tuner's proposed values, the user's final values, and the resulting KPIs.
 
 ## 3. User Interface Architecture
 
-The UI is built on a robust, modular architecture designed for stability and responsiveness. It utilizes a single, globally initialized `InputManager` and separates the application into two distinct boot modes.
-
 ### 3.1. Dual-Boot System
+* **(Design Unchanged)**
 
-The firmware uses a simple, reliable method to select the operating mode on power-up, mirroring the stable legacy implementation.
-* **Mode Selection:** The boot mode is determined by checking if the **middle ("Enter") button** is held down during the initial boot sequence.
-* **Normal Boot:** If no button is pressed, the device proceeds to launch the main application.
-* **pBIOS Boot:** If the button is held down, the device launches the pBIOS diagnostics suite.
-* **Stability:** This approach eliminates the complexities of RTC memory and software reboots, guaranteeing a clean hardware state for each mode.
+### 3.2. The pBIOS UI Engine & "Guided Tuning" Workflow
 
-### 3.2. The Two UI Engines
+* **Architecture:** A dedicated, dual-core RTOS system that provides a powerful interface for diagnostics and tuning.
+* **"Guided Tuning" Workflow:** The "Live Filter Tuning" feature implements a sophisticated but stable guided tuning process:
+    1.  **Entry Point:** When the user enters the `LiveFilterTuningScreen`, the `pBiosDataTask` is triggered to perform a one-time, automatic analysis of the signal.
+    2.  **Heuristic Analysis:** The task uses a data-driven, heuristic algorithm (combining Statistical and FFT analysis) to measure the noise characteristics of the signal.
+    3.  **Propose Baseline:** Based on the analysis, it calculates a complete set of recommended starting parameters for both the specialized HF and LF filter stages.
+    4.  **User Fine-Tuning:** These parameters are automatically loaded, and the user is presented with the live graphs, which are already running with this intelligent baseline. The user then performs the final fine-tuning using the interactive menu.
+* **UI Layout (Live Filter Tuning):**
+    * **Top/Bottom OLEDs:** Display dedicated, real-time graphs and KPIs for the HF and LF stages, respectively.
+    * **Middle OLED:** Features a clear, two-zone layout with a "Status Area" at the top (showing the live calibrated value and the selected parameter's current value) and a "Menu Area" at the bottom for navigation.
 
-1.  **The pBIOS UI Engine (Diagnostics Mode):**
-    * **Architecture:** A dedicated, dual-core RTOS system (`pBiosUiTask` on Core 1, `pBiosDataTask` on Core 0) that is launched when pBIOS mode is selected. It provides a lightweight but powerful interface for all diagnostic functions.
-    * **Live Filter Tuning UI:** The LFT workflow is a key feature:
-        1.  The user first enters a `FilterSelectionScreen` to choose which sensor to tune.
-        2.  They are then taken to the `LiveFilterTuningScreen`, which uses all three OLEDs:
-            * **Top/Bottom OLEDs:** Display real-time graphs for the HF and LF filter stages.
-            * **Middle OLED:** Displays a status area at the top showing the selected parameter's live value, with a menu list below for navigation.
-        3.  Selecting a parameter takes the user to a dedicated `ParameterEditScreen` for a focused editing experience.
-
-2.  **The Main UI Engine (Normal Mode):**
-    * **Architecture:** The full, multi-threaded UI engine orchestrated by the main `uiTask` on Core 1. It manages the complete user experience for measurement, calibration, and settings.
 
 ### 3.3. Core UI Philosophy: Block-Based Assembly
 
 Both UI engines are built on the principle that **screens do not draw themselves**. A screen's role is to manage state and populate a `UIRenderProps` data structure. The central `UIManager` is the sole rendering engine that interprets this structure and calls the draw functions for reusable **UI Blocks** (`MenuBlock`, `GraphBlock`, `ButtonBlock`).
 
 
-## 4. Adopted Refinements & Planned Architecture Enhancements
+## 4. Android Suite Feedback Loop
+
+The system is designed to support a long-term learning feedback loop with a companion Android app.
+1.  The app will sync the detailed tuning logs from the meter's SD card.
+2.  It will perform off-device analysis on the "deviation data" (the difference between the algorithm's proposals and the user's final settings).
+3.  Based on this analysis, it can generate an updated set of heuristic rules for the auto-tuner.
+4.  This updated rule file is sent back to the meter and saved by the `ConfigManager`, making the device's "guided tuning" feature progressively smarter over time.
+
+
+## 5. Adopted Refinements & Planned Architecture Enhancements
 
 1.  **Unified `ConfigManager`:** A new cabinet will be created to provide a single interface for all configuration data. It will abstract the underlying storage medium (NVS vs. SD card) from the rest of the application.
 2.  **Centralized Fault & Status Handling:** A global `FaultHandler` will continue to manage critical errors. This will be supplemented by a `SystemStatus` manager to track and report non-fatal warnings (e.g., "SD Card missing"), allowing the system to operate in a degraded "Limp Mode" and provide richer feedback to the user.
 3.  **Commitment to Unit Testing:** The modular "Cabinet" architecture will be leveraged by using PlatformIO's unit testing framework to test each module in isolation. We will continue to follow a "Test-Driven Development" approach where possible.
 
-## 5. We will integrate testing directly into our development process.
+## 6. We will integrate testing directly into our development process.
 
 1.  **Develop a Cabinet First:** Before adding a new manager to main.cpp or creating an RTOS task for it, we first build the cabinet's class structure (.h and .cpp files).
 

@@ -7,6 +7,14 @@ This document tracks the development progress, current tasks, and future roadmap
 
 ## Changelog (What Was Done)
 
+* **v2.11.19 (2025-08-05):**
+    * **Status:** Planning Complete.
+    * **Milestone:** Completed a comprehensive review and redesign of the pBIOS "Live Filter Tuning" workflow. All outstanding bugs and UI/UX issues have been analyzed, and a definitive "Reset and Rebuild" plan has been formulated to ensure a stable and correct implementation.
+    * **Design (Filter Pipeline):** Solidified the two-stage filter design. The HF stage is now specialized as a "Spike Scraper," and the LF stage is specialized as a "Smoothing Squeegee," each with distinct parameters to target different noise domains.
+    * **Design (UI Workflow):** Finalized the "Guided Tuning" workflow. The system will now automatically analyze the signal upon entering the tuning screen and propose a high-quality baseline set of parameters, which the user can then fine-tune.
+    * **Design (UI Layout):** Finalized a new, clean, and data-rich layout for the Live Filter Tuning screen that solves all previous visual conflicts and improves usability.
+    * **Design (Storage):** Formalized the dual-save strategy. Essential filter setpoints and calibration models will be saved to the ESP32's internal NVS for fast boot and robust "Limp Mode" operation, while detailed tuning logs will be saved to the SD card for the companion Android app.
+
 * **v2.11.18 (2025-08-03):**
     * **Status:** Complete.
     * **Milestone:** All major pBIOS diagnostic features are now implemented, stable, and feature-complete. The firmware is ready to begin development on the main application's user interface.
@@ -245,7 +253,12 @@ This document tracks the development progress, current tasks, and future roadmap
 
 ## Current Task (What We Are Doing)
 
-* **UI Development - Phase 3: Implement Remaining pBIOS Screens.** With the Live Filter Tuning screen complete and stable, the current task is to build out the other diagnostic screens defined in the pBIOS menu, starting with **"Noise Analysis"**.
+* **Implement the "Reset and Rebuild" Plan for the pBIOS Filter Tuning UI.**
+    * **Goal:** To create a 100% stable and correct implementation of the "Live Filter Tuning" feature based on our new, finalized design.
+    * **Process:**
+        1.  **Step 1: Stabilize the HF Stage.** Create a minimal, crash-free screen showing only the HF filter graph and its KPIs.
+        2.  **Step 2: Integrate the LF Stage.** Add the LF filter graph and KPIs, ensuring it is visually and functionally distinct from the HF stage.
+        3.  **Step 3: Re-integrate the Full UI.** Add the final, stable menu and parameter editing overlay to complete the feature.
 
 
 
@@ -260,20 +273,10 @@ This document tracks the development progress, current tasks, and future roadmap
 
 ## Roadmap (What Is to Come)
 
-
-
-1.  **Implement Remaining pBIOS Screens:** Build out the other diagnostic screens defined in the pBIOS menu:
-    * Ensure the graphing works as intended
-    * implement the live tuning KPIs
-    * Noise Analysis & Drift Trending
-    * View Calibration KPIs
-    * New Sensor / Maintenance Wizards
-2.  **UI - Phase 4: Normal Boot UI**:
-    * a. Creating the Live Measurement Screen to display real-time sensor data (pH, EC, Temp, etc.).
+1.  **Implement the "Guided Tuning" Algorithm:** Build the heuristic noise analysis engine that automatically proposes filter parameters.
+2.  **Implement Remaining pBIOS Screens:** Build out the other diagnostic screens (Noise Analysis, Drift Trending, View KPIs, etc.) based on the new, stable foundation.
+3.  **Implement the Dual-Save Strategy in `ConfigManager`:** Build the logic to save/load parameters from both NVS and the SD card.
+4.  **UI - Phase 4: Normal Boot UI**:
+    * a. Creating the Live Measurement Screen.
     * b. Beginning the implementation of the multi-step Calibration Wizard Screen.
-3.  **Architectural Refinements (To be implemented incrementally):**
-    * **Flesh out `ConfigManager`:** Implement the logic to make it the single source for all configuration data, abstracting NVS vs. SD card storage.
-    * **Implement `GlobalDataModel`:** Refactor inter-task communication to use a single, mutex-protected data structure instead of multiple global variables.
-    * **Implement `SystemStatus` Manager:** Create a system for handling and reporting non-fatal errors to enable robust "Limp Mode" operation.
-4.  **Implement the `StatusIndicatorController`**: Implement the logic to drive the physical LEDs and on-screen status icons based on system state.
-5.  **Develop the `ConnectivityManager` and API Layer**: Implement the Wi-Fi/BLE connection management and the remote control API.
+5.  **Implement the `StatusIndicatorController` & `ConnectivityManager`**.

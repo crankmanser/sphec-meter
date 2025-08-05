@@ -3,8 +3,12 @@
 
 #include "PI_Filter.h"
 #include <cmath> 
+#include <numeric>
+// --- FIX: Reverted to a simple include. The build flag will handle the path. ---
+#include "DebugConfig.h"
 
-// ... (constructor, process, and updateBuffers are unchanged) ...
+// ... (The rest of the file is correct and remains unchanged) ...
+// ... (constructor, process, updateBuffers) ...
 PI_Filter::PI_Filter() :
     medianWindowSize(5),
     settleThreshold(0.1),
@@ -59,45 +63,55 @@ void PI_Filter::updateBuffers(double rawValue, double filteredValue) {
     }
 }
 
-
 void PI_Filter::calculateStatistics() {
     if (_rawBuffer.size() < 2) {
-        _rawStdDev = 0; _filteredStdDev = 0; _stabilityPercent = 0;
+        _rawStdDev = 0.0; _filteredStdDev = 0.0; _stabilityPercent = 100;
         return;
     }
 
-    double rawSum = std::accumulate(_rawBuffer.begin(), _rawBuffer.end(), 0.0);
+    LOG_FILTER("--- START CALC (Buffer Size: %d) ---", _rawBuffer.size());
+
+    // --- Raw Standard Deviation ---
+    double rawSum = 0.0;
+    for(double val : _rawBuffer) { rawSum += val; }
     double rawMean = rawSum / _rawBuffer.size();
-    if (isnan(rawMean)) { rawMean = 0; }
-    double rawSqSum = std::inner_product(_rawBuffer.begin(), _rawBuffer.end(), _rawBuffer.begin(), 0.0);
-    double rawVariance = rawSqSum / _rawBuffer.size() - rawMean * rawMean;
-    _rawStdDev = (rawVariance > 0 && !isnan(rawVariance)) ? std::sqrt(rawVariance) : 0.0;
+    double rawSumSqDiff = 0.0;
+    for(double val : _rawBuffer) { rawSumSqDiff += (val - rawMean) * (val - rawMean); }
+    double rawVariance = rawSumSqDiff / _rawBuffer.size();
+    
+    LOG_FILTER("RAW: Sum=%.4f, Mean=%.4f, SumSqDiff=%.4f, Variance=%.10f", rawSum, rawMean, rawSumSqDiff, rawVariance);
+    
+    if (rawVariance < 0.0) {
+        LOG_FILTER("!!! RAW VARIANCE IS NEGATIVE !!!");
+    }
+    _rawStdDev = (rawVariance > 0.0) ? std::sqrt(rawVariance) : 0.0;
+    LOG_FILTER("--> RAW StdDev = %.10f", _rawStdDev);
 
-    double filteredSum = std::accumulate(_filteredBuffer.begin(), _filteredBuffer.end(), 0.0);
+    // --- Filtered Standard Deviation ---
+    double filteredSum = 0.0;
+    for(double val : _filteredBuffer) { filteredSum += val; }
     double filteredMean = filteredSum / _filteredBuffer.size();
-    if (isnan(filteredMean)) { filteredMean = 0; }
-    double filteredSqSum = std::inner_product(_filteredBuffer.begin(), _filteredBuffer.end(), _filteredBuffer.begin(), 0.0);
-    double filteredVariance = filteredSqSum / _filteredBuffer.size() - filteredMean * filteredMean;
-    _filteredStdDev = (filteredVariance > 0 && !isnan(filteredVariance)) ? std::sqrt(filteredVariance) : 0.0;
+    double filteredSumSqDiff = 0.0;
+    for(double val : _filteredBuffer) { filteredSumSqDiff += (val - filteredMean) * (val - filteredMean); }
+    double filteredVariance = filteredSumSqDiff / _filteredBuffer.size();
+    
+    LOG_FILTER("FIL: Sum=%.4f, Mean=%.4f, SumSqDiff=%.4f, Variance=%.10f", filteredSum, filteredMean, filteredSumSqDiff, filteredVariance);
 
-    if (_rawStdDev > 0.00001) {
+    if (filteredVariance < 0.0) {
+        LOG_FILTER("!!! FILT VARIANCE IS NEGATIVE !!!");
+    }
+    _filteredStdDev = (filteredVariance > 0.0) ? std::sqrt(filteredVariance) : 0.0;
+    LOG_FILTER("--> FIL StdDev = %.10f", _filteredStdDev);
+
+    // --- Stability Percentage ---
+    if (_rawStdDev > 1e-9) {
         double improvement = 1.0 - (_filteredStdDev / _rawStdDev);
         _stabilityPercent = (int)constrain(improvement * 100.0, 0.0, 100.0);
     } else {
         _stabilityPercent = 100;
     }
+    LOG_FILTER("--- END CALC (Stab=%d%%) ---", _stabilityPercent);
 }
-
-
-
-
-
-
-
-
-
-
-
 
 void PI_Filter::getRawHistory(double* buffer, size_t size) const {
     size_t historySize = _rawBuffer.size();

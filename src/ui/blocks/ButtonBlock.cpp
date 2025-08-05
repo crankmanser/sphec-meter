@@ -19,23 +19,19 @@ void ButtonBlock::draw(DisplayManager& displayManager, const ButtonBlockProps& p
         display->setFont(nullptr);
         display->getTextBounds(text.c_str(), 0, 0, &x1, &y1, &w, &h);
 
+        // --- DEFINITIVE FIX: Move the button down by 1 pixel for more clearance ---
         int cursor_x = (SCREEN_WIDTH - w) / 2;
-        int cursor_y = SCREEN_HEIGHT - h - 2;
+        int cursor_y = SCREEN_HEIGHT - h - 1; 
 
-        // --- NEW: Draw an inverse rectangle across the full width of the bottom ---
-        int rect_y = SCREEN_HEIGHT - h - 4;
+        int rect_y = SCREEN_HEIGHT - h - 2;
         int rect_h = h + 4;
         display->fillRect(0, rect_y, SCREEN_WIDTH, rect_h, SSD1306_WHITE);
 
-        display->setTextColor(SSD1306_BLACK); // Set text to black for inverse effect
+        display->setTextColor(SSD1306_BLACK);
         display->setCursor(cursor_x, cursor_y);
         display->print(text.c_str());
     };
 
-    // --- FIX: Corrected mapping to align prompts with physical buttons ---
-    // Top Button (Back/Up) -> Top OLED (display_index 0)
-    // Middle Button (Enter) -> Middle OLED (display_index 1)
-    // Bottom Button (Down) -> Bottom OLED (display_index 2)
     draw_single_prompt(0, OLED3_TCA_CHANNEL, props.back_text);
     draw_single_prompt(1, OLED2_TCA_CHANNEL, props.enter_text);
     draw_single_prompt(2, OLED1_TCA_CHANNEL, props.down_text);

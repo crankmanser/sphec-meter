@@ -4,27 +4,19 @@
 #include "MenuBlock.h"
 
 void MenuBlock::draw(Adafruit_GFX* display, const MenuBlockProps& props) {
-    if (!props.is_enabled || !display) {
+    if (!props.is_enabled || !display || props.items.empty()) {
         return;
     }
 
     display->setTextSize(1);
     display->setFont(nullptr);
 
-    if (props.items.empty()) {
-        display->setCursor(4, 30);
-        display->setTextColor(1);
-        display->print("No menu items.");
-        return;
-    }
-
-    // --- FIX: Y positions moved down to create space for the status area above ---
-    const int y_top = 28;
-    const int y_middle = 40;
-    const int y_bottom = 52;
+    const int y_top = 32;
+    const int y_middle = 44;
+    const int y_bottom = 56;
     const int highlight_height = 12;
 
-    // Draw Selected Item
+    // --- DEFINITIVE FIX: Restore full-width highlight for menu selection ---
     display->fillRect(0, y_middle - (highlight_height / 2) - 2, 128, highlight_height, 1);
     display->setTextColor(0);
     display->setCursor(4, y_middle - 4);

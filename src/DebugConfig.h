@@ -1,4 +1,5 @@
 // File Path: /src/DebugConfig.h
+// MODIFIED FILE
 
 #ifndef DEBUG_CONFIG_H
 #define DEBUG_CONFIG_H
@@ -18,7 +19,8 @@
 #define DEBUG_SENSORS        0 // For raw and processed sensor data from managers
 #define DEBUG_SPI            0 // For low-level SPI bus transactions
 #define DEBUG_I2C            0 // For low-level I2C bus transactions
-#define DEBUG_FILTER         0 // For the PI Filter's state and calculations
+// --- FIX: Enable the filter debug logs ---
+#define DEBUG_FILTER         1 // For the PI Filter's state and calculations
 #define DEBUG_NOISE_ANALYSIS 0 // For the Noise Analysis Engine results
 #define DEBUG_POWER          0 // For the PowerMonitor cabinet
 #define DEBUG_STORAGE        0 // For the StorageEngine and file operations
@@ -31,6 +33,14 @@
 #else
     #define LOG_BOOT(x, ...)
 #endif
+
+// --- FIX: Add the new macro for filter debugging ---
+#if DEBUG_FILTER == 1
+    #define LOG_FILTER(x, ...) Serial.printf("[FILTER] " x "\n", ##__VA_ARGS__)
+#else
+    #define LOG_FILTER(x, ...)
+#endif
+
 
 // Add other macros for other debug switches as needed...
 

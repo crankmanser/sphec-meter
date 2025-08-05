@@ -1,4 +1,5 @@
 // File Path: /include/ProjectConfig.h
+// This is the single, correct configuration file.
 
 #ifndef PROJECT_CONFIG_H
 #define PROJECT_CONFIG_H
@@ -8,10 +9,9 @@
 // =================================================================
 
 // --- I2C Bus ---
-// Primary bus for sensors and displays.
 #define I2C_SDA_PIN 21
 #define I2C_SCL_PIN 22
-#define INA219_I2C_ADDRESS 0x40 // For the PowerMonitor cabinet
+#define INA219_I2C_ADDRESS 0x40
 
 // --- I2C Multiplexer (TCA9548A) ---
 // Used to manage multiple devices on the same I2C address space.
@@ -38,9 +38,9 @@
 // --- User Input ---
 #define ENCODER_PIN_A 25
 #define ENCODER_PIN_B 26
-#define BTN_OLED1_PIN 34 // Bottom Button
-#define BTN_OLED2_PIN 39 // Middle Button
-#define BTN_OLED3_PIN 36 // Top Button
+#define BTN_BACK_PIN  36 // Top Button
+#define BTN_ENTER_PIN 39 // Middle Button
+#define BTN_DOWN_PIN  34 // Bottom Button
 
 // --- LEDs ---
 // Note: Pin mapping corrected based on "Bi-Color (Red/Blue)" description

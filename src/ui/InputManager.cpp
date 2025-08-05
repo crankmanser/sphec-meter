@@ -2,9 +2,12 @@
 // MODIFIED FILE
 
 #include "InputManager.h"
-#include <ProjectConfig.h>
+// --- DEFINITIVE FIX: Use a direct relative path to the correct header. ---
+// This bypasses the build system issue and ensures the compiler can find
+// the necessary pin definitions.
+#include "../../include/ProjectConfig.h"
 
-// ... (static member initializations are unchanged) ...
+// ... (The rest of the file is correct and remains unchanged) ...
 volatile long InputManager::_encoder_raw_pulses = 0;
 volatile uint8_t InputManager::_last_AB_state = 0;
 const int8_t InputManager::_qem_decode_table[] = {0, -1, 1, 0, 1, 0, 0, -1, -1, 0, 0, 1, 0, 1, -1, 0};
@@ -24,8 +27,6 @@ void IRAM_ATTR InputManager::encoderISR() {
         _last_AB_state = currentState;
     }
 }
-
-// ... (constructor and begin() are unchanged) ...
 InputManager::InputManager() :
     _accumulated_pulses(0),
     _back_pressed(false), _enter_pressed(false), _down_pressed(false),
@@ -34,7 +35,6 @@ InputManager::InputManager() :
     _enter_last_state(false), _enter_last_debounce_time(0),
     _down_last_state(false), _down_last_debounce_time(0)
 {}
-
 void InputManager::begin() {
     pinMode(ENCODER_PIN_A, INPUT_PULLUP);
     pinMode(ENCODER_PIN_B, INPUT_PULLUP);
@@ -47,8 +47,6 @@ void InputManager::begin() {
     attachInterrupt(digitalPinToInterrupt(ENCODER_PIN_A), encoderISR, CHANGE);
     attachInterrupt(digitalPinToInterrupt(ENCODER_PIN_B), encoderISR, CHANGE);
 }
-
-// ... (update() and getters are unchanged) ...
 void InputManager::update() {
     noInterrupts();
     long pulsesSinceLastCheck = _encoder_raw_pulses;
@@ -85,20 +83,10 @@ void InputManager::update() {
     if (down_reading && !_down_last_state) { if (now - _down_last_debounce_time > 100) { _down_pressed = true; _down_last_debounce_time = now; } }
     _down_last_state = down_reading;
 }
-
 bool InputManager::wasBackPressed() { return _back_pressed; }
 bool InputManager::wasEnterPressed() { return _enter_pressed; }
 bool InputManager::wasDownPressed() { return _down_pressed; }
 int InputManager::getEncoderChange() { return _encoder_change; }
-
-
-/**
- * @brief --- NEW: Implementation to clear the enter button's state ---
- * This function resets the debouncer's state for the enter button. It reads
- * the current physical state of the button and synchronizes the internal
- * tracking variables, ensuring that the button release from the boot combo
- * is not misinterpreted as a new press event.
- */
 void InputManager::clearEnterButtonState() {
     _enter_last_state = (digitalRead(BTN_ENTER_PIN) == LOW);
     _enter_last_debounce_time = millis();
