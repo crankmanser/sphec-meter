@@ -15,10 +15,14 @@ enum class ScreenState {
     MAIN_MENU,
     PBIOS_MENU,
     FILTER_SELECTION,
+    AUTO_TUNING_ANALYSIS,
     LIVE_FILTER_TUNING,
     PARAMETER_EDIT,
     NOISE_ANALYSIS,
-    DRIFT_TRENDING
+    DRIFT_TRENDING,
+    MAINTENANCE_MENU,
+    SHUTDOWN_MENU,
+    LIVE_VOLTMETER // New state for the Voltmeter screen
 };
 
 class Screen {
@@ -40,7 +44,6 @@ public:
     void addScreen(ScreenState state, Screen* screen);
     void changeState(ScreenState new_state);
     Screen* getActiveScreen();
-    // --- NEW: Add a getter to find a specific screen instance ---
     Screen* getScreen(ScreenState state);
     ScreenState getActiveScreenState() const;
     UIRenderProps* getUiRenderProps();

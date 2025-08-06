@@ -24,27 +24,26 @@ void FilterSelectionScreen::handleInput(const InputEvent& event) {
     else if (event.type == InputEventType::BTN_DOWN_PRESS) {
         if (_stateManager && _context) {
             
-            // --- MODIFIED: Set the filter name in the context ---
             switch (_selected_index) {
-                case 0: // pH Probe
+                case 0:
                     _context->selectedFilter = &phFilter;
                     _context->selectedFilterName = "ph_filter";
                     _context->selectedAdcIndex = 0;
                     _context->selectedAdcInput = ADS1118::DIFF_0_1;
                     break;
-                case 1: // EC Probe
+                case 1:
                     _context->selectedFilter = &ecFilter;
                     _context->selectedFilterName = "ec_filter";
                     _context->selectedAdcIndex = 1;
                     _context->selectedAdcInput = ADS1118::DIFF_0_1;
                     break;
-                case 2: // 3.3V Bus
+                case 2:
                     _context->selectedFilter = &v3_3_Filter;
                     _context->selectedFilterName = "v3_3_filter";
                     _context->selectedAdcIndex = 0;
                     _context->selectedAdcInput = ADS1118::AIN_2;
                     break;
-                case 3: // 5.0V Bus
+                case 3:
                     _context->selectedFilter = &v5_0_Filter;
                     _context->selectedFilterName = "v5_0_filter";
                     _context->selectedAdcIndex = 1;
@@ -52,7 +51,8 @@ void FilterSelectionScreen::handleInput(const InputEvent& event) {
                     break;
             }
             
-            _stateManager->changeState(ScreenState::LIVE_FILTER_TUNING);
+            // --- MODIFIED: Transition to the new analysis screen ---
+            _stateManager->changeState(ScreenState::AUTO_TUNING_ANALYSIS);
         }
     } 
     else if (event.type == InputEventType::BTN_BACK_PRESS) {

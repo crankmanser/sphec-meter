@@ -23,6 +23,7 @@
 #define DEBUG_NOISE_ANALYSIS 0 // For the Noise Analysis Engine results
 #define DEBUG_POWER          0 // For the PowerMonitor cabinet
 #define DEBUG_STORAGE        1 // For the StorageEngine and file operations
+#define DEBUG_AUTO_TUNE      1 // For the GuidedTuningEngine
 
 // --- HELPER MACROS ---
 // Example Usage: LOG_BOOT("Initializing %s...", "DisplayManager");
@@ -39,11 +40,17 @@
     #define LOG_FILTER(x, ...)
 #endif
 
-// --- FIX: Add the missing macro definition for storage debugging ---
 #if DEBUG_STORAGE == 1
     #define LOG_STORAGE(x, ...) Serial.printf("[STORAGE] " x "\n", ##__VA_ARGS__)
 #else
     #define LOG_STORAGE(x, ...)
+#endif
+
+// --- NEW: Add the missing macro definition for the auto-tuner ---
+#if DEBUG_AUTO_TUNE == 1
+    #define LOG_AUTO_TUNE(x, ...) Serial.printf("[AUTOTUNE] " x "\n", ##__VA_ARGS__)
+#else
+    #define LOG_AUTO_TUNE(x, ...)
 #endif
 
 

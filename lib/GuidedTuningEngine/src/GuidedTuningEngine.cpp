@@ -1,0 +1,198 @@
+// File Path: /lib/GuidedTuningEngine/src/GuidedTuningEngine.cpp
+// MODIFIED FILE
+
+#include "GuidedTuningEngine.h"
+#include "../../src/DebugConfig.h"
+#include <Arduino.h>
+#include <arduinoFFT.h>
+
+// Helper function to map a value from one range to another
+double map_double(double x, double in_min, double in_max, double out_min, double out_max) {
+    return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
+}
+
+GuidedTuningEngine::GuidedTuningEngine() :
+    _rawStdDev(0.0),
+    _peakFrequency(0.0)
+{
+    for (int i = 0; i < GT_SAMPLE_COUNT; ++i) {
+        _rawSamples[i] = 0.0;
+    }
+}
+
+bool GuidedTuningEngine::proposeSettings(FilterManager* targetFilter, AdcManager* adcManager, uint8_t adcIndex, uint8_t adcInput) {
+    if (!targetFilter || !adcManager) return false;
+
+    LOG_AUTO_TUNE("Starting high-speed signal capture...");
+    if (!captureSignal(adcManager, adcIndex, adcInput)) {
+        LOG_AUTO_TUNE("Failed to capture signal.");
+        return false;
+    }
+    LOG_AUTO_TUNE("Signal capture complete.");
+
+    LOG_AUTO_TUNE("Analyzing signal...");
+    analyzeSignal();
+    LOG_AUTO_TUNE("Analysis complete. Raw StdDev: %.4f, Peak Freq: %.2f Hz", _rawStdDev, _peakFrequency);
+
+    PI_Filter* hfFilter = targetFilter->getFilter(0);
+    if (hfFilter) {
+        LOG_AUTO_TUNE("Deriving HF filter parameters...");
+        deriveHfParameters(hfFilter);
+    }
+
+    PI_Filter* lfFilter = targetFilter->getFilter(1);
+    if (hfFilter && lfFilter) {
+        LOG_AUTO_TUNE("Deriving LF filter parameters...");
+        deriveLfParameters(hfFilter, lfFilter);
+    }
+    
+    LOG_AUTO_TUNE("Guided Tuning complete. New parameters applied.");
+    return true;
+}
+
+bool GuidedTuningEngine::captureSignal(AdcManager* adcManager, uint8_t adcIndex, uint8_t adcInput) {
+    const int delay_between_samples_us = 1000;
+    for (int i = 0; i < GT_SAMPLE_COUNT; ++i) {
+        _rawSamples[i] = adcManager->getVoltage(adcIndex, adcInput);
+        delayMicroseconds(delay_between_samples_us);
+    }
+    return (_rawSamples[GT_SAMPLE_COUNT / 2] != 0.0);
+}
+
+void GuidedTuningEngine::analyzeSignal() {
+    double sum = 0.0;
+    for (int i = 0; i < GT_SAMPLE_COUNT; ++i) {
+        sum += _rawSamples[i];
+    }
+    double mean = sum / GT_SAMPLE_COUNT;
+
+    for (int i = 0; i < GT_SAMPLE_COUNT; ++i) {
+        _fftReal[i] = _rawSamples[i] - mean;
+        _fftImag[i] = 0.0;
+    }
+
+    double sumSqDiff = 0.0;
+    for (int i = 0; i < GT_SAMPLE_COUNT; ++i) {
+        sumSqDiff += _fftReal[i] * _fftReal[i];
+    }
+    _rawStdDev = sqrt(sumSqDiff / GT_SAMPLE_COUNT);
+
+    double sampling_frequency = 1000.0;
+    arduinoFFT FFT = arduinoFFT(_fftReal, _fftImag, GT_SAMPLE_COUNT, sampling_frequency);
+
+    FFT.Windowing(FFT_WIN_TYP_HAMMING, FFT_FORWARD);
+    FFT.Compute(FFT_FORWARD);
+    FFT.ComplexToMagnitude();
+    _peakFrequency = FFT.MajorPeak();
+}
+
+
+/**
+ * @brief --- DEFINITIVE FIX: Implements an efficient, single-pass heuristic algorithm. ---
+ * This new version calculates parameters directly from the analysis results,
+ * completely avoiding the computationally expensive simulation loops that were
+ * causing the watchdog timer to crash the system.
+ */
+void GuidedTuningEngine::deriveHfParameters(PI_Filter* targetHfFilter) {
+    if (!targetHfFilter) return;
+
+    // Rule 1: Settle threshold is proportional to the overall noise amplitude.
+    targetHfFilter->settleThreshold = _rawStdDev * 1.5;
+
+    // Rule 2: Median window size is based on the dominant noise frequency.
+    targetHfFilter->medianWindowSize = (_peakFrequency > 150) ? 7 : 5;
+
+    // Rule 3: Track response is mapped directly to the noise frequency.
+    // Faster noise (higher frequency) needs a faster filter response.
+    targetHfFilter->trackResponse = map_double(_peakFrequency, 10, 500, 0.4, 0.8);
+    targetHfFilter->trackResponse = constrain(targetHfFilter->trackResponse, 0.4, 0.8);
+
+    // Rule 4: Lock smoothing is inversely proportional to the track response.
+    // A fast-responding filter should have gentle smoothing to avoid over-correction.
+    targetHfFilter->lockSmoothing = map_double(targetHfFilter->trackResponse, 0.4, 0.8, 0.2, 0.05);
+    targetHfFilter->lockSmoothing = constrain(targetHfFilter->lockSmoothing, 0.05, 0.2);
+
+    // Rule 5: Track assist is a small, constant value for the HF stage.
+    targetHfFilter->trackAssist = 0.01;
+
+    LOG_AUTO_TUNE("HF Results: Settle=%.3f, Resp=%.2f, Smooth=%.2f", targetHfFilter->settleThreshold, targetHfFilter->trackResponse, targetHfFilter->lockSmoothing);
+}
+
+/**
+ * @brief --- DEFINITIVE FIX: Uses a single, stateful simulation of the HF filter. ---
+ * This function now runs one clean simulation of the newly configured HF filter
+ * to get its output characteristics, then calculates the LF parameters directly
+ * from that cleaner signal, just as the original design intended.
+ */
+void GuidedTuningEngine::deriveLfParameters(PI_Filter* hfFilter, PI_Filter* targetLfFilter) {
+    if (!hfFilter || !targetLfFilter) return;
+
+    // Create a clean HF filter instance for a stateful simulation.
+    PI_Filter hfSim;
+    hfSim.medianWindowSize = hfFilter->medianWindowSize;
+    hfSim.settleThreshold = hfFilter->settleThreshold;
+    hfSim.lockSmoothing = hfFilter->lockSmoothing;
+    hfSim.trackResponse = hfFilter->trackResponse;
+    hfSim.trackAssist = hfFilter->trackAssist;
+
+    // Run the single simulation to get the characteristics of the HF stage's output.
+    double hf_filtered_output[GT_SAMPLE_COUNT];
+    for(int i=0; i < GT_SAMPLE_COUNT; ++i){
+        hf_filtered_output[i] = hfSim.process(_rawSamples[i]);
+    }
+    
+    // Analyze the now-cleaner signal from the HF stage.
+    double hf_sum = 0.0;
+    for(int i=0; i<GT_SAMPLE_COUNT; ++i) hf_sum += hf_filtered_output[i];
+    double hf_mean = hf_sum / GT_SAMPLE_COUNT;
+    double hf_sum_sq_diff = 0.0;
+    for(int i=0; i<GT_SAMPLE_COUNT; ++i) hf_sum_sq_diff += (hf_filtered_output[i] - hf_mean) * (hf_filtered_output[i] - hf_mean);
+    double hf_output_std_dev = sqrt(hf_sum_sq_diff / GT_SAMPLE_COUNT);
+
+    // Now, calculate the LF parameters to aggressively smooth this cleaner signal.
+    targetLfFilter->settleThreshold = hf_output_std_dev * 0.5; // Tighter threshold
+    targetLfFilter->medianWindowSize = 15; // Always large for smoothing
+    targetLfFilter->trackResponse = 0.05; // Always very slow tracking
+    targetLfFilter->lockSmoothing = 0.005; // Always very heavy smoothing
+    targetLfFilter->trackAssist = 0.0001; // Always very small assist
+
+    LOG_AUTO_TUNE("LF Results: Settle=%.3f, Resp=%.2f, Smooth=%.3f", targetLfFilter->settleThreshold, targetLfFilter->trackResponse, targetLfFilter->lockSmoothing);
+}
+
+
+// This function is no longer needed by the new algorithm, but we keep it
+// as it may be useful for future analysis or a more advanced simulation.
+int GuidedTuningEngine::runSimulation(const PI_Filter& params, const double* input_data, double& output_std_dev) {
+    PI_Filter sim;
+    sim.medianWindowSize = params.medianWindowSize;
+    sim.settleThreshold = params.settleThreshold;
+    sim.lockSmoothing = params.lockSmoothing;
+    sim.trackResponse = params.trackResponse;
+    sim.trackAssist = params.trackAssist;
+
+    double filtered_data[GT_SAMPLE_COUNT];
+
+    for (int i = 0; i < GT_SAMPLE_COUNT; ++i) {
+        filtered_data[i] = sim.process(input_data[i]);
+    }
+
+    double input_sum = 0.0, output_sum = 0.0;
+    for(int i=0; i<GT_SAMPLE_COUNT; ++i){
+        input_sum += input_data[i];
+        output_sum += filtered_data[i];
+    }
+    double input_mean = input_sum / GT_SAMPLE_COUNT;
+    double output_mean = output_sum / GT_SAMPLE_COUNT;
+
+    double input_sq_diff = 0.0, output_sq_diff = 0.0;
+     for(int i=0; i<GT_SAMPLE_COUNT; ++i){
+        input_sq_diff += (input_data[i] - input_mean) * (input_data[i] - input_mean);
+        output_sq_diff += (filtered_data[i] - output_mean) * (filtered_data[i] - output_mean);
+    }
+
+    double input_std_dev = sqrt(input_sq_diff / GT_SAMPLE_COUNT);
+    output_std_dev = sqrt(output_sq_diff / GT_SAMPLE_COUNT);
+
+    if (input_std_dev < 1e-9) return 100;
+    return (1.0 - (output_std_dev / input_std_dev)) * 100.0;
+}

@@ -1,8 +1,10 @@
 // File Path: /lib/TempManager/src/TempManager.cpp
+// MODIFIED FILE
 
 #include "TempManager.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 
-// --- Constructor ---
 TempManager::TempManager() :
     _faultHandler(nullptr),
     _initialized(false),
@@ -16,34 +18,33 @@ TempManager::TempManager() :
     _ambientTempOffset(0.0f)
 {}
 
-// --- Initialization ---
 bool TempManager::begin(FaultHandler& faultHandler) {
     _faultHandler = &faultHandler;
 
     _dallasSensors.begin();
     _dht.begin();
 
-    // Check if at least one DS18B20 is found
     if (_dallasSensors.getDeviceCount() == 0) {
-        // This could be a non-fatal warning if the sensor is optional
-        // _faultHandler->trigger_fault("DS18B20_NOT_FOUND", "No DS18B20 sensors found", __FILE__, __LINE__);
         return false;
     }
     
-    _dallasSensors.setResolution(12); // Set to highest resolution
+    _dallasSensors.setResolution(12);
+    // --- DEFINITIVE FIX: Configure the library for non-blocking reads ---
+    _dallasSensors.setWaitForConversion(false);
+    
     _initialized = true;
     return true;
 }
 
 /**
- * @brief Reads temperature and humidity from all sensors.
- * It reads the raw value and applies the stored calibration offset.
+ * @brief --- MODIFIED: This function now only READS sensor values. ---
+ * The long-running "request" operation is moved to the main task loop
+ * to make the process RTOS-friendly and prevent watchdog timeouts.
  */
 void TempManager::update() {
     if (!_initialized) return;
 
     // --- Read DS18B20 Probe Sensor ---
-    _dallasSensors.requestTemperatures(); 
     float rawProbeTemp = _dallasSensors.getTempCByIndex(0);
     if (rawProbeTemp != DEVICE_DISCONNECTED_C) {
         _probeTempC = rawProbeTemp + _probeTempOffset;
@@ -61,7 +62,16 @@ void TempManager::update() {
     }
 }
 
-// --- Public Getters ---
+/**
+ * @brief --- NEW: Starts the temperature conversion on the DS18B20. ---
+ * This is a non-blocking call.
+ */
+void TempManager::requestProbeTemperature() {
+    if (!_initialized) return;
+    _dallasSensors.requestTemperatures();
+}
+
+
 float TempManager::getProbeTemp() {
     return _probeTempC;
 }
@@ -74,7 +84,6 @@ float TempManager::getHumidity() {
     return _humidity;
 }
 
-// --- Calibration Methods ---
 void TempManager::setProbeTempOffset(float offset) {
     _probeTempOffset = offset;
 }

@@ -6,17 +6,19 @@
 #include <Arduino.h>
 
 pBiosMenuScreen::pBiosMenuScreen() : _selected_index(0) {
+    // --- MODIFIED: Update menu items to the new structure ---
     _menu_items.push_back("Noise Analysis");
     _menu_items.push_back("NA Drift Trending");
     _menu_items.push_back("Live Filter Tuning");
-    _menu_items.push_back("Performance Index");
     _menu_items.push_back("Maintenance");
+    _menu_items.push_back("Shutdown");
     
+    // --- MODIFIED: Update descriptions to match ---
     _menu_descriptions.push_back("Analyze HF signal noise (statistical).");
     _menu_descriptions.push_back("Analyze LF signal drift (FFT).");
     _menu_descriptions.push_back("Tune HF/LF filter parameters live.");
-    _menu_descriptions.push_back("View calibration and probe KPIs.");
     _menu_descriptions.push_back("Run system maintenance tasks.");
+    _menu_descriptions.push_back("Prepare device for safe power-off.");
 }
 
 void pBiosMenuScreen::handleInput(const InputEvent& event) {
@@ -34,9 +36,15 @@ void pBiosMenuScreen::handleInput(const InputEvent& event) {
         else if (selected_item == "Noise Analysis") {
             if (_stateManager) _stateManager->changeState(ScreenState::NOISE_ANALYSIS);
         }
-        // --- NEW: Add transition for the Drift Trending screen ---
         else if (selected_item == "NA Drift Trending") {
             if (_stateManager) _stateManager->changeState(ScreenState::DRIFT_TRENDING);
+        }
+        // --- NEW: Add navigation to new sub-menus ---
+        else if (selected_item == "Maintenance") {
+            if (_stateManager) _stateManager->changeState(ScreenState::MAINTENANCE_MENU);
+        }
+        else if (selected_item == "Shutdown") {
+            if (_stateManager) _stateManager->changeState(ScreenState::SHUTDOWN_MENU);
         }
     }
 }
