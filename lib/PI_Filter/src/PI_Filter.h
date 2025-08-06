@@ -9,14 +9,26 @@
 #include <algorithm>
 #include <numeric>
 
-// --- NEW: Define a shared constant for history size ---
-// This ensures the filter's internal buffers and the UI graph buffers are
-// always synchronized, fixing the graph scaling issue.
 #define FILTER_HISTORY_SIZE 128
 
 class PI_Filter {
 public:
     PI_Filter();
+
+    /**
+     * @brief --- NEW: Copy Constructor (Rule of Three) ---
+     * Ensures a deep copy is performed when a PI_Filter object is copied,
+     * preventing heap corruption and double-free errors.
+     */
+    PI_Filter(const PI_Filter& other);
+
+    /**
+     * @brief --- NEW: Copy Assignment Operator (Rule of Three) ---
+     * Ensures a deep copy is performed when a PI_Filter object is assigned,
+     * preventing memory leaks and heap corruption.
+     */
+    PI_Filter& operator=(const PI_Filter& other);
+
     double process(double rawValue);
 
     // Getters for KPIs
@@ -42,8 +54,6 @@ private:
     FilterState _currentState;
 
     std::vector<double> _medianHistoryBuffer; 
-    
-    // These buffers now act as a circular history of the last FILTER_HISTORY_SIZE data points.
     std::vector<double> _rawBuffer;      
     std::vector<double> _filteredBuffer;
     

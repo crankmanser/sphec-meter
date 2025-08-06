@@ -23,7 +23,9 @@
 #include "boot/boot_sequence.h"
 #include "pBiosContext.h"
 #include "GuidedTuningEngine.h"
+#include "HardwareTester.h"
 
+#include "ui/screens/ProbeProfilingScreen.h" 
 #include "ui/screens/MaintenanceScreen.h"
 #include "ui/screens/ShutdownScreen.h"
 #include "ui/screens/AutoTuningScreen.h"
@@ -32,7 +34,7 @@
 #include "ui/screens/LiveFilterTuningScreen.h"
 #include "ui/screens/ParameterEditScreen.h"
 #include "ui/screens/LiveVoltmeterScreen.h"
-
+#include "ui/screens/HardwareTestScreen.h"
 
 // Global objects
 FaultHandler faultHandler;
@@ -47,6 +49,7 @@ InputManager inputManager;
 StateManager* pBiosStateManager = nullptr;
 UIManager* uiManager = nullptr;
 GuidedTuningEngine guidedTuningEngine;
+HardwareTester hardwareTester; // Keep the tester instance
 
 PBiosContext pBiosContext;
 SPIClass* vspi = nullptr;
@@ -57,6 +60,14 @@ SemaphoreHandle_t i2cMutex = nullptr;
 void pBiosUiTask(void* pvParameters);
 void pBiosDataTask(void* pvParameters);
 void oneWireTask(void* pvParameters);
+
+
+
+
+
+
+
+
 
 void setup() {
     Serial.begin(115200);
@@ -81,10 +92,8 @@ void setup() {
     
     LOG_BOOT("SpHEC Meter Booting... [pBIOS Mode]");
     adcManager.begin(faultHandler, vspi, spiMutex, SD_CS_PIN);
-    
     sdManager.begin(faultHandler, vspi, spiMutex, SD_CS_PIN, ADC1_CS_PIN, ADC2_CS_PIN);
     configManager.begin(faultHandler, sdManager);
-    
     tempManager.begin(faultHandler);
 
     phFilter.begin(faultHandler, configManager, "ph_filter");
@@ -112,9 +121,20 @@ void setup() {
     LOG_BOOT("Initialization Complete.");
 }
 
+
+
+
+
+
+
 void loop() { 
     vTaskSuspend(NULL); 
 }
+
+
+
+
+
 
 void pBiosUiTask(void* pvParameters) {
     LOG_BOOT("pBios UI Task started on Core %d", xPortGetCoreID());
@@ -130,8 +150,9 @@ void pBiosUiTask(void* pvParameters) {
     pBiosStateManager->addScreen(ScreenState::PARAMETER_EDIT, paramEditScreen);
     pBiosStateManager->addScreen(ScreenState::MAINTENANCE_MENU, new MaintenanceScreen());
     pBiosStateManager->addScreen(ScreenState::SHUTDOWN_MENU, new ShutdownScreen());
-    // --- NEW: Add the new screen to the state manager ---
     pBiosStateManager->addScreen(ScreenState::LIVE_VOLTMETER, new LiveVoltmeterScreen());
+    pBiosStateManager->addScreen(ScreenState::HARDWARE_SELF_TEST, new HardwareTestScreen());
+    pBiosStateManager->addScreen(ScreenState::PROBE_PROFILING, new ProbeProfilingScreen());
 
     pBiosStateManager->changeState(ScreenState::PBIOS_MENU);
 
@@ -140,35 +161,20 @@ void pBiosUiTask(void* pvParameters) {
         Screen* activeScreen = pBiosStateManager->getActiveScreen();
         if (activeScreen) {
             InputEvent event;
-
-            if (inputManager.wasBackPressed()) { 
-                event.type = InputEventType::BTN_BACK_PRESS; 
-                activeScreen->handleInput(event); 
-            }
-
+            if (inputManager.wasBackPressed()) { event.type = InputEventType::BTN_BACK_PRESS; activeScreen->handleInput(event); }
             if (inputManager.wasDownPressed()) {
                 ScreenState currentState = pBiosStateManager->getActiveScreenState();
-
                 if (currentState == ScreenState::LIVE_FILTER_TUNING) {
-                    paramEditScreen->setParameterToEdit(
-                        tuningScreen->getSelectedParamName(),
-                        tuningScreen->getSelectedParamIndex()
-                    );
+                    paramEditScreen->setParameterToEdit(tuningScreen->getSelectedParamName(), tuningScreen->getSelectedParamIndex());
                 }
-                
                 if (currentState == ScreenState::PARAMETER_EDIT) {
                     if (pBiosContext.selectedFilter) {
-                        configManager.saveFilterSettings(
-                            *pBiosContext.selectedFilter, 
-                            pBiosContext.selectedFilterName.c_str()
-                        );
+                        configManager.saveFilterSettings(*pBiosContext.selectedFilter, pBiosContext.selectedFilterName.c_str());
                     }
                 }
-
                 event.type = InputEventType::BTN_DOWN_PRESS;
                 activeScreen->handleInput(event);
             }
-            
             int enc_change = inputManager.getEncoderChange();
             if (enc_change != 0) { 
                 event.type = enc_change > 0 ? InputEventType::ENCODER_INCREMENT : InputEventType::ENCODER_DECREMENT;
@@ -176,14 +182,19 @@ void pBiosUiTask(void* pvParameters) {
             }
         }
 
-        tuningScreen->update();
-
         UIRenderProps props;
         ScreenState currentState = pBiosStateManager->getActiveScreenState();
+        
+        // This must be called every frame for live graph updates
+        if (pBiosStateManager->getScreen(ScreenState::LIVE_FILTER_TUNING)) {
+            static_cast<LiveFilterTuningScreen*>(pBiosStateManager->getScreen(ScreenState::LIVE_FILTER_TUNING))->update();
+        }
 
         if (currentState == ScreenState::PARAMETER_EDIT) {
-            tuningScreen->getRenderProps(&props);
-            paramEditScreen->getRenderProps(&props);
+            if (pBiosStateManager->getScreen(ScreenState::LIVE_FILTER_TUNING)) {
+                pBiosStateManager->getScreen(ScreenState::LIVE_FILTER_TUNING)->getRenderProps(&props);
+            }
+            if (activeScreen) activeScreen->getRenderProps(&props);
         } else if (activeScreen) {
             activeScreen->getRenderProps(&props);
         }
@@ -193,14 +204,17 @@ void pBiosUiTask(void* pvParameters) {
     }
 }
 
+
+
+
+
+
+
+
 void pBiosDataTask(void* pvParameters) {
     LOG_BOOT("pBios Data Task started on Core %d", xPortGetCoreID());
     for (;;) {
-        if (!pBiosStateManager) {
-            vTaskDelay(pdMS_TO_TICKS(100));
-            continue;
-        }
-
+        if (!pBiosStateManager) { vTaskDelay(pdMS_TO_TICKS(100)); continue; }
         ScreenState currentState = pBiosStateManager->getActiveScreenState();
 
         if (currentState == ScreenState::AUTO_TUNING_ANALYSIS) {
@@ -214,25 +228,20 @@ void pBiosDataTask(void* pvParameters) {
             }
         }
         else if (currentState == ScreenState::LIVE_FILTER_TUNING || currentState == ScreenState::PARAMETER_EDIT) {
-            if (pBiosContext.selectedFilter != nullptr) {
+            if (pBiosContext.selectedFilter) {
                 double raw_voltage = adcManager.getVoltage(pBiosContext.selectedAdcIndex, pBiosContext.selectedAdcInput);
                 double filtered_voltage = pBiosContext.selectedFilter->process(raw_voltage);
                 double final_value = 0.0;
                 float temp = tempManager.getProbeTemp();
-
                 if (pBiosContext.selectedFilter == &phFilter) {
                     final_value = phCalManager.getCompensatedValue(phCalManager.getCalibratedValue(filtered_voltage), temp, false);
                 } else if (pBiosContext.selectedFilter == &ecFilter) {
                     final_value = ecCalManager.getCompensatedValue(ecCalManager.getCalibratedValue(filtered_voltage), temp, true);
                 }
-
                 LiveFilterTuningScreen* screen = static_cast<LiveFilterTuningScreen*>(pBiosStateManager->getScreen(ScreenState::LIVE_FILTER_TUNING));
-                if(screen) {
-                    screen->setCalibratedValue(final_value);
-                }
+                if(screen) screen->setCalibratedValue(final_value);
             }
         }
-        // --- NEW: Add data handling for the Live Voltmeter screen ---
         else if (currentState == ScreenState::LIVE_VOLTMETER) {
             LiveVoltmeterScreen* screen = static_cast<LiveVoltmeterScreen*>(pBiosStateManager->getScreen(ScreenState::LIVE_VOLTMETER));
             if (screen && screen->isMeasuring()) {
@@ -240,10 +249,59 @@ void pBiosDataTask(void* pvParameters) {
                 screen->setLiveVoltage(raw_voltage);
             }
         }
+        else if (currentState == ScreenState::HARDWARE_SELF_TEST) {
+            HardwareTestScreen* screen = static_cast<HardwareTestScreen*>(pBiosStateManager->getScreen(ScreenState::HARDWARE_SELF_TEST));
+            if (screen) {
+                std::vector<TestResult> results;
+                hardwareTester.runTests(sdManager, displayManager, adcManager, tempManager, results);
+                screen->updateResults(results);
+                bool all_passed = true;
+                for(const auto& result : results) {
+                    if (result.status == TestStatus::FAIL) { all_passed = false; break; }
+                }
+                screen->setFinalMessage(all_passed ? "All Systems OK!" : "One or more tests failed.");
+                while(pBiosStateManager->getActiveScreenState() == ScreenState::HARDWARE_SELF_TEST) {
+                    vTaskDelay(pdMS_TO_TICKS(100));
+                }
+            }
+        }
+        else if (currentState == ScreenState::PROBE_PROFILING) {
+            ProbeProfilingScreen* screen = static_cast<ProbeProfilingScreen*>(pBiosStateManager->getScreen(ScreenState::PROBE_PROFILING));
+            if (screen && screen->isAnalyzing()) {
+                // 1. Perform high-speed capture to get live R_std
+                double samples[GT_SAMPLE_COUNT];
+                double sum = 0.0;
+                for (int i = 0; i < GT_SAMPLE_COUNT; ++i) {
+                    samples[i] = adcManager.getVoltage(screen->getSelectedAdcIndex(), screen->getSelectedAdcInput());
+                    sum += samples[i];
+                    vTaskDelay(pdMS_TO_TICKS(2)); // ~500Hz sample rate
+                }
+                double mean = sum / GT_SAMPLE_COUNT;
+                double sumSqDiff = 0.0;
+                for (int i = 0; i < GT_SAMPLE_COUNT; ++i) {
+                    sumSqDiff += (samples[i] - mean) * (samples[i] - mean);
+                }
+                double live_r_std = sqrt(sumSqDiff / GT_SAMPLE_COUNT);
+
+                // 2. Load the filter parameters from the SD card
+                FilterManager tempFilter;
+                configManager.loadFilterSettings(tempFilter, screen->getSelectedFilterName().c_str());
+
+                // 3. Push results to the screen
+                screen->setAnalysisResults(live_r_std, *tempFilter.getFilter(0), *tempFilter.getFilter(1));
+            }
+        }
         
-        vTaskDelay(pdMS_TO_TICKS(50)); // A slightly longer delay for non-tuning tasks
+        vTaskDelay(pdMS_TO_TICKS(50));
     }
 }
+
+
+
+
+
+
+
 
 void oneWireTask(void* pvParameters) { 
     for (;;) {
@@ -253,5 +311,4 @@ void oneWireTask(void* pvParameters) {
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }
-
 #endif

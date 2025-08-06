@@ -90,21 +90,22 @@ void GuidedTuningEngine::analyzeSignal() {
 /**
  * @brief --- DEFINITIVE FIX: Implements an efficient, single-pass heuristic algorithm. ---
  * This new version calculates parameters directly from the analysis results,
- * completely avoiding the computationally expensive simulation loops that were
- * causing the watchdog timer to crash the system.
+ * completely avoiding the computationally expensive and memory-unsafe simulation
+ * loops that were causing the heap corruption and crashes.
  */
 void GuidedTuningEngine::deriveHfParameters(PI_Filter* targetHfFilter) {
     if (!targetHfFilter) return;
 
     // Rule 1: Settle threshold is proportional to the overall noise amplitude.
     targetHfFilter->settleThreshold = _rawStdDev * 1.5;
+    targetHfFilter->settleThreshold = constrain(targetHfFilter->settleThreshold, 0.01, 1.0);
 
     // Rule 2: Median window size is based on the dominant noise frequency.
     targetHfFilter->medianWindowSize = (_peakFrequency > 150) ? 7 : 5;
 
     // Rule 3: Track response is mapped directly to the noise frequency.
     // Faster noise (higher frequency) needs a faster filter response.
-    targetHfFilter->trackResponse = map_double(_peakFrequency, 10, 500, 0.4, 0.8);
+    targetHfFilter->trackResponse = map_double(_peakFrequency, 10.0, 500.0, 0.4, 0.8);
     targetHfFilter->trackResponse = constrain(targetHfFilter->trackResponse, 0.4, 0.8);
 
     // Rule 4: Lock smoothing is inversely proportional to the track response.
@@ -122,18 +123,13 @@ void GuidedTuningEngine::deriveHfParameters(PI_Filter* targetHfFilter) {
  * @brief --- DEFINITIVE FIX: Uses a single, stateful simulation of the HF filter. ---
  * This function now runs one clean simulation of the newly configured HF filter
  * to get its output characteristics, then calculates the LF parameters directly
- * from that cleaner signal, just as the original design intended.
+ * from that cleaner signal, avoiding nested simulations and heap corruption.
  */
 void GuidedTuningEngine::deriveLfParameters(PI_Filter* hfFilter, PI_Filter* targetLfFilter) {
     if (!hfFilter || !targetLfFilter) return;
 
     // Create a clean HF filter instance for a stateful simulation.
-    PI_Filter hfSim;
-    hfSim.medianWindowSize = hfFilter->medianWindowSize;
-    hfSim.settleThreshold = hfFilter->settleThreshold;
-    hfSim.lockSmoothing = hfFilter->lockSmoothing;
-    hfSim.trackResponse = hfFilter->trackResponse;
-    hfSim.trackAssist = hfFilter->trackAssist;
+    PI_Filter hfSim(*hfFilter); // Use the new, safe copy constructor
 
     // Run the single simulation to get the characteristics of the HF stage's output.
     double hf_filtered_output[GT_SAMPLE_COUNT];
@@ -150,49 +146,12 @@ void GuidedTuningEngine::deriveLfParameters(PI_Filter* hfFilter, PI_Filter* targ
     double hf_output_std_dev = sqrt(hf_sum_sq_diff / GT_SAMPLE_COUNT);
 
     // Now, calculate the LF parameters to aggressively smooth this cleaner signal.
-    targetLfFilter->settleThreshold = hf_output_std_dev * 0.5; // Tighter threshold
-    targetLfFilter->medianWindowSize = 15; // Always large for smoothing
-    targetLfFilter->trackResponse = 0.05; // Always very slow tracking
-    targetLfFilter->lockSmoothing = 0.005; // Always very heavy smoothing
-    targetLfFilter->trackAssist = 0.0001; // Always very small assist
+    targetLfFilter->settleThreshold = hf_output_std_dev * 0.5;
+    targetLfFilter->settleThreshold = constrain(targetLfFilter->settleThreshold, 0.001, 0.5);
+    targetLfFilter->medianWindowSize = 15;
+    targetLfFilter->trackResponse = 0.05;
+    targetLfFilter->lockSmoothing = 0.005;
+    targetLfFilter->trackAssist = 0.0001;
 
     LOG_AUTO_TUNE("LF Results: Settle=%.3f, Resp=%.2f, Smooth=%.3f", targetLfFilter->settleThreshold, targetLfFilter->trackResponse, targetLfFilter->lockSmoothing);
-}
-
-
-// This function is no longer needed by the new algorithm, but we keep it
-// as it may be useful for future analysis or a more advanced simulation.
-int GuidedTuningEngine::runSimulation(const PI_Filter& params, const double* input_data, double& output_std_dev) {
-    PI_Filter sim;
-    sim.medianWindowSize = params.medianWindowSize;
-    sim.settleThreshold = params.settleThreshold;
-    sim.lockSmoothing = params.lockSmoothing;
-    sim.trackResponse = params.trackResponse;
-    sim.trackAssist = params.trackAssist;
-
-    double filtered_data[GT_SAMPLE_COUNT];
-
-    for (int i = 0; i < GT_SAMPLE_COUNT; ++i) {
-        filtered_data[i] = sim.process(input_data[i]);
-    }
-
-    double input_sum = 0.0, output_sum = 0.0;
-    for(int i=0; i<GT_SAMPLE_COUNT; ++i){
-        input_sum += input_data[i];
-        output_sum += filtered_data[i];
-    }
-    double input_mean = input_sum / GT_SAMPLE_COUNT;
-    double output_mean = output_sum / GT_SAMPLE_COUNT;
-
-    double input_sq_diff = 0.0, output_sq_diff = 0.0;
-     for(int i=0; i<GT_SAMPLE_COUNT; ++i){
-        input_sq_diff += (input_data[i] - input_mean) * (input_data[i] - input_mean);
-        output_sq_diff += (filtered_data[i] - output_mean) * (filtered_data[i] - output_mean);
-    }
-
-    double input_std_dev = sqrt(input_sq_diff / GT_SAMPLE_COUNT);
-    output_std_dev = sqrt(output_sq_diff / GT_SAMPLE_COUNT);
-
-    if (input_std_dev < 1e-9) return 100;
-    return (1.0 - (output_std_dev / input_std_dev)) * 100.0;
 }

@@ -22,7 +22,9 @@ enum class ScreenState {
     DRIFT_TRENDING,
     MAINTENANCE_MENU,
     SHUTDOWN_MENU,
-    LIVE_VOLTMETER // New state for the Voltmeter screen
+    LIVE_VOLTMETER,
+    HARDWARE_SELF_TEST,
+    PROBE_PROFILING // New state for the profiling screen
 };
 
 class Screen {

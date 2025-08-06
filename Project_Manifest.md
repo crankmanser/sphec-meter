@@ -7,6 +7,13 @@ This document tracks the development progress, current tasks, and future roadmap
 
 ## Changelog (What Was Done)
 
+* **v2.11.20 (2025-08-06):**
+    * **Status:** Complete.
+    * **Milestone:** The pBIOS "Guided Tuning" feature is now feature-complete, stable, and validated. The "setpoint editions" stage is complete.
+    * **Feature:** Implemented the `GuidedTuningEngine`, a data-driven heuristic algorithm that performs statistical and FFT analysis on the live signal to automatically propose a high-quality baseline set of parameters for the HF and LF filter stages.
+    * **Feature:** Implemented a robust persistence layer. Tuned setpoints can now be permanently saved to a configuration file on the SD card via the `ConfigManager` and are automatically loaded on boot.
+    * **Fix (Critical):** Resolved all outstanding stability issues, including Guru Meditation Errors (memory corruption, incorrect FFT initialization) and Task Watchdog crashes (by re-architecting the tuning algorithm to be RTOS-friendly and non-blocking).
+    * **Design:** Finalized a comprehensive redesign of the pBIOS menu structure to improve usability and provide a logical framework for new diagnostic tools.
 * **v2.11.19 (2025-08-05):**
     * **Status:** Planning Complete.
     * **Milestone:** Completed a comprehensive review and redesign of the pBIOS "Live Filter Tuning" workflow. All outstanding bugs and UI/UX issues have been analyzed, and a definitive "Reset and Rebuild" plan has been formulated to ensure a stable and correct implementation.
@@ -273,10 +280,17 @@ This document tracks the development progress, current tasks, and future roadmap
 
 ## Roadmap (What Is to Come)
 
-1.  **Implement the "Guided Tuning" Algorithm:** Build the heuristic noise analysis engine that automatically proposes filter parameters.
-2.  **Implement Remaining pBIOS Screens:** Build out the other diagnostic screens (Noise Analysis, Drift Trending, View KPIs, etc.) based on the new, stable foundation.
-3.  **Implement the Dual-Save Strategy in `ConfigManager`:** Build the logic to save/load parameters from both NVS and the SD card.
-4.  **UI - Phase 4: Normal Boot UI**:
-    * a. Creating the Live Measurement Screen.
-    * b. Beginning the implementation of the multi-step Calibration Wizard Screen.
-5.  **Implement the `StatusIndicatorController` & `ConnectivityManager`**.
+1.  **Complete pBIOS Feature Set:**
+    * a. Implement the `Probe Analysis` screen to display live `R_std` and saved "Filter Creep" data.
+    * b. Implement the `New Probe` utility to reset configurations.
+    * c. Implement the `pBIOS Snapshot` function to save a diagnostic file.
+    * d. Implement the `SD Card Formatter` utility.
+    * e. Implement the `Shutdown` screen logic, including the "safe to power off" message.
+
+2.  **UI - Phase 4: Begin Normal Boot UI:**
+    * a. Create the `Live Measurement Screen`, which will be the primary user-facing display.
+    * b. Begin implementation of the multi-step `Calibration Wizard Screen`, including the guided "Hardware Calibration" for setting the amplifier's 2500 mV zero-point.
+
+3.  **Implement the `SystemStatus` Manager** for detecting and reporting non-fatal errors like "Probe Disconnected."
+
+4.  **Implement the `ConnectivityManager`** for the Android Suite feedback loop.

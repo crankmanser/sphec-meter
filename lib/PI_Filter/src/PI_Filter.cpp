@@ -4,11 +4,10 @@
 #include "PI_Filter.h"
 #include <cmath> 
 #include <numeric>
-// --- FIX: Reverted to a simple include. The build flag will handle the path. ---
+// --- DEFINITIVE FIX: Revert to a simple include path. ---
+// The build flags in platformio.ini will correctly locate this file in the /src directory.
 #include "DebugConfig.h"
 
-// ... (The rest of the file is correct and remains unchanged) ...
-// ... (constructor, process, updateBuffers) ...
 PI_Filter::PI_Filter() :
     medianWindowSize(5),
     settleThreshold(0.1),
@@ -25,6 +24,51 @@ PI_Filter::PI_Filter() :
     _rawBuffer.reserve(FILTER_HISTORY_SIZE);
     _filteredBuffer.reserve(FILTER_HISTORY_SIZE);
 }
+
+PI_Filter::PI_Filter(const PI_Filter& other) {
+    // Copy all tunable parameters and state variables
+    medianWindowSize = other.medianWindowSize;
+    settleThreshold = other.settleThreshold;
+    lockSmoothing = other.lockSmoothing;
+    trackResponse = other.trackResponse;
+    trackAssist = other.trackAssist;
+    _currentState = other._currentState;
+    _filteredValue = other._filteredValue;
+    _integralTerm = other._integralTerm;
+    _rawStdDev = other._rawStdDev;
+    _filteredStdDev = other._filteredStdDev;
+    _stabilityPercent = other._stabilityPercent;
+
+    // Perform a deep copy of the heap-allocated vectors
+    _medianHistoryBuffer = other._medianHistoryBuffer;
+    _rawBuffer = other._rawBuffer;
+    _filteredBuffer = other._filteredBuffer;
+}
+
+PI_Filter& PI_Filter::operator=(const PI_Filter& other) {
+    if (this != &other) { // Protect against self-assignment
+        // Copy all tunable parameters and state variables
+        medianWindowSize = other.medianWindowSize;
+        settleThreshold = other.settleThreshold;
+        lockSmoothing = other.lockSmoothing;
+        trackResponse = other.trackResponse;
+        trackAssist = other.trackAssist;
+        _currentState = other._currentState;
+        _filteredValue = other._filteredValue;
+        _integralTerm = other._integralTerm;
+        _rawStdDev = other._rawStdDev;
+        _filteredStdDev = other._filteredStdDev;
+        _stabilityPercent = other._stabilityPercent;
+
+        // Perform a deep copy of the heap-allocated vectors
+        _medianHistoryBuffer = other._medianHistoryBuffer;
+        _rawBuffer = other._rawBuffer;
+        _filteredBuffer = other._filteredBuffer;
+    }
+    return *this;
+}
+
+
 double PI_Filter::process(double rawValue) {
     if (isnan(rawValue)) { return _filteredValue; }
     _medianHistoryBuffer.push_back(rawValue);
@@ -52,6 +96,7 @@ double PI_Filter::process(double rawValue) {
     calculateStatistics();
     return _filteredValue;
 }
+
 void PI_Filter::updateBuffers(double rawValue, double filteredValue) {
     _rawBuffer.push_back(rawValue);
     _filteredBuffer.push_back(filteredValue);
@@ -69,9 +114,6 @@ void PI_Filter::calculateStatistics() {
         return;
     }
 
-    LOG_FILTER("--- START CALC (Buffer Size: %d) ---", _rawBuffer.size());
-
-    // --- Raw Standard Deviation ---
     double rawSum = 0.0;
     for(double val : _rawBuffer) { rawSum += val; }
     double rawMean = rawSum / _rawBuffer.size();
@@ -79,15 +121,8 @@ void PI_Filter::calculateStatistics() {
     for(double val : _rawBuffer) { rawSumSqDiff += (val - rawMean) * (val - rawMean); }
     double rawVariance = rawSumSqDiff / _rawBuffer.size();
     
-    LOG_FILTER("RAW: Sum=%.4f, Mean=%.4f, SumSqDiff=%.4f, Variance=%.10f", rawSum, rawMean, rawSumSqDiff, rawVariance);
-    
-    if (rawVariance < 0.0) {
-        LOG_FILTER("!!! RAW VARIANCE IS NEGATIVE !!!");
-    }
     _rawStdDev = (rawVariance > 0.0) ? std::sqrt(rawVariance) : 0.0;
-    LOG_FILTER("--> RAW StdDev = %.10f", _rawStdDev);
 
-    // --- Filtered Standard Deviation ---
     double filteredSum = 0.0;
     for(double val : _filteredBuffer) { filteredSum += val; }
     double filteredMean = filteredSum / _filteredBuffer.size();
@@ -95,22 +130,14 @@ void PI_Filter::calculateStatistics() {
     for(double val : _filteredBuffer) { filteredSumSqDiff += (val - filteredMean) * (val - filteredMean); }
     double filteredVariance = filteredSumSqDiff / _filteredBuffer.size();
     
-    LOG_FILTER("FIL: Sum=%.4f, Mean=%.4f, SumSqDiff=%.4f, Variance=%.10f", filteredSum, filteredMean, filteredSumSqDiff, filteredVariance);
-
-    if (filteredVariance < 0.0) {
-        LOG_FILTER("!!! FILT VARIANCE IS NEGATIVE !!!");
-    }
     _filteredStdDev = (filteredVariance > 0.0) ? std::sqrt(filteredVariance) : 0.0;
-    LOG_FILTER("--> FIL StdDev = %.10f", _filteredStdDev);
 
-    // --- Stability Percentage ---
     if (_rawStdDev > 1e-9) {
         double improvement = 1.0 - (_filteredStdDev / _rawStdDev);
         _stabilityPercent = (int)constrain(improvement * 100.0, 0.0, 100.0);
     } else {
         _stabilityPercent = 100;
     }
-    LOG_FILTER("--- END CALC (Stab=%d%%) ---", _stabilityPercent);
 }
 
 void PI_Filter::getRawHistory(double* buffer, size_t size) const {
@@ -119,6 +146,7 @@ void PI_Filter::getRawHistory(double* buffer, size_t size) const {
     for (size_t i = 0; i < padding; ++i) { buffer[i] = (historySize > 0) ? _rawBuffer[0] : 0.0; }
     for (size_t i = 0; i < historySize; ++i) { buffer[padding + i] = _rawBuffer[i]; }
 }
+
 void PI_Filter::getFilteredHistory(double* buffer, size_t size) const {
     size_t historySize = _filteredBuffer.size();
     size_t padding = (size > historySize) ? (size - historySize) : 0;
