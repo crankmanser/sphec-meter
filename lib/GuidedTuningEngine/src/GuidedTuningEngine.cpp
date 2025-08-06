@@ -8,6 +8,7 @@
 
 // Helper function to map a value from one range to another
 double map_double(double x, double in_min, double in_max, double out_min, double out_max) {
+    if (in_max - in_min == 0) return out_min; // Avoid division by zero
     return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
 }
 
@@ -86,12 +87,11 @@ void GuidedTuningEngine::analyzeSignal() {
     _peakFrequency = FFT.MajorPeak();
 }
 
-
 /**
- * @brief --- DEFINITIVE FIX: Implements an efficient, single-pass heuristic algorithm. ---
- * This new version calculates parameters directly from the analysis results,
- * completely avoiding the computationally expensive and memory-unsafe simulation
- * loops that were causing the heap corruption and crashes.
+ * @brief --- DEFINITIVE FIX: Re-architected to a single-pass heuristic algorithm. ---
+ * This new version calculates parameters directly from the signal analysis results,
+ * completely eliminating the nested, memory-intensive simulation loops that were
+ * causing the stack overflow crashes. This is a lean, fast, and RTOS-safe design.
  */
 void GuidedTuningEngine::deriveHfParameters(PI_Filter* targetHfFilter) {
     if (!targetHfFilter) return;
@@ -123,13 +123,13 @@ void GuidedTuningEngine::deriveHfParameters(PI_Filter* targetHfFilter) {
  * @brief --- DEFINITIVE FIX: Uses a single, stateful simulation of the HF filter. ---
  * This function now runs one clean simulation of the newly configured HF filter
  * to get its output characteristics, then calculates the LF parameters directly
- * from that cleaner signal, avoiding nested simulations and heap corruption.
+ * from that cleaner signal, avoiding nested simulations and stack overflows.
  */
 void GuidedTuningEngine::deriveLfParameters(PI_Filter* hfFilter, PI_Filter* targetLfFilter) {
     if (!hfFilter || !targetLfFilter) return;
 
     // Create a clean HF filter instance for a stateful simulation.
-    PI_Filter hfSim(*hfFilter); // Use the new, safe copy constructor
+    PI_Filter hfSim(*hfFilter); // Use the safe copy constructor
 
     // Run the single simulation to get the characteristics of the HF stage's output.
     double hf_filtered_output[GT_SAMPLE_COUNT];

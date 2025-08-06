@@ -75,6 +75,8 @@ The system uses a dual-core FreeRTOS architecture to ensure UI responsiveness an
     2.  **Heuristic Analysis:** The engine uses a data-driven, heuristic algorithm (combining Statistical and FFT analysis) to measure the noise characteristics of the signal.
     3.  **Propose Baseline:** Based on the analysis, it calculates a complete set of recommended starting parameters for both the specialized HF and LF filter stages.
     4.  **User Fine-Tuning:** These parameters are automatically loaded, and the user is presented with the live graphs, which are already running with this intelligent baseline. The user then performs the final fine-tuning and can permanently save their setpoints.
+    * **Implementation Note:** The `GuidedTuningEngine`'s analysis and parameter derivation logic is computationally and memory-intensive. Initial implementations have led to critical heap corruption and stack overflow errors on the ESP32. The final implementation **must** be carefully designed to be RTOS-friendly. It must avoid large local variable allocations on the task stack and minimize or eliminate rapid memory allocation/deallocation patterns on the heap to ensure system stability.
+
 
 * **Finalized pBIOS Menu Structure:** The pBIOS provides a comprehensive suite of engineering and maintenance tools, organized into a clear menu structure.
     * **`Noise Analysis`**: A tool for performing a high-speed statistical analysis of a selected signal, providing key metrics like Mean, Min/Max, and Standard Deviation.

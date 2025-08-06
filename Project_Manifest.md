@@ -7,6 +7,19 @@ This document tracks the development progress, current tasks, and future roadmap
 
 ## Changelog (What Was Done)
 
+* **v2.11.22 (2025-08-06):**
+    * **Status:** In Progress - BLOCKED
+    * **Milestone:** Attempted to implement the `GuidedTuningEngine`'s heuristic algorithm.
+    * **Issue (Critical):** The implementation has led to persistent and critical stability issues, including heap corruption and stack overflow errors within the `pBiosDataTask`. Multiple attempts to refactor the algorithm (using copy-safe objects, single-pass heuristics) have failed to produce a stable result. The feature is currently non-functional and is blocking further development of the pBIOS.
+
+* **v2.11.21 (2025-08-06):**
+    * **Status:** Complete.
+    * **Milestone:** Refactored the pBIOS menu structure and implemented several stable maintenance features.
+    * **Feature:** Implemented a pBIOS-safe "Hardware Self-Test" to verify the core components.
+    * **Feature:** Implemented a "Live ADC Voltmeter" for low-level hardware diagnostics.
+    * **Feature:** Implemented the foundational "Probe Profiling" screen, which successfully displays live `R_std` and saved "Filter Creep" data, though the UI layout requires minor cosmetic adjustments.
+    * **Design:** Finalized a comprehensive redesign of the pBIOS menu structure to improve usability and provide a logical framework for new diagnostic tools.
+
 * **v2.11.20 (2025-08-06):**
     * **Status:** Complete.
     * **Milestone:** The pBIOS "Guided Tuning" feature is now feature-complete, stable, and validated. The "setpoint editions" stage is complete.
@@ -260,12 +273,11 @@ This document tracks the development progress, current tasks, and future roadmap
 
 ## Current Task (What We Are Doing)
 
-* **Implement the "Reset and Rebuild" Plan for the pBIOS Filter Tuning UI.**
-    * **Goal:** To create a 100% stable and correct implementation of the "Live Filter Tuning" feature based on our new, finalized design.
-    * **Process:**
-        1.  **Step 1: Stabilize the HF Stage.** Create a minimal, crash-free screen showing only the HF filter graph and its KPIs.
-        2.  **Step 2: Integrate the LF Stage.** Add the LF filter graph and KPIs, ensuring it is visually and functionally distinct from the HF stage.
-        3.  **Step 3: Re-integrate the Full UI.** Add the final, stable menu and parameter editing overlay to complete the feature.
+* **Diagnose and Resolve Critical Memory Crash in `GuidedTuningEngine`.**
+    * **Goal:** To create a 100% stable and memory-safe implementation of the `GuidedTuningEngine`.
+    * **Problem:** The current implementation, which runs during the `AUTO_TUNING_ANALYSIS` state, causes a fatal crash (either heap corruption or stack overflow) in the `pBiosDataTask`.
+    * **Next Step:** A full architectural review of the `GuidedTuningEngine`'s memory usage patterns is required. The algorithm must be redesigned to be compatible with the memory constraints and real-time requirements of the ESP32 FreeRTOS environment. All further pBIOS development is blocked until this stability issue is resolved.
+
 
 
 
