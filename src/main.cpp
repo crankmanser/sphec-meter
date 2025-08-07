@@ -217,13 +217,18 @@ void pBiosDataTask(void* pvParameters) {
         if (!pBiosStateManager) { vTaskDelay(pdMS_TO_TICKS(100)); continue; }
         ScreenState currentState = pBiosStateManager->getActiveScreenState();
 
-        if (currentState == ScreenState::AUTO_TUNING_ANALYSIS) {
+ if (currentState == ScreenState::AUTO_TUNING_ANALYSIS) {
             AutoTuningScreen* screen = static_cast<AutoTuningScreen*>(pBiosStateManager->getScreen(ScreenState::AUTO_TUNING_ANALYSIS));
             if (screen && pBiosContext.selectedFilter) {
-                screen->setProgress(25);
-                guidedTuningEngine.proposeSettings(pBiosContext.selectedFilter, &adcManager, pBiosContext.selectedAdcIndex, pBiosContext.selectedAdcInput);
-                screen->setProgress(100);
-                vTaskDelay(pdMS_TO_TICKS(250));
+                // The proposeSettings function now handles all progress updates internally
+                guidedTuningEngine.proposeSettings(
+                    pBiosContext.selectedFilter, 
+                    &adcManager, 
+                    pBiosContext.selectedAdcIndex, 
+                    pBiosContext.selectedAdcInput,
+                    screen // Pass the screen pointer for progress updates
+                );
+                vTaskDelay(pdMS_TO_TICKS(500)); // Brief pause on completion
                 pBiosStateManager->changeState(ScreenState::LIVE_FILTER_TUNING);
             }
         }
