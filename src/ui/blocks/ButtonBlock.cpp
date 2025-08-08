@@ -19,11 +19,11 @@ void ButtonBlock::draw(DisplayManager& displayManager, const ButtonBlockProps& p
         display->setFont(nullptr);
         display->getTextBounds(text.c_str(), 0, 0, &x1, &y1, &w, &h);
 
-        // --- DEFINITIVE FIX: Move the button down by 1 pixel for more clearance ---
+        // --- DEFINITIVE FIX: Move the button up by 1 pixel for more clearance ---
         int cursor_x = (SCREEN_WIDTH - w) / 2;
         int cursor_y = SCREEN_HEIGHT - h - 1; 
 
-        int rect_y = SCREEN_HEIGHT - h - 2;
+        int rect_y = SCREEN_HEIGHT - h - 3;
         int rect_h = h + 4;
         display->fillRect(0, rect_y, SCREEN_WIDTH, rect_h, SSD1306_WHITE);
 

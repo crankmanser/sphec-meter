@@ -1,7 +1,8 @@
 // File Path: /src/ui/blocks/ProgressBarBlock.cpp
-// NEW FILE
+// MODIFIED FILE
 
 #include "ProgressBarBlock.h"
+#include <Adafruit_SSD1306.h> 
 
 /**
  * @brief Draws a progress bar on the provided display.
@@ -22,17 +23,17 @@ void ProgressBarBlock::draw(Adafruit_GFX* display, const ProgressBarProps& props
     if (!props.label.empty()) {
         display->setTextSize(1);
         display->setFont(nullptr);
-        display->setTextColor(1);
+        display->setTextColor(SSD1306_WHITE);
         display->setCursor(4, 28);
         display->print(props.label.c_str());
     }
 
     // Draw the outer border of the progress bar
-    display->drawRect(bar_x, bar_y, bar_width, bar_height, 1);
+    display->drawRect(bar_x, bar_y, bar_width, bar_height, SSD1306_WHITE);
 
     // Calculate the width of the filled portion of the bar
     int progress_width = map(props.progress_percent, 0, 100, 0, bar_width - 2);
     if (progress_width > 0) {
-        display->fillRect(bar_x + 1, bar_y + 1, progress_width, bar_height - 2, 1);
+        display->fillRect(bar_x + 1, bar_y + 1, progress_width, bar_height - 2, SSD1306_WHITE);
     }
 }

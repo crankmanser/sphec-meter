@@ -25,9 +25,7 @@ void MainMenuScreen::handleInput(const InputEvent& event) {
             _selected_index--;
         }
     } else if (event.type == InputEventType::BTN_ENTER_PRESS) {
-        // Handle selection logic here...
-        // For now, we'll just log it.
-        // Serial.printf("Selected item: %s\n", _menu_items[_selected_index].c_str());
+        // STUB: Add navigation logic to other main app screens here.
     }
 }
 

@@ -10,6 +10,8 @@ StateManager::StateManager() :
 {}
 
 StateManager::~StateManager() {
+    // --- DEFINITIVE FIX: Revert to a C++11 compatible iterator loop ---
+    // This resolves the compiler warning about structured bindings.
     for (std::map<ScreenState, Screen*>::iterator it = _screens.begin(); it != _screens.end(); ++it) {
         delete it->second;
     }
@@ -51,11 +53,6 @@ Screen* StateManager::getActiveScreen() {
     return _activeScreen;
 }
 
-/**
- * @brief --- NEW: Safely retrieves a pointer to a registered screen ---
- * @param state The state of the screen to retrieve.
- * @return A pointer to the Screen object, or nullptr if not found.
- */
 Screen* StateManager::getScreen(ScreenState state) {
     auto it = _screens.find(state);
     if (it != _screens.end()) {
@@ -63,7 +60,6 @@ Screen* StateManager::getScreen(ScreenState state) {
     }
     return nullptr;
 }
-
 
 ScreenState StateManager::getActiveScreenState() const {
     return _currentState;

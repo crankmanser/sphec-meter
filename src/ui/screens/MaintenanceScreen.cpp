@@ -1,25 +1,22 @@
 // File Path: /src/ui/screens/MaintenanceScreen.cpp
-// MODIFIED FILE
+// NEW FILE
 
 #include "MaintenanceScreen.h"
 
 MaintenanceScreen::MaintenanceScreen() : _selected_index(0) {
-    _menu_items.push_back("Probe Profiling"); // Renamed
+    _menu_items.push_back("Probe Profiling");
     _menu_items.push_back("New Probe");
     _menu_items.push_back("Hardware Self-Test");
     _menu_items.push_back("Live ADC Voltmeter");
     _menu_items.push_back("pBIOS Snapshot");
     _menu_items.push_back("SD Card Formatter");
-    _menu_items.push_back("Android Suite");
 
     _menu_descriptions.push_back("View probe health and filter load.");
-    _menu_descriptions.push_back("View probe health KPIs.");
     _menu_descriptions.push_back("Reset config for a new probe.");
     _menu_descriptions.push_back("Check status of all components.");
     _menu_descriptions.push_back("View live, raw ADC voltages.");
     _menu_descriptions.push_back("Save diagnostics to SD card.");
     _menu_descriptions.push_back("Format the SD card.");
-    _menu_descriptions.push_back("Placeholder for future use.");
 }
 
 void MaintenanceScreen::handleInput(const InputEvent& event) {
@@ -30,7 +27,6 @@ void MaintenanceScreen::handleInput(const InputEvent& event) {
     } else if (event.type == InputEventType::BTN_DOWN_PRESS) {
         const std::string& selected_item = _menu_items[_selected_index];
         
-        // --- NEW: Add navigation to the Probe Profiling screen ---
         if (selected_item == "Probe Profiling") {
             if (_stateManager) _stateManager->changeState(ScreenState::PROBE_PROFILING);
         }
@@ -40,6 +36,7 @@ void MaintenanceScreen::handleInput(const InputEvent& event) {
         else if (selected_item == "Hardware Self-Test") {
             if (_stateManager) _stateManager->changeState(ScreenState::HARDWARE_SELF_TEST);
         }
+        // STUB: Add navigation for other maintenance tasks here.
 
     } else if (event.type == InputEventType::BTN_BACK_PRESS) {
         if (_stateManager) _stateManager->changeState(ScreenState::PBIOS_MENU);

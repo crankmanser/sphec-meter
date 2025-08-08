@@ -1,19 +1,17 @@
 // File Path: /src/ui/screens/pBiosMenuScreen.cpp
-// MODIFIED FILE
+// NEW FILE
 
 #include "pBiosMenuScreen.h"
-#include "../StateManager.h"
+#include "../StateManager.h" // For ScreenState enum
 #include <Arduino.h>
 
 pBiosMenuScreen::pBiosMenuScreen() : _selected_index(0) {
-    // --- MODIFIED: Update menu items to the new structure ---
     _menu_items.push_back("Noise Analysis");
     _menu_items.push_back("NA Drift Trending");
     _menu_items.push_back("Live Filter Tuning");
     _menu_items.push_back("Maintenance");
     _menu_items.push_back("Shutdown");
     
-    // --- MODIFIED: Update descriptions to match ---
     _menu_descriptions.push_back("Analyze HF signal noise (statistical).");
     _menu_descriptions.push_back("Analyze LF signal drift (FFT).");
     _menu_descriptions.push_back("Tune HF/LF filter parameters live.");
@@ -39,7 +37,6 @@ void pBiosMenuScreen::handleInput(const InputEvent& event) {
         else if (selected_item == "NA Drift Trending") {
             if (_stateManager) _stateManager->changeState(ScreenState::DRIFT_TRENDING);
         }
-        // --- NEW: Add navigation to new sub-menus ---
         else if (selected_item == "Maintenance") {
             if (_stateManager) _stateManager->changeState(ScreenState::MAINTENANCE_MENU);
         }
@@ -60,7 +57,5 @@ void pBiosMenuScreen::getRenderProps(UIRenderProps* props_to_fill) {
         props_to_fill->oled_bottom_props.line1 = _menu_descriptions[_selected_index];
     }
 
-    props_to_fill->button_props.back_text = "";
-    props_to_fill->button_props.enter_text = "";
     props_to_fill->button_props.down_text = "Select";
 }

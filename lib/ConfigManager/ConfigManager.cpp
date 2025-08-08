@@ -14,21 +14,20 @@ bool ConfigManager::begin(FaultHandler& faultHandler, SdManager& sdManager) {
     _faultHandler = &faultHandler;
     _sdManager = &sdManager;
     _initialized = true;
-    
-    // --- FIX: Ensure the configuration directory exists on the SD card ---
     if (_sdManager) {
         _sdManager->mkdir("/config");
     }
-    
     return true;
 }
 
-bool ConfigManager::saveFilterSettings(FilterManager& filter, const char* filterName) {
+/**
+ * @brief --- DEFINITIVE UPDATE: Overloaded to handle both working and saved states. ---
+ */
+bool ConfigManager::saveFilterSettings(FilterManager& filter, const char* filterName, bool is_saved_state) {
     if (!_initialized || !_sdManager) return false;
 
     StaticJsonDocument<512> doc;
 
-    // Serialize HF Filter
     PI_Filter* hfFilter = filter.getFilter(0);
     if (hfFilter) {
         JsonObject hf = doc.createNestedObject("hf_filter");
@@ -39,7 +38,6 @@ bool ConfigManager::saveFilterSettings(FilterManager& filter, const char* filter
         hf["medianWindowSize"] = hfFilter->medianWindowSize;
     }
 
-    // Serialize LF Filter
     PI_Filter* lfFilter = filter.getFilter(1);
     if (lfFilter) {
         JsonObject lf = doc.createNestedObject("lf_filter");
@@ -51,26 +49,36 @@ bool ConfigManager::saveFilterSettings(FilterManager& filter, const char* filter
     }
 
     char filepath[64];
-    snprintf(filepath, sizeof(filepath), "/config/%s.json", filterName);
+    if (is_saved_state) {
+        snprintf(filepath, sizeof(filepath), "/config/%s_saved.json", filterName);
+    } else {
+        snprintf(filepath, sizeof(filepath), "/config/%s.json", filterName);
+    }
 
     LOG_STORAGE("Saving filter settings to %s", filepath);
     return _sdManager->saveJson(filepath, doc);
 }
 
-bool ConfigManager::loadFilterSettings(FilterManager& filter, const char* filterName) {
+/**
+ * @brief --- DEFINITIVE UPDATE: Overloaded to handle both working and saved states. ---
+ */
+bool ConfigManager::loadFilterSettings(FilterManager& filter, const char* filterName, bool is_saved_state) {
     if (!_initialized || !_sdManager) return false;
 
     char filepath[64];
-    snprintf(filepath, sizeof(filepath), "/config/%s.json", filterName);
+    if (is_saved_state) {
+        snprintf(filepath, sizeof(filepath), "/config/%s_saved.json", filterName);
+    } else {
+        snprintf(filepath, sizeof(filepath), "/config/%s.json", filterName);
+    }
 
     StaticJsonDocument<512> doc;
     LOG_STORAGE("Loading filter settings from %s", filepath);
     if (!_sdManager->loadJson(filepath, doc)) {
-        LOG_STORAGE("Failed to load %s, will save defaults.", filepath);
+        LOG_STORAGE("Failed to load %s.", filepath);
         return false;
     }
 
-    // Deserialize HF Filter
     PI_Filter* hfFilter = filter.getFilter(0);
     JsonObject hf = doc["hf_filter"];
     if (hfFilter && !hf.isNull()) {
@@ -81,7 +89,6 @@ bool ConfigManager::loadFilterSettings(FilterManager& filter, const char* filter
         hfFilter->medianWindowSize = hf["medianWindowSize"];
     }
 
-    // Deserialize LF Filter
     PI_Filter* lfFilter = filter.getFilter(1);
     JsonObject lf = doc["lf_filter"];
     if (lfFilter && !lf.isNull()) {
@@ -89,7 +96,7 @@ bool ConfigManager::loadFilterSettings(FilterManager& filter, const char* filter
         lfFilter->lockSmoothing = lf["lockSmoothing"];
         lfFilter->trackResponse = lf["trackResponse"];
         lfFilter->trackAssist = lf["trackAssist"];
-        lfFilter->medianWindowSize = lfFilter->medianWindowSize;
+        lfFilter->medianWindowSize = lf["medianWindowSize"];
     }
     
     LOG_STORAGE("Successfully loaded settings from %s", filepath);

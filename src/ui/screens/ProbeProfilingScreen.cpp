@@ -1,5 +1,5 @@
 // File Path: /src/ui/screens/ProbeProfilingScreen.cpp
-// MODIFIED FILE
+// NEW FILE
 
 #include "ProbeProfilingScreen.h"
 #include "ADS1118.h"
@@ -28,18 +28,13 @@ void ProbeProfilingScreen::handleInput(const InputEvent& event) {
             handleViewReportInput(event);
             break;
         case ProfilingState::ANALYZING:
+            // Input is ignored while analyzing
             break;
     }
 }
 
-/**
- * @brief --- DEFINITIVE FIX: Implements the clean, multi-screen report layout. ---
- * This function is completely rewritten to distribute the diagnostic data logically
- * across the three OLEDs, providing a clear and readable "report card" for the
- * selected probe and resolving all previous UI clutter and text overlap issues.
- */
 void ProbeProfilingScreen::getRenderProps(UIRenderProps* props_to_fill) {
-    *props_to_fill = UIRenderProps();
+    *props_to_fill = UIRenderProps(); // Clear previous props
 
     switch (_current_state) {
         case ProfilingState::SELECT_PROBE:
@@ -92,7 +87,7 @@ bool ProbeProfilingScreen::isAnalyzing() const {
 }
 
 uint8_t ProbeProfilingScreen::getSelectedAdcIndex() const {
-    return _selected_index;
+    return _selected_index; // 0 for pH, 1 for EC
 }
 
 uint8_t ProbeProfilingScreen::getSelectedAdcInput() const {
@@ -107,8 +102,8 @@ const std::string& ProbeProfilingScreen::getSelectedFilterName() const {
 
 void ProbeProfilingScreen::setAnalysisResults(double live_r_std, const PI_Filter& hfFilter, const PI_Filter& lfFilter) {
     _live_r_std = live_r_std;
-    _hf_params_snapshot = hfFilter;
-    _lf_params_snapshot = lfFilter;
+    _hf_params_snapshot = hfFilter; // Uses safe copy assignment
+    _lf_params_snapshot = lfFilter; // Uses safe copy assignment
     _current_state = ProfilingState::VIEW_REPORT;
 }
 

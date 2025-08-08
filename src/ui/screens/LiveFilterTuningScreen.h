@@ -10,15 +10,18 @@
 #include "FilterManager.h"
 #include "ui/blocks/GraphBlock.h"
 
-// --- DEFINITIVE FIX: Forward declare classes to resolve compiler errors ---
 class AdcManager;
 class CalibrationManager;
 class TempManager;
 struct PBiosContext;
 
+struct FilterParametersSnapshot {
+    PI_Filter hf_params;
+    PI_Filter lf_params;
+};
+
 class LiveFilterTuningScreen : public Screen {
 public:
-    // This constructor is now correctly declared.
     LiveFilterTuningScreen(AdcManager* adcManager, PBiosContext* context, CalibrationManager* phCal, CalibrationManager* ecCal, TempManager* tempManager);
     
     void onEnter(StateManager* stateManager) override;
@@ -26,11 +29,19 @@ public:
     void getRenderProps(UIRenderProps* props_to_fill) override;
     void update();
 
-    void setCalibratedValue(double value);
-    const std::string& getSelectedParamName() const;
-    int getSelectedParamIndex() const;
-
 private:
+    enum class WorkbenchState {
+        HUB_MENU,
+        MANUAL_TUNE,
+        MANUAL_TUNE_EDITING
+    };
+
+    void handleHubMenuInput(const InputEvent& event);
+    void handleManualTuneInput(const InputEvent& event);
+    void getHubMenuRenderProps(UIRenderProps* props_to_fill);
+    void getManualTuneRenderProps(UIRenderProps* props_to_fill);
+
+    void runCompareModeSimulation();
     std::string getSelectedParamValueString();
 
     AdcManager* _adcManager;
@@ -39,16 +50,25 @@ private:
     CalibrationManager* _ecCalManager;
     TempManager* _tempManager;
 
+    WorkbenchState _current_state;
+
     double _hf_raw_buffer[GRAPH_DATA_POINTS];
     double _hf_filtered_buffer[GRAPH_DATA_POINTS];
     double _lf_filtered_buffer[GRAPH_DATA_POINTS];
+    double _ghost_lf_filtered_buffer[GRAPH_DATA_POINTS];
+    bool _is_compare_mode_active;
 
     double _hf_f_std, _hf_r_std, _lf_f_std, _lf_r_std;
     int _hf_stab_percent, _lf_stab_percent;
-    
     double _calibrated_value;
-    std::vector<std::string> _menu_item_names;
+
+    std::vector<std::string> _hub_menu_items;
+    // --- DEFINITIVE FIX: Declare the missing member variable ---
+    std::vector<std::string> _hub_menu_descriptions;
+    std::vector<std::string> _param_menu_items;
     int _selected_index;
+
+    FilterParametersSnapshot _manual_tune_snapshot;
 };
 
 #endif // LIVE_FILTER_TUNING_SCREEN_H

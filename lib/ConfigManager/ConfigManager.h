@@ -6,40 +6,35 @@
 
 #include <ArduinoJson.h>
 #include <FaultHandler.h>
-#include "FilterManager.h" // Now needs the full definition
-#include "SdManager.h"     // Needs the SdManager for file operations
+#include "FilterManager.h"
+#include "SdManager.h"
 
 class ConfigManager {
 public:
     ConfigManager();
-
-    /**
-     * @brief Initializes the ConfigManager.
-     * @param faultHandler A reference to the global fault handler.
-     * @param sdManager A reference to the SdManager for file operations.
-     * @return True if initialization is successful, false otherwise.
-     */
     bool begin(FaultHandler& faultHandler, SdManager& sdManager);
 
     /**
      * @brief Saves the settings of a FilterManager to a JSON file.
      * @param filter The FilterManager instance to save.
      * @param filterName The base name for the config file (e.g., "ph_filter").
+     * @param is_saved_state If true, appends "_saved" to the filename for the user's backup.
      * @return True if saving was successful, false otherwise.
      */
-    bool saveFilterSettings(FilterManager& filter, const char* filterName);
+    bool saveFilterSettings(FilterManager& filter, const char* filterName, bool is_saved_state = false);
 
     /**
      * @brief Loads the settings for a FilterManager from a JSON file.
      * @param filter The FilterManager instance to load into.
      * @param filterName The base name for the config file (e.g., "ph_filter").
+     * @param is_saved_state If true, loads from the user's "_saved" backup file.
      * @return True if loading was successful, false otherwise.
      */
-    bool loadFilterSettings(FilterManager& filter, const char* filterName);
+    bool loadFilterSettings(FilterManager& filter, const char* filterName, bool is_saved_state = false);
 
 private:
     FaultHandler* _faultHandler;
-    SdManager* _sdManager; // Pointer to the SD card manager
+    SdManager* _sdManager;
     bool _initialized;
 };
 

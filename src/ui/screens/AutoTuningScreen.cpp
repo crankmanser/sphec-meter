@@ -5,11 +5,12 @@
 
 AutoTuningScreen::AutoTuningScreen() : 
     _progress_percent(0),
-    _progress_label("Initializing...")
+    _progress_label("Initializing...") // Set a default starting label
 {}
 
+// This screen is non-interactive while the process is running.
 void AutoTuningScreen::handleInput(const InputEvent& event) {
-    // No-op
+    // No-op for now
 }
 
 void AutoTuningScreen::getRenderProps(UIRenderProps* props_to_fill) {
@@ -23,6 +24,9 @@ void AutoTuningScreen::getRenderProps(UIRenderProps* props_to_fill) {
     props_to_fill->oled_bottom_props.line1 = "This may take a few moments...";
 }
 
+/**
+ * @brief --- DEFINITIVE FIX: Implements the updated function with two parameters. ---
+ */
 void AutoTuningScreen::setProgress(int percent, const std::string& label) {
     _progress_percent = percent;
     _progress_label = label;

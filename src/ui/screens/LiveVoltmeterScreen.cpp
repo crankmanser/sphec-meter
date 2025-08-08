@@ -18,7 +18,7 @@ LiveVoltmeterScreen::LiveVoltmeterScreen() :
 
 void LiveVoltmeterScreen::onEnter(StateManager* stateManager) {
     Screen::onEnter(stateManager);
-    // Reset to the selection state every time the user enters this screen
+    // Reset to the selection state every time the user enters this screen.
     _current_state = VoltmeterState::SELECT_SOURCE;
     _live_voltage_mv = 0.0;
 }
@@ -59,7 +59,8 @@ void LiveVoltmeterScreen::setLiveVoltage(double voltage) {
 }
 
 uint8_t LiveVoltmeterScreen::getSelectedAdcIndex() const {
-    return (_selected_index < 2) ? _selected_index : (_selected_index - 2);
+    // pH and 3.3V are on ADC 0, EC and 5.0V are on ADC 1
+    return (_selected_index == 1 || _selected_index == 3) ? 1 : 0;
 }
 
 uint8_t LiveVoltmeterScreen::getSelectedAdcInput() const {

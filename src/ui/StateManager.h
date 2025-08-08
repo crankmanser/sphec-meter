@@ -10,6 +10,7 @@
 
 class StateManager;
 
+// --- DEFINITIVE UPDATE: Add the new Auto Tune Sub-Menu state ---
 enum class ScreenState {
     NONE,
     MAIN_MENU,
@@ -24,7 +25,8 @@ enum class ScreenState {
     SHUTDOWN_MENU,
     LIVE_VOLTMETER,
     HARDWARE_SELF_TEST,
-    PROBE_PROFILING // New state for the profiling screen
+    PROBE_PROFILING,
+    AUTO_TUNE_SUB_MENU // New state
 };
 
 class Screen {

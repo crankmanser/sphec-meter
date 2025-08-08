@@ -6,14 +6,16 @@
 #include "boot_animation.h"
 
 /**
- * @brief --- FIX: The constructor is simplified ---
+ * @brief --- DEFINITIVE FIX: The constructor is simplified ---
+ * The boot selector's only responsibility is to show the animation.
+ * All boot logic is now handled directly and robustly in main.cpp.
  */
 BootSelector::BootSelector(DisplayManager& displayManager) :
     _displayManager(displayManager)
 {}
 
 /**
- * @brief --- FIX: This function is now just an animation runner ---
+ * @brief --- DEFINITIVE FIX: This function is now just an animation runner ---
  * It calls the private animation function and has no other logic.
  */
 void BootSelector::runBootAnimation() {
@@ -29,15 +31,18 @@ void BootSelector::runAnimation(uint32_t duration_ms) {
     Adafruit_SSD1306* display = _displayManager.getDisplay(1);
     if (!display) return;
 
+    _displayManager.selectTCAChannel(OLED2_TCA_CHANNEL);
+    display->clearDisplay();
+    display->setTextSize(2);
+    display->setCursor(10, 20);
+    display->print("SpHEC Meter");
+    display->setTextSize(1);
+    display->setCursor(35, 40);
+    display->print("v3.1.1");
+    display->display();
+    
     while (millis() - start_time < duration_ms) {
-        uint32_t elapsed = millis() - start_time;
-        int frame_index = (elapsed / 400) % boot_animation_frame_count;
-        int x_pos = map(elapsed, 0, duration_ms, -32, SCREEN_WIDTH);
-        
-        _displayManager.selectTCAChannel(OLED2_TCA_CHANNEL);
-        display->clearDisplay();
-        display->drawBitmap(x_pos, 16, boot_animation_frames[frame_index], 32, 32, 1);
-        display->display();
+        // Simple delay to show the static screen
         delay(50);
     }
 }
