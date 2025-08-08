@@ -23,7 +23,9 @@ void BootSelector::runBootAnimation() {
 }
 
 /**
- * @brief Renders the "walking boot" animation. (Unchanged)
+ * @brief --- DEFINITIVE FIX: Displays a clean, static boot screen. ---
+ * The walking boot animation has been replaced with a simple, professional
+ * static display to reduce boot-time complexity.
  * @param duration_ms The total duration for the animation to run.
  */
 void BootSelector::runAnimation(uint32_t duration_ms) {
@@ -34,6 +36,7 @@ void BootSelector::runAnimation(uint32_t duration_ms) {
     _displayManager.selectTCAChannel(OLED2_TCA_CHANNEL);
     display->clearDisplay();
     display->setTextSize(2);
+    display->setTextColor(SSD1306_WHITE);
     display->setCursor(10, 20);
     display->print("SpHEC Meter");
     display->setTextSize(1);

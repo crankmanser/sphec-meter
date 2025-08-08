@@ -2,127 +2,115 @@
 // MODIFIED FILE
 
 #include "ParameterEditScreen.h"
-#include "pBiosContext.h"
+#include "ui/screens/LiveFilterTuningScreen.h"
 #include <stdio.h>
-#include <Arduino.h>
-
-// --- NEW: A temporary struct to hold parameter values ---
-struct ParamSnapshot {
-    double settleThreshold;
-    double lockSmoothing;
-    double trackResponse;
-    double trackAssist;
-};
-
-// --- NEW: Two snapshots to store pre-edit values ---
-ParamSnapshot hf_snapshot;
-ParamSnapshot lf_snapshot;
-
 
 ParameterEditScreen::ParameterEditScreen(PBiosContext* context) :
     _context(context),
-    _param_index(-1)
-{}
+    _selected_index(0),
+    _is_editing(false)
+{
+    _param_menu_items.push_back("HF Settle Thr");
+    _param_menu_items.push_back("HF Lock Smooth");
+    _param_menu_items.push_back("HF Track Resp");
+    _param_menu_items.push_back("HF Track Assist");
+    _param_menu_items.push_back("LF Settle Thr");
+    _param_menu_items.push_back("LF Lock Smooth");
+    _param_menu_items.push_back("LF Track Resp");
+    _param_menu_items.push_back("LF Track Assist");
+}
 
-void ParameterEditScreen::setParameterToEdit(const std::string& name, int index) {
-    _param_name = name;
-    _param_index = index;
-
-    // --- NEW: Take a snapshot of parameters when entering the screen ---
+void ParameterEditScreen::onEnter(StateManager* stateManager) {
+    Screen::onEnter(stateManager);
+    _is_editing = false;
+    _selected_index = 0;
     if (_context && _context->selectedFilter) {
-        PI_Filter* hf = _context->selectedFilter->getFilter(0);
-        PI_Filter* lf = _context->selectedFilter->getFilter(1);
-        if (hf) {
-            hf_snapshot = {hf->settleThreshold, hf->lockSmoothing, hf->trackResponse, hf->trackAssist};
-        }
-        if (lf) {
-            lf_snapshot = {lf->settleThreshold, lf->lockSmoothing, lf->trackResponse, lf->trackAssist};
-        }
+        _hf_snapshot = *_context->selectedFilter->getFilter(0);
+        _lf_snapshot = *_context->selectedFilter->getFilter(1);
     }
 }
 
 void ParameterEditScreen::handleInput(const InputEvent& event) {
-    // --- MODIFIED: Handle "Cancel" button press ---
     if (event.type == InputEventType::BTN_BACK_PRESS) {
-        // Restore the snapshot if the user cancels
-        if (_context && _context->selectedFilter) {
-            PI_Filter* hf = _context->selectedFilter->getFilter(0);
-            PI_Filter* lf = _context->selectedFilter->getFilter(1);
-            if (hf) {
-                hf->settleThreshold = hf_snapshot.settleThreshold;
-                hf->lockSmoothing = hf_snapshot.lockSmoothing;
-                hf->trackResponse = hf_snapshot.trackResponse;
-                hf->trackAssist = hf_snapshot.trackAssist;
+        if (_is_editing) {
+            _is_editing = false;
+        } else {
+            if (_context && _context->selectedFilter) {
+                *_context->selectedFilter->getFilter(0) = _hf_snapshot;
+                *_context->selectedFilter->getFilter(1) = _lf_snapshot;
             }
-            if (lf) {
-                lf->settleThreshold = lf_snapshot.settleThreshold;
-                lf->lockSmoothing = lf_snapshot.lockSmoothing;
-                lf->trackResponse = lf_snapshot.trackResponse;
-                lf->trackAssist = lf_snapshot.trackAssist;
-            }
+            if (_stateManager) _stateManager->changeState(ScreenState::LIVE_FILTER_TUNING);
         }
-        if (_stateManager) _stateManager->changeState(ScreenState::LIVE_FILTER_TUNING);
         return;
     }
-
-    // --- MODIFIED: Handle "Set" button press ---
-    // The actual saving is handled in main.cpp, this just transitions state.
     if (event.type == InputEventType::BTN_DOWN_PRESS) {
         if (_stateManager) _stateManager->changeState(ScreenState::LIVE_FILTER_TUNING);
         return;
     }
+    if (event.type == InputEventType::BTN_ENTER_PRESS) {
+        _is_editing = !_is_editing;
+        return;
+    }
 
-    if (!_context || !_context->selectedFilter || _param_index < 0) return;
-    
-    PI_Filter* filter = (_param_index < 4) ? _context->selectedFilter->getFilter(0) : _context->selectedFilter->getFilter(1);
-    if (!filter) return;
-    
-    int local_param_index = _param_index % 4;
-    double step = 0.01;
-    if(local_param_index == 0) step = 0.01;
-    if(local_param_index == 1) step = 0.01;
-    if(local_param_index == 2) step = 0.01;
-    if(local_param_index == 3) step = 0.001;
-
-    double change = (event.type == InputEventType::ENCODER_INCREMENT) ? step : -step;
-
-    switch (local_param_index) {
-        case 0: filter->settleThreshold += change; break;
-        case 1: filter->lockSmoothing += change; break;
-        case 2: filter->trackResponse += change; break;
-        case 3: filter->trackAssist += change; break;
+    if (_is_editing) {
+        PI_Filter* filter = (_selected_index < 4) ? _context->selectedFilter->getFilter(0) : _context->selectedFilter->getFilter(1);
+        if (!filter) return;
+        int local_param_index = _selected_index % 4;
+        double step = (local_param_index == 3) ? 0.001 * event.value : 0.01 * event.value;
+        double change = (event.type == InputEventType::ENCODER_INCREMENT) ? step : -step;
+        switch (local_param_index) {
+            case 0: filter->settleThreshold += change; break;
+            case 1: filter->lockSmoothing += change; break;
+            case 2: filter->trackResponse += change; break;
+            case 3: filter->trackAssist += change; break;
+        }
+    } else {
+        if (event.type == InputEventType::ENCODER_INCREMENT) { if (_selected_index < _param_menu_items.size() - 1) _selected_index++; }
+        else if (event.type == InputEventType::ENCODER_DECREMENT) { if (_selected_index > 0) _selected_index--; }
     }
 }
 
+/**
+ * @brief --- DEFINITIVE FIX: Implements the correct "overlay" rendering logic. ---
+ * This function now correctly gets the background graph properties from the
+ * workbench screen and then overwrites the middle OLED and button properties
+ * with its own content.
+ */
 void ParameterEditScreen::getRenderProps(UIRenderProps* props_to_fill) {
+    LiveFilterTuningScreen* workbench = static_cast<LiveFilterTuningScreen*>(_stateManager->getScreen(ScreenState::LIVE_FILTER_TUNING));
+    if (!workbench) return;
+
+    // 1. Get the background graph properties from the workbench
+    workbench->getManualTuneRenderProps(props_to_fill);
+
+    // 2. Overwrite the middle OLED and buttons with our content
     OledProps& mid_props = props_to_fill->oled_middle_props;
-    mid_props = OledProps();
-    mid_props.line1 = "Editing: " + _param_name;
-    mid_props.line2 = "New Value:";
-    
-    char buffer[20];
-    snprintf(buffer, sizeof(buffer), "> %s <", getParamValueString().c_str());
-    mid_props.line3 = buffer;
+    mid_props = OledProps(); // Clear it first
+    mid_props.line1 = getSelectedParamValueString();
+    mid_props.menu_props.is_enabled = true;
+    mid_props.menu_props.items = _param_menu_items;
+    mid_props.menu_props.selected_index = _selected_index;
+    if (_is_editing) {
+        mid_props.line2 = "> Editing <";
+    }
 
     props_to_fill->button_props.back_text = "Cancel";
+    props_to_fill->button_props.enter_text = _is_editing ? "OK" : "Edit";
     props_to_fill->button_props.down_text = "Set";
 }
 
-std::string ParameterEditScreen::getParamValueString() {
-    if (!_context || !_context->selectedFilter || _param_index < 0) return "N/A";
-    
-    PI_Filter* filter = (_param_index < 4) ? _context->selectedFilter->getFilter(0) : _context->selectedFilter->getFilter(1);
+std::string ParameterEditScreen::getSelectedParamValueString() {
+    if (!_context || !_context->selectedFilter) return "N/A";
+    PI_Filter* filter = (_selected_index < 4) ? _context->selectedFilter->getFilter(0) : _context->selectedFilter->getFilter(1);
     if (!filter) return "N/A";
-    
-    int param_index = _param_index % 4;
-    char buffer[10];
-    double val = 0;
-    
+    int param_index = _selected_index % 4;
+    char buffer[20];
+    double val = 0.0;
     switch (param_index) {
         case 0: val = filter->settleThreshold; dtostrf(val, 4, 3, buffer); break;
         case 1: val = filter->lockSmoothing; dtostrf(val, 4, 3, buffer); break;
         case 2: val = filter->trackResponse; dtostrf(val, 4, 3, buffer); break;
         case 3: val = filter->trackAssist; dtostrf(val, 4, 4, buffer); break;
     }
-    return std::string(buffer);
+    return std::string("Value: ") + buffer;
 }

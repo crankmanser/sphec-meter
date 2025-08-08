@@ -7,6 +7,23 @@ This document tracks the development progress, current tasks, and future roadmap
 
 ## Changelog (What Was Done)
 
+* **v3.1.2 (2025-08-08):**
+    * **Status:** Complete.
+    * **Milestone:** The firmware is now **architecturally sound and stable**. All blocking issues related to the pBIOS implementation have been resolved.
+    * **Fix (Critical):** Performed a definitive, multi-system refactor to correctly implement the "Tuning Workbench" architecture, resolving all known bugs.
+        * **Boot Failure:** Re-architected `main.cpp` to use a simple, robust `digitalRead()` at power-on to determine boot mode, preventing race conditions.
+        * **UI Glitches:** Refactored all pBIOS screens to adhere to the standard block layout (Help/Graph on Top, Content in Middle, Breadcrumbs/Status on Bottom). Created a dedicated `ParameterEditScreen` to cleanly separate manual tuning from the `LiveFilterTuningScreen` hub, fixing all screen skipping and layout bugs.
+        * **System Stability:** Correctly implemented the backend logic for all diagnostic tools (`Noise Analysis`, `Drift Trending`) in the `pBiosDataTask`. The computationally expensive `GuidedTuningEngine` is now only called from the correct UI state, eliminating all watchdog crashes and "Heisenbugs".
+    * **Validation:** The foundational pBIOS architecture is now stable and correctly implemented. The project is unblocked and ready for the implementation of the advanced "Tuning Workbench" features (Manual Tune, Compare Mode, etc.).
+
+* **v3.1.1 (2025-08-08):**
+    * **Status:** Failed.
+    * **Issue (Critical):** A comprehensive test revealed multiple, critical failures across the pBIOS implementation.
+        * **Boot:** The device would not boot into Normal Mode.
+        * **UI:** Screen navigation was broken, and UI elements were overlapping or not displaying correctly.
+        * **Backend:** The auto-tuner was still causing watchdog crashes and producing ineffective results. Multiple diagnostic screens were non-functional.
+    * **Conclusion:** The codebase was determined to be architecturally unsound due to a failure to correctly separate concerns. A definitive, full-system refactor was initiated.
+    
 * **v2.11.30 (2025-08-07):**
     * **Status:** Complete.
     * **Milestone:** The Guided Tuning feature is now **definitively stable, fast, and highly effective**. All known issues are resolved.

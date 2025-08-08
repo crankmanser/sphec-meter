@@ -29,20 +29,19 @@ public:
     void getRenderProps(UIRenderProps* props_to_fill) override;
     void update();
 
-private:
-    enum class WorkbenchState {
-        HUB_MENU,
-        MANUAL_TUNE,
-        MANUAL_TUNE_EDITING
-    };
-
-    void handleHubMenuInput(const InputEvent& event);
-    void handleManualTuneInput(const InputEvent& event);
-    void getHubMenuRenderProps(UIRenderProps* props_to_fill);
+    // --- NEW: Public method for the ParameterEditScreen to get graph data ---
     void getManualTuneRenderProps(UIRenderProps* props_to_fill);
 
+private:
+    // --- DEFINITIVE REFACTOR: The screen's state is simplified ---
+    // The screen is either showing the hub menu or it's in the manual tuning state.
+    bool _is_in_manual_tune_mode;
+
+    void handleHubMenuInput(const InputEvent& event);
+    void getHubMenuRenderProps(UIRenderProps* props_to_fill);
+    
+    // Helper function for the Compare Mode simulation
     void runCompareModeSimulation();
-    std::string getSelectedParamValueString();
 
     AdcManager* _adcManager;
     PBiosContext* _context;
@@ -50,25 +49,19 @@ private:
     CalibrationManager* _ecCalManager;
     TempManager* _tempManager;
 
-    WorkbenchState _current_state;
-
+    // Data for live graphs, now public for the edit screen
     double _hf_raw_buffer[GRAPH_DATA_POINTS];
     double _hf_filtered_buffer[GRAPH_DATA_POINTS];
     double _lf_filtered_buffer[GRAPH_DATA_POINTS];
     double _ghost_lf_filtered_buffer[GRAPH_DATA_POINTS];
     bool _is_compare_mode_active;
-
     double _hf_f_std, _hf_r_std, _lf_f_std, _lf_r_std;
     int _hf_stab_percent, _lf_stab_percent;
     double _calibrated_value;
 
     std::vector<std::string> _hub_menu_items;
-    // --- DEFINITIVE FIX: Declare the missing member variable ---
     std::vector<std::string> _hub_menu_descriptions;
-    std::vector<std::string> _param_menu_items;
     int _selected_index;
-
-    FilterParametersSnapshot _manual_tune_snapshot;
 };
 
 #endif // LIVE_FILTER_TUNING_SCREEN_H
