@@ -4,6 +4,7 @@
 #include "ProbeProfilingScreen.h"
 #include "ADS1118.h"
 #include <stdio.h>
+#include "ui/UIManager.h" // Include for UIRenderProps definition
 
 ProbeProfilingScreen::ProbeProfilingScreen() :
     _current_state(ProfilingState::SELECT_PROBE),

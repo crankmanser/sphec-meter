@@ -2,6 +2,7 @@
 // MODIFIED FILE
 
 #include "AutoTuningScreen.h"
+#include "ui/UIManager.h" // Include for UIRenderProps definition
 
 AutoTuningScreen::AutoTuningScreen() : 
     _progress_percent(0),

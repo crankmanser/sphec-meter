@@ -1,6 +1,3 @@
-// File Path: /src/Project_Manifest.md
-// MODIFIED FILE
-
 # SpHEC Meter Project Manifest
 
 This document tracks the development progress, current tasks, and future roadmap for the SpHEC Meter firmware.
@@ -335,15 +332,13 @@ This document tracks the development progress, current tasks, and future roadmap
 
 
 
+
 ## Current Task (What We Are Doing)
 
-* **Diagnose and Resolve Critical Memory Crash in `GuidedTuningEngine`.**
-    * **Goal:** To create a 100% stable and memory-safe implementation of the `GuidedTuningEngine`.
-    * **Problem:** The current implementation, which runs during the `AUTO_TUNING_ANALYSIS` state, causes a fatal crash (either heap corruption or stack overflow) in the `pBiosDataTask`.
-    * **Next Step:** A full architectural review of the `GuidedTuningEngine`'s memory usage patterns is required. The algorithm must be redesigned to be compatible with the memory constraints and real-time requirements of the ESP32 FreeRTOS environment. All further pBIOS development is blocked until this stability issue is resolved.
-
-
-
+* **Diagnose and Resolve Stateless Auto-Tuner.**
+    * **Goal:** To create a 100% stateful and iterative implementation of the `GuidedTuningEngine`.
+    * **Problem:** The current implementation produces the same results on every pass. It is not refining the tune as intended.
+    * **Next Step:** A full architectural review of the `GuidedTuningEngine`'s logic is required. The algorithm must be redesigned to correctly implement the "Iterative Refinement" strategy, where each pass analyzes the output of the *current* filter settings and proposes an improvement. All further pBIOS development is blocked until this issue is resolved.
 
 
 

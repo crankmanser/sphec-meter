@@ -2,6 +2,7 @@
 // NEW FILE
 
 #include "ShutdownScreen.h"
+#include "ui/UIManager.h" // Include for UIRenderProps definition
 
 ShutdownScreen::ShutdownScreen() : _selected_index(0) {
     _menu_items.push_back("Save & Shutdown");

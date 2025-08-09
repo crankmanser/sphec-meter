@@ -4,6 +4,7 @@
 #include "LiveVoltmeterScreen.h"
 #include "ADS1118.h" // For ADC channel definitions
 #include <stdio.h>   // For snprintf
+#include "ui/UIManager.h" // Include for UIRenderProps definition
 
 LiveVoltmeterScreen::LiveVoltmeterScreen() :
     _current_state(VoltmeterState::SELECT_SOURCE),

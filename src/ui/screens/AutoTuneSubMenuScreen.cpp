@@ -2,8 +2,11 @@
 // MODIFIED FILE
 
 #include "AutoTuneSubMenuScreen.h"
-// --- DEFINITIVE FIX: Use the correct relative path to the header ---
 #include "ui/StateManager.h" 
+#include "ui/UIManager.h" 
+#include "pBiosContext.h" // For access to the context "float"
+
+extern PBiosContext pBiosContext;
 
 AutoTuneSubMenuScreen::AutoTuneSubMenuScreen() : _selected_index(0) {
     _menu_items.push_back("Tuner Wizard");
@@ -28,7 +31,14 @@ void AutoTuneSubMenuScreen::handleInput(const InputEvent& event) {
         const std::string& selected_item = _menu_items[_selected_index];
         
         if (selected_item == "Tuner Wizard") {
-            if (_stateManager) _stateManager->changeState(ScreenState::AUTO_TUNING_ANALYSIS);
+            if (_stateManager && pBiosContext.selectedFilter) {
+                // --- DEFINITIVE FIX: Take a snapshot of current params for iterative refinement ---
+                pBiosContext.hf_params_snapshot = *pBiosContext.selectedFilter->getFilter(0);
+                pBiosContext.lf_params_snapshot = *pBiosContext.selectedFilter->getFilter(1);
+                
+                // --- DEFINITIVE FIX: Transition to the correct starting state for the new wizard ---
+                _stateManager->changeState(ScreenState::AUTO_TUNE_CHARACTERIZE_SIGNAL);
+            }
         }
     } else if (event.type == InputEventType::BTN_BACK_PRESS) {
         if (_stateManager) _stateManager->changeState(ScreenState::LIVE_FILTER_TUNING);

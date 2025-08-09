@@ -3,7 +3,8 @@
 
 #include "FilterSelectionScreen.h"
 #include "pBiosContext.h"      
-#include "ADS1118.h"           
+#include "ADS1118.h"
+#include "ui/UIManager.h" 
 
 FilterSelectionScreen::FilterSelectionScreen(PBiosContext* context) : 
     _context(context),
@@ -51,8 +52,8 @@ void FilterSelectionScreen::handleInput(const InputEvent& event) {
                     break;
             }
             
-            // --- MODIFIED: Transition to the new analysis screen ---
-            _stateManager->changeState(ScreenState::AUTO_TUNING_ANALYSIS);
+            // --- DEFINITIVE FIX: Transition to the correct starting state for the new wizard ---
+            _stateManager->changeState(ScreenState::LIVE_FILTER_TUNING);
         }
     } 
     else if (event.type == InputEventType::BTN_BACK_PRESS) {

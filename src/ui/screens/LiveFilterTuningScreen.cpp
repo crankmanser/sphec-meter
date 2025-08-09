@@ -11,6 +11,7 @@
 #include <Arduino.h>
 
 extern ConfigManager configManager;
+extern FilterManager phFilter, ecFilter;
 
 LiveFilterTuningScreen::LiveFilterTuningScreen(AdcManager* adcManager, PBiosContext* context, CalibrationManager* phCal, CalibrationManager* ecCal, TempManager* tempManager) :
     _adcManager(adcManager),
@@ -43,13 +44,12 @@ LiveFilterTuningScreen::LiveFilterTuningScreen(AdcManager* adcManager, PBiosCont
 
 void LiveFilterTuningScreen::onEnter(StateManager* stateManager) {
     Screen::onEnter(stateManager);
-    _is_in_manual_tune_mode = false; // Always start at the hub
+    _is_in_manual_tune_mode = false; 
     _selected_index = 0;
     _is_compare_mode_active = false;
 }
 
 void LiveFilterTuningScreen::handleInput(const InputEvent& event) {
-    // If we are in manual tune mode, delegate input to the edit screen
     if (_is_in_manual_tune_mode) {
         if (_stateManager) {
             Screen* editScreen = _stateManager->getScreen(ScreenState::PARAMETER_EDIT);
@@ -60,11 +60,33 @@ void LiveFilterTuningScreen::handleInput(const InputEvent& event) {
     }
 }
 
+/**
+ * @brief --- DEFINITIVE FIX: The main render function now correctly assembles the hub view. ---
+ * It calls a helper to get the base graph layout and then overwrites the necessary
+ * sections with the hub's specific content (help text and menu).
+ */
 void LiveFilterTuningScreen::getRenderProps(UIRenderProps* props_to_fill) {
     *props_to_fill = UIRenderProps();
-    // The workbench hub is now the only state this screen directly renders
-    getHubMenuRenderProps(props_to_fill);
+
+    // 1. Get the base layout with graphs and KPIs for all screens
+    getManualTuneRenderProps(props_to_fill);
+
+    // 2. Overwrite the TOP OLED's text with contextual help for the hub menu
+    if (_selected_index < _hub_menu_descriptions.size()) {
+        props_to_fill->oled_top_props.line1 = _hub_menu_descriptions[_selected_index];
+    }
+    
+    // 3. Overwrite the MIDDLE OLED with the hub menu
+    OledProps& mid_props = props_to_fill->oled_middle_props;
+    mid_props = OledProps(); // Clear any graph data from the middle
+    mid_props.menu_props.is_enabled = true;
+    mid_props.menu_props.items = _hub_menu_items;
+    mid_props.menu_props.selected_index = _selected_index;
+
+    // 4. Set the correct button prompts for the hub
+    props_to_fill->button_props.down_text = "Select";
 }
+
 
 void LiveFilterTuningScreen::update() {
     if (!_context || !_context->selectedFilter) return;
@@ -104,7 +126,6 @@ void LiveFilterTuningScreen::handleHubMenuInput(const InputEvent& event) {
         
         if (selected_item == "Auto Tune") { if (_stateManager) _stateManager->changeState(ScreenState::AUTO_TUNE_SUB_MENU); }
         else if (selected_item == "Manual Tune") {
-            // --- DEFINITIVE FIX: Transition to the dedicated parameter edit screen ---
             _is_in_manual_tune_mode = true;
             if (_stateManager) _stateManager->changeState(ScreenState::PARAMETER_EDIT);
         }
@@ -124,38 +145,14 @@ void LiveFilterTuningScreen::handleHubMenuInput(const InputEvent& event) {
 }
 
 /**
- * @brief --- DEFINITIVE FIX: Implements the standard block layout for the hub. ---
- * This function now correctly places contextual help on the top screen, the menu
- * in the middle, and breadcrumbs on the bottom, resolving all UI glitches.
+ * @brief This helper function populates the UIRenderProps with all the data
+ * needed to draw the graphs and their associated labels on the top and bottom screens.
+ * It is called by both the hub and the parameter edit screen.
  */
-void LiveFilterTuningScreen::getHubMenuRenderProps(UIRenderProps* props_to_fill) {
-    // Top OLED: Contextual Help
-    if (_selected_index < _hub_menu_descriptions.size()) {
-        props_to_fill->oled_top_props.line1 = _hub_menu_descriptions[_selected_index];
-    }
-
-    // Middle OLED: Hub Menu
-    OledProps& mid_props = props_to_fill->oled_middle_props;
-    mid_props.menu_props.is_enabled = true;
-    mid_props.menu_props.items = _hub_menu_items;
-    mid_props.menu_props.selected_index = _selected_index;
-
-    // Bottom OLED: Breadcrumbs & Status
-    props_to_fill->oled_bottom_props.line1 = "pBios > Tuning Workbench";
-    char cal_val_buf[20];
-    if (isnan(_calibrated_value)) { snprintf(cal_val_buf, sizeof(cal_val_buf), "Val: ---"); }
-    else if (_context->selectedFilter == &phFilter) { snprintf(cal_val_buf, sizeof(cal_val_buf), "pH: %.2f", _calibrated_value); }
-    else { snprintf(cal_val_buf, sizeof(cal_val_buf), "EC: %.0f uS", _calibrated_value); }
-    props_to_fill->oled_bottom_props.line2 = cal_val_buf;
-    
-    // Button Prompts
-    props_to_fill->button_props.down_text = "Select";
-}
-
-// --- DEFINITIVE FIX: This public method allows the ParameterEditScreen to get the graph data ---
 void LiveFilterTuningScreen::getManualTuneRenderProps(UIRenderProps* props_to_fill) {
     static char hf_top[40], hf_bl[10], hf_br[20], lf_top[40], lf_bl[10], lf_br[20], r_buf[10], f_buf[10];
     
+    // --- Top OLED: HF Graph and KPIs ---
     dtostrf(_hf_r_std, 4, 3, r_buf); dtostrf(_hf_f_std, 4, 3, f_buf);
     snprintf(hf_top, sizeof(hf_top), "R:%s F:%s", r_buf, f_buf);
     snprintf(hf_bl, sizeof(hf_bl), "HF"); snprintf(hf_br, sizeof(hf_br), "Stab:%d%%", _hf_stab_percent);
@@ -166,18 +163,21 @@ void LiveFilterTuningScreen::getManualTuneRenderProps(UIRenderProps* props_to_fi
     props_to_fill->oled_top_props.graph_props.bottom_left_label = hf_bl;
     props_to_fill->oled_top_props.graph_props.bottom_right_label = hf_br;
     
-    dtostrf(_lf_r_std, 4, 3, f_buf); dtostrf(_lf_f_std, 4, 3, r_buf);
-    snprintf(lf_top, sizeof(lf_top), "R:%s F:%s", f_buf, r_buf);
-    snprintf(lf_bl, sizeof(lf_bl), "LF"); snprintf(lf_br, sizeof(lf_br), "Stab:%d%%", _lf_stab_percent);
+    // --- Bottom OLED: LF Graph, KPIs, and Calibrated Value ---
+    dtostrf(_lf_r_std, 4, 3, r_buf); dtostrf(_lf_f_std, 4, 3, f_buf);
+    snprintf(lf_top, sizeof(lf_top), "R:%s F:%s", r_buf, f_buf);
+    snprintf(lf_br, sizeof(lf_br), "Stab:%d%%", _lf_stab_percent);
     props_to_fill->oled_bottom_props.graph_props.is_enabled = true;
     props_to_fill->oled_bottom_props.graph_props.pre_filter_data = _hf_filtered_buffer;
     props_to_fill->oled_bottom_props.graph_props.post_filter_data = _lf_filtered_buffer;
     props_to_fill->oled_bottom_props.graph_props.ghost_filter_data = _is_compare_mode_active ? _ghost_lf_filtered_buffer : nullptr;
     props_to_fill->oled_bottom_props.graph_props.top_left_label = lf_top;
-    props_to_fill->oled_bottom_props.graph_props.bottom_left_label = lf_bl;
+    
+    char cal_val_buf[20];
+    if (isnan(_calibrated_value)) { snprintf(cal_val_buf, sizeof(cal_val_buf), "Val: ---"); }
+    else if (_context->selectedFilter == &phFilter) { snprintf(cal_val_buf, sizeof(cal_val_buf), "pH: %.2f", _calibrated_value); }
+    else { snprintf(cal_val_buf, sizeof(cal_val_buf), "EC: %.0f uS", _calibrated_value); }
+    props_to_fill->oled_bottom_props.graph_props.bottom_left_label = cal_val_buf;
+    
     props_to_fill->oled_bottom_props.graph_props.bottom_right_label = lf_br;
-}
-
-void LiveFilterTuningScreen::runCompareModeSimulation() {
-    // This logic is now handled inside the ParameterEditScreen
 }

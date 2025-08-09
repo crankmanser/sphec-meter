@@ -3,6 +3,7 @@
 
 #include "HardwareTestScreen.h"
 #include <string>
+#include "ui/UIManager.h" // Include for UIRenderProps definition
 
 HardwareTestScreen::HardwareTestScreen() {}
 

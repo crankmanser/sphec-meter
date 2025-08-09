@@ -6,6 +6,7 @@
 #include "AdcManager.h"
 #include "ADS1118.h"
 #include <stdio.h>   
+#include "ui/UIManager.h" // Include for UIRenderProps definition
 
 // ... (constructor and other methods are unchanged) ...
 NoiseAnalysisScreen::NoiseAnalysisScreen(PBiosContext* context, AdcManager* adcManager) :

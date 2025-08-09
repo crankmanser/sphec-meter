@@ -2,6 +2,7 @@
 // NEW FILE
 
 #include "MainMenuScreen.h"
+#include "ui/UIManager.h" // Include for UIRenderProps definition
 
 MainMenuScreen::MainMenuScreen() : _selected_index(0) {
     _menu_items.push_back("Measure");

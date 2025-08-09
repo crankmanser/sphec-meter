@@ -14,7 +14,7 @@ struct OledProps {
     std::string line1;
     std::string line2;
     std::string line3;
-    std::string line4; 
+    std::string line4;
     MenuBlockProps menu_props;
     GraphBlockProps graph_props;
     ProgressBarProps progress_bar_props;
@@ -33,7 +33,6 @@ public:
     void render(const UIRenderProps& props);
 
 private:
-    // --- FIX: This declaration is now correct and matches the definition ---
     void drawOledContent(Adafruit_SSD1306* display, const OledProps& props);
     DisplayManager& _displayManager;
 };

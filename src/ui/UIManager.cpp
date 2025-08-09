@@ -3,6 +3,7 @@
 
 #include "UIManager.h"
 #include "DebugConfig.h"
+#include "ProjectConfig.h" // Include for OLED TCA channel definitions
 
 UIManager::UIManager(DisplayManager& displayManager) : _displayManager(displayManager) {}
 

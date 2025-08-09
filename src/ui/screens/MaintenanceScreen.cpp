@@ -2,6 +2,7 @@
 // NEW FILE
 
 #include "MaintenanceScreen.h"
+#include "ui/UIManager.h" // Include for UIRenderProps definition
 
 MaintenanceScreen::MaintenanceScreen() : _selected_index(0) {
     _menu_items.push_back("Probe Profiling");

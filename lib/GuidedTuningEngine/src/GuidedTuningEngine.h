@@ -7,35 +7,36 @@
 #include "FilterManager.h"
 #include "AdcManager.h"
 #include "ui/screens/AutoTuningScreen.h"
+#include "pBiosContext.h" // For the context "float"
 #include <arduinoFFT.h>
 
 #define GT_SAMPLE_COUNT 512
 
+/**
+ * @class GuidedTuningEngine
+ * @brief --- DEFINITIVE REFACTOR: The engine is now a collection of non-blocking, discrete functions. ---
+ * The monolithic `proposeSettings` function has been replaced by a suite of smaller
+ * methods that are called sequentially by the pBiosDataTask's new state machine.
+ * This resolves the watchdog timer crash (Heisenbug) and enables a true, multi-stage
+ * guided tuning wizard.
+ */
 class GuidedTuningEngine {
 public:
     GuidedTuningEngine();
     ~GuidedTuningEngine();
 
-    bool proposeSettings(FilterManager* targetFilter, AdcManager* adcManager, uint8_t adcIndex, uint8_t adcInput, AutoTuningScreen* progressScreen);
+    // --- Wizard Stage Functions ---
+    bool captureSignal(PBiosContext& context, AdcManager& adcManager, AutoTuningScreen& progressScreen);
+    bool characterizeSignal(PBiosContext& context, AutoTuningScreen& progressScreen);
+    bool optimizeHfStage(PBiosContext& context, AutoTuningScreen& progressScreen);
+    bool optimizeLfStage(PBiosContext& context, AutoTuningScreen& progressScreen);
+    void applyResults(PBiosContext& context);
 
 private:
-    // Core pipeline functions
-    bool captureSignal(AdcManager* adcManager, uint8_t adcIndex, uint8_t adcInput);
-    void analyzeSignal();
-    void deriveHfParameters(PI_Filter* targetHfFilter);
-    void deriveLfParameters(PI_Filter* hfFilter, PI_Filter* targetLfFilter);
-    
-    // Member variables for signal data
-    double _rawSamples[GT_SAMPLE_COUNT];
-    
     // FFT-related members
     arduinoFFT* _FFT; 
     double* _fftReal;
     double* _fftImag;
-    
-    // Signal characteristics
-    double _rawStdDev;
-    double _peakFrequency;
 };
 
 #endif // GUIDED_TUNING_ENGINE_H

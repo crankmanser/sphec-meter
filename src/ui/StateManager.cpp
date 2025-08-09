@@ -2,6 +2,7 @@
 // MODIFIED FILE
 
 #include "StateManager.h"
+#include "UIManager.h" // Include UIManager.h for the full definition of UIRenderProps
 
 StateManager::StateManager() :
     _activeScreen(nullptr),

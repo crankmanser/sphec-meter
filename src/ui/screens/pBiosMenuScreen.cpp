@@ -4,6 +4,7 @@
 #include "pBiosMenuScreen.h"
 #include "../StateManager.h" // For ScreenState enum
 #include <Arduino.h>
+#include "ui/UIManager.h" // Include for UIRenderProps definition
 
 pBiosMenuScreen::pBiosMenuScreen() : _selected_index(0) {
     _menu_items.push_back("Noise Analysis");

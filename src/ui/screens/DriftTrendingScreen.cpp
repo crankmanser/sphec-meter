@@ -7,6 +7,7 @@
 #include "ADS1118.h"
 #include <stdio.h>
 #include <algorithm>
+#include "ui/UIManager.h" // Include for UIRenderProps definition
 
 // ... (constructor and all other existing methods are unchanged) ...
 DriftTrendingScreen::DriftTrendingScreen(PBiosContext* context, AdcManager* adcManager) :

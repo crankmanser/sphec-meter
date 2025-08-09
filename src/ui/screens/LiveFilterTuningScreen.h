@@ -15,11 +15,6 @@ class CalibrationManager;
 class TempManager;
 struct PBiosContext;
 
-struct FilterParametersSnapshot {
-    PI_Filter hf_params;
-    PI_Filter lf_params;
-};
-
 class LiveFilterTuningScreen : public Screen {
 public:
     LiveFilterTuningScreen(AdcManager* adcManager, PBiosContext* context, CalibrationManager* phCal, CalibrationManager* ecCal, TempManager* tempManager);
@@ -29,27 +24,21 @@ public:
     void getRenderProps(UIRenderProps* props_to_fill) override;
     void update();
 
-    // --- NEW: Public method for the ParameterEditScreen to get graph data ---
     void getManualTuneRenderProps(UIRenderProps* props_to_fill);
 
 private:
-    // --- DEFINITIVE REFACTOR: The screen's state is simplified ---
-    // The screen is either showing the hub menu or it's in the manual tuning state.
+    // --- DEFINITIVE FIX: Restore the state variable for input delegation ---
     bool _is_in_manual_tune_mode;
 
     void handleHubMenuInput(const InputEvent& event);
     void getHubMenuRenderProps(UIRenderProps* props_to_fill);
     
-    // Helper function for the Compare Mode simulation
-    void runCompareModeSimulation();
-
     AdcManager* _adcManager;
     PBiosContext* _context;
     CalibrationManager* _phCalManager;
     CalibrationManager* _ecCalManager;
     TempManager* _tempManager;
 
-    // Data for live graphs, now public for the edit screen
     double _hf_raw_buffer[GRAPH_DATA_POINTS];
     double _hf_filtered_buffer[GRAPH_DATA_POINTS];
     double _lf_filtered_buffer[GRAPH_DATA_POINTS];
@@ -62,6 +51,8 @@ private:
     std::vector<std::string> _hub_menu_items;
     std::vector<std::string> _hub_menu_descriptions;
     int _selected_index;
+
+    FilterManager _saved_tune_snapshot;
 };
 
 #endif // LIVE_FILTER_TUNING_SCREEN_H
