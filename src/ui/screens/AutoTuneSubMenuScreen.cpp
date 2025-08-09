@@ -4,7 +4,7 @@
 #include "AutoTuneSubMenuScreen.h"
 #include "ui/StateManager.h" 
 #include "ui/UIManager.h" 
-#include "pBiosContext.h" // For access to the context "float"
+#include "pBiosContext.h" 
 
 extern PBiosContext pBiosContext;
 
@@ -32,12 +32,13 @@ void AutoTuneSubMenuScreen::handleInput(const InputEvent& event) {
         
         if (selected_item == "Tuner Wizard") {
             if (_stateManager && pBiosContext.selectedFilter) {
-                // --- DEFINITIVE FIX: Take a snapshot of current params for iterative refinement ---
+                // The snapshot is no longer needed for the engine, but is good practice
+                // for a potential "cancel" feature in the future.
                 pBiosContext.hf_params_snapshot = *pBiosContext.selectedFilter->getFilter(0);
                 pBiosContext.lf_params_snapshot = *pBiosContext.selectedFilter->getFilter(1);
                 
-                // --- DEFINITIVE FIX: Transition to the correct starting state for the new wizard ---
-                _stateManager->changeState(ScreenState::AUTO_TUNE_CHARACTERIZE_SIGNAL);
+                // --- DEFINITIVE FIX: Transition to the single running state. ---
+                _stateManager->changeState(ScreenState::AUTO_TUNE_RUNNING);
             }
         }
     } else if (event.type == InputEventType::BTN_BACK_PRESS) {

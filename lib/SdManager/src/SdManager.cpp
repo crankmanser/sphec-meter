@@ -33,28 +33,51 @@ void SdManager::deselectOtherSlaves() {
     digitalWrite(_adc2CsPin, HIGH);
 }
 
-
-/**
- * @brief --- DEFINITIVE FIX: Creates a directory using the correct SdFat method. ---
- * This function now correctly opens the parent directory as an FsFile and then
- * calls the mkdir() method on that file object, which is the proper procedure
- * for the SdFat library. This resolves the file persistence issue.
- */
 bool SdManager::mkdir(const char* path) {
     if (!_isInitialized || _spiMutex == nullptr) return false;
     
     bool success = false;
     if (xSemaphoreTake(_spiMutex, portMAX_DELAY) == pdTRUE) {
         deselectOtherSlaves();
-        
-        // The SdFat library requires creating a directory relative to an
-        // already open directory file object. For an absolute path, we
-        // can just use the 'sd' object itself as the base.
         success = sd.mkdir(path);
-        
         xSemaphoreGive(_spiMutex);
     }
     return success;
+}
+
+FsFile SdManager::open(const char* path, oflag_t oflag) {
+    if (!_isInitialized) return FsFile();
+    deselectOtherSlaves();
+    return sd.open(path, oflag);
+}
+
+bool SdManager::remove(const char* path) {
+    if (!_isInitialized || _spiMutex == nullptr) return false;
+    
+    bool success = false;
+    if (xSemaphoreTake(_spiMutex, portMAX_DELAY) == pdTRUE) {
+        deselectOtherSlaves();
+        success = sd.remove(path);
+        xSemaphoreGive(_spiMutex);
+    }
+    return success;
+}
+
+/**
+ * @brief --- NEW: Implementation for takeMutex. ---
+ */
+bool SdManager::takeMutex() {
+    if (!_spiMutex) return false;
+    return xSemaphoreTake(_spiMutex, portMAX_DELAY) == pdTRUE;
+}
+
+/**
+ * @brief --- NEW: Implementation for giveMutex. ---
+ */
+void SdManager::giveMutex() {
+    if (_spiMutex) {
+        xSemaphoreGive(_spiMutex);
+    }
 }
 
 

@@ -4,14 +4,19 @@ This document tracks the development progress, current tasks, and future roadmap
 
 ## Changelog (What Was Done)
 
+* **v3.1.3 (2025-08-10):**
+    * **Status:** Planning Complete.
+    * **Milestone:** The auto-tuner algorithm has been definitively re-architected to be **stateful, intelligent, and holistic**. All previous flawed implementations have been scrubbed in favor of a new, robust design.
+    * **Design (Tuner Intelligence):** Architected the new **"Holistic, Characterization-Driven Iterative Refinement"** algorithm. This definitive design resolves all previous issues of ineffectiveness and instability.
+        * **Stateful Refinement:** The algorithm is now truly stateful. The first pass makes an aggressive adjustment from the default settings, and subsequent passes make smaller, more precise refinements, allowing the tune to converge on an optimal state.
+        * **Holistic HF Heuristic:** The HF "Spike Scraper" is now fully data-driven. It calculates its ideal `settleThreshold` using a weighted average of the signal's `raw_std_dev` and `pk_pk_amplitude`, eliminating all hardcoded values. The `trackResponse` and `lockSmoothing` parameters are now intelligently and inversely linked.
+        * **Specialized LF Heuristic:** The LF "Smoothing Squeegee" now uses its own specialized algorithm. It correctly analyzes the **peak-to-peak amplitude** of the intermediate "wobble" (the output of the HF filter) to derive its `settleThreshold`, ensuring it targets the correct noise characteristic. Its response is now proportional, eliminating the "hunting" behavior of previous versions.
+    * **Design (Bus Stability):** Re-affirmed the "SPI Bus Priming" principle as the solution to the SD card file I/O errors that were occurring after long ADC capture sessions.
+
 * **v3.1.2 (2025-08-08):**
-    * **Status:** Complete.
-    * **Milestone:** The firmware is now **architecturally sound and stable**. All blocking issues related to the pBIOS implementation have been resolved.
-    * **Fix (Critical):** Performed a definitive, multi-system refactor to correctly implement the "Tuning Workbench" architecture, resolving all known bugs.
-        * **Boot Failure:** Re-architected `main.cpp` to use a simple, robust `digitalRead()` at power-on to determine boot mode, preventing race conditions.
-        * **UI Glitches:** Refactored all pBIOS screens to adhere to the standard block layout (Help/Graph on Top, Content in Middle, Breadcrumbs/Status on Bottom). Created a dedicated `ParameterEditScreen` to cleanly separate manual tuning from the `LiveFilterTuningScreen` hub, fixing all screen skipping and layout bugs.
-        * **System Stability:** Correctly implemented the backend logic for all diagnostic tools (`Noise Analysis`, `Drift Trending`) in the `pBiosDataTask`. The computationally expensive `GuidedTuningEngine` is now only called from the correct UI state, eliminating all watchdog crashes and "Heisenbugs".
-    * **Validation:** The foundational pBIOS architecture is now stable and correctly implemented. The project is unblocked and ready for the implementation of the advanced "Tuning Workbench" features (Manual Tune, Compare Mode, etc.).
+    * **Status:** In Progress - BLOCKED.
+    * **Issue (Critical):** A persistent SD card file creation error (`Could not create capture file`) blocked all testing of the auto-tuner's LF stage. The issue was diagnosed as an SPI bus state conflict.
+    * **Issue (Algorithm):** The "Characterization-Driven" heuristic, while stateful, was not intelligent. The HF stage relied on hardcoded values, and the LF stage used a simplistic, unstable algorithm that caused its performance to "hunt" instead of converging. A complete redesign was deemed necessary.
 
 * **v3.1.1 (2025-08-08):**
     * **Status:** Failed.
@@ -335,10 +340,11 @@ This document tracks the development progress, current tasks, and future roadmap
 
 ## Current Task (What We Are Doing)
 
-* **Diagnose and Resolve Stateless Auto-Tuner.**
-    * **Goal:** To create a 100% stateful and iterative implementation of the `GuidedTuningEngine`.
-    * **Problem:** The current implementation produces the same results on every pass. It is not refining the tune as intended.
-    * **Next Step:** A full architectural review of the `GuidedTuningEngine`'s logic is required. The algorithm must be redesigned to correctly implement the "Iterative Refinement" strategy, where each pass analyzes the output of the *current* filter settings and proposes an improvement. All further pBIOS development is blocked until this issue is resolved.
+* **Implement and Validate the "Holistic, Characterization-Driven Iterative Refinement" Algorithm.**
+    * **Goal:** To translate the new, definitive algorithm design into code and validate its performance on hardware.
+    * **Next Step:** Generate the new `GuidedTuningEngine.cpp` that implements the intelligent, stateful heuristics for both the HF and LF filter stages. All other tasks are blocked until the auto-tuner is fully functional and effective.
+
+
 
 
 

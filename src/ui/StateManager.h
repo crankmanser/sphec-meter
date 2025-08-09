@@ -11,9 +11,9 @@
 class StateManager;
 
 /**
- * @brief --- DEFINITIVE REFACTOR: Add new states for the multi-stage tuning wizard. ---
- * These states allow the pBiosDataTask to run the auto-tuner as a non-blocking
- * state machine, solving the watchdog timer crashes (Heisenbug).
+ * @brief --- DEFINITIVE REFACTOR: Simplifies the wizard states. ---
+ * The complex multi-stage states are replaced by a single `AUTO_TUNE_RUNNING`
+ * state to reflect the new, monolithic `proposeSettings` function.
  */
 enum class ScreenState {
     NONE,
@@ -25,11 +25,8 @@ enum class ScreenState {
     LIVE_FILTER_TUNING,
     PARAMETER_EDIT,
     AUTO_TUNE_SUB_MENU,
-    // --- Wizard States ---
-    AUTO_TUNE_CHARACTERIZE_SIGNAL,
-    AUTO_TUNE_OPTIMIZE_HF,
-    AUTO_TUNE_OPTIMIZE_LF,
-    AUTO_TUNE_FINALIZE,
+    // --- Wizard State ---
+    AUTO_TUNE_RUNNING, // Simplified from four states to one
     // --- Standalone Diagnostic States ---
     NOISE_ANALYSIS,
     DRIFT_TRENDING,

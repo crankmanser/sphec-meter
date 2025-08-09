@@ -20,7 +20,7 @@
 #define DEBUG_SPI            0 // For low-level SPI bus transactions
 #define DEBUG_I2C            0 // For low-level I2C bus transactions
 #define DEBUG_FILTER         1 // For the PI Filter's state and calculations
-#define DEBUG_NOISE_ANALYSIS 1 // For the Noise Analysis Engine results
+#define DEBUG_NOISE_ANALYSIS 0 // For the Noise Analysis Engine results
 #define DEBUG_POWER          0 // For the PowerMonitor cabinet
 #define DEBUG_STORAGE        1 // For the StorageEngine and file operations
 #define DEBUG_AUTO_TUNE      1 // For the GuidedTuningEngine
@@ -46,13 +46,16 @@
     #define LOG_STORAGE(x, ...)
 #endif
 
-// --- DEFINITIVE FIX: Ensures that when debugging is off, the macro compiles to nothing. ---
-// This prevents the Serial.printf call from blocking execution when the serial
-// monitor is disconnected, which was the root cause of the "Heisenbug" crash.
+/**
+ * @brief --- DEFINITIVE FIX: Ensures the macro compiles to nothing when debugging is off. ---
+ * This prevents the Serial.printf call from blocking execution when the serial
+ * monitor is disconnected, which is the root cause of the "Heisenbug" crash.
+ *
+ */
 #if DEBUG_AUTO_TUNE == 1
     #define LOG_AUTO_TUNE(x, ...) Serial.printf("[AUTOTUNE] " x "\n", ##__VA_ARGS__)
 #else
-    #define LOG_AUTO_TUNE(x, ...)
+    #define LOG_AUTO_TUNE(x, ...) // This line is critical.
 #endif
 
 

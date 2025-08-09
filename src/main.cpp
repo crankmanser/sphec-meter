@@ -134,12 +134,9 @@ void uiTask(void* pvParameters) {
     if (mode == BootMode::PBIOS) {
         stateManager->addScreen(ScreenState::PBIOS_MENU, new pBiosMenuScreen());
         stateManager->addScreen(ScreenState::FILTER_SELECTION, new FilterSelectionScreen(&pBiosContext));
-        // --- DEFINITIVE FIX: Register the same UI screen for all wizard states ---
-        AutoTuningScreen* tuneScreen = new AutoTuningScreen();
-        stateManager->addScreen(ScreenState::AUTO_TUNE_CHARACTERIZE_SIGNAL, tuneScreen);
-        stateManager->addScreen(ScreenState::AUTO_TUNE_OPTIMIZE_HF, tuneScreen);
-        stateManager->addScreen(ScreenState::AUTO_TUNE_OPTIMIZE_LF, tuneScreen);
-        stateManager->addScreen(ScreenState::AUTO_TUNE_FINALIZE, tuneScreen);
+        
+        // --- DEFINITIVE FIX: Register the UI screen for the single running state ---
+        stateManager->addScreen(ScreenState::AUTO_TUNE_RUNNING, new AutoTuningScreen());
 
         stateManager->addScreen(ScreenState::LIVE_FILTER_TUNING, new LiveFilterTuningScreen(&adcManager, &pBiosContext, &phCalManager, &ecCalManager, &tempManager));
         stateManager->addScreen(ScreenState::PARAMETER_EDIT, new ParameterEditScreen(&pBiosContext));
@@ -187,11 +184,9 @@ void uiTask(void* pvParameters) {
 }
 
 /**
- * @brief --- DEFINITIVE REFACTOR: The data task is now a state machine for the tuning wizard. ---
- * This function no longer contains a single, monolithic block for auto-tuning. It now
- * uses a switch statement to execute discrete, non-blocking stages of the tuning
- * process, using the pBiosContext as the "float" to pass data between stages.
- * This is the definitive fix for the watchdog crash (Heisenbug).
+ * @brief --- DEFINITIVE REFACTOR: The data task uses the simplified state machine. ---
+ * It now calls the single, powerful `proposeSettings` function, which contains all
+ * the necessary logic, ensuring a stable and effective tuning process.
  */
 void dataTask(void* pvParameters) {
     BootMode mode = static_cast<BootMode>(reinterpret_cast<intptr_t>(pvParameters));
@@ -200,40 +195,22 @@ void dataTask(void* pvParameters) {
     for (;;) {
         if (!stateManager) { vTaskDelay(pdMS_TO_TICKS(100)); continue; }
         ScreenState currentState = stateManager->getActiveScreenState();
-        AutoTuningScreen* tuneScreen = static_cast<AutoTuningScreen*>(stateManager->getScreen(ScreenState::AUTO_TUNE_CHARACTERIZE_SIGNAL));
-
+        
         switch (currentState) {
-            case ScreenState::AUTO_TUNE_CHARACTERIZE_SIGNAL:
+            case ScreenState::AUTO_TUNE_RUNNING: {
+                AutoTuningScreen* tuneScreen = static_cast<AutoTuningScreen*>(stateManager->getScreen(ScreenState::AUTO_TUNE_RUNNING));
                 if (tuneScreen && pBiosContext.selectedFilter) {
-                    guidedTuningEngine.captureSignal(pBiosContext, adcManager, *tuneScreen);
-                    guidedTuningEngine.characterizeSignal(pBiosContext, *tuneScreen);
-                    stateManager->changeState(ScreenState::AUTO_TUNE_OPTIMIZE_HF);
-                }
-                break;
-
-            case ScreenState::AUTO_TUNE_OPTIMIZE_HF:
-                if (tuneScreen && pBiosContext.selectedFilter) {
-                    guidedTuningEngine.optimizeHfStage(pBiosContext, *tuneScreen);
-                    stateManager->changeState(ScreenState::AUTO_TUNE_OPTIMIZE_LF);
-                }
-                break;
-
-            case ScreenState::AUTO_TUNE_OPTIMIZE_LF:
-                if (tuneScreen && pBiosContext.selectedFilter) {
-                    guidedTuningEngine.optimizeLfStage(pBiosContext, *tuneScreen);
-                    stateManager->changeState(ScreenState::AUTO_TUNE_FINALIZE);
-                }
-                break;
-            
-            case ScreenState::AUTO_TUNE_FINALIZE:
-                if (pBiosContext.selectedFilter) {
-                    guidedTuningEngine.applyResults(pBiosContext);
-                    configManager.saveFilterSettings(*pBiosContext.selectedFilter, pBiosContext.selectedFilterName.c_str(), false);
-                    configManager.saveFilterSettings(*pBiosContext.selectedFilter, pBiosContext.selectedFilterName.c_str(), true);
+                    // --- DEFINITIVE FIX: Pass the StateManager pointer. ---
+                    if (guidedTuningEngine.proposeSettings(pBiosContext, adcManager, sdManager, stateManager, *tuneScreen)) {
+                        configManager.saveFilterSettings(*pBiosContext.selectedFilter, pBiosContext.selectedFilterName.c_str(), false);
+                    }
+                    // --- DEFINITIVE FIX: Use the correct variable name. ---
+                    tuneScreen->setProgress(100, "Finalizing...");
                     vTaskDelay(pdMS_TO_TICKS(500)); 
                     stateManager->changeState(ScreenState::LIVE_FILTER_TUNING);
                 }
                 break;
+            }
 
             case ScreenState::LIVE_FILTER_TUNING:
             case ScreenState::PARAMETER_EDIT:
@@ -245,6 +222,10 @@ void dataTask(void* pvParameters) {
             
              case ScreenState::NOISE_ANALYSIS:
                 // ... (other diagnostic tasks remain unchanged) ...
+                break;
+            
+            default:
+                // No data processing needed for other states
                 break;
         }
         

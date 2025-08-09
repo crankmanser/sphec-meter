@@ -33,6 +33,13 @@ struct PBiosContext {
     // The results of the signal characterization.
     double raw_std_dev = 0.0;
     double peak_frequency = 0.0;
+    
+    /**
+     * @brief --- NEW: The peak-to-peak amplitude of the signal. ---
+     * This is a key metric used by the new "Characterization-Driven" heuristic
+     * to determine the overall power and nature of the noise.
+     */
+    double pk_pk_amplitude = 0.0;
 };
 
 extern FilterManager phFilter;

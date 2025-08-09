@@ -70,11 +70,17 @@ The system uses a dual-core FreeRTOS architecture to ensure UI responsiveness an
 
 * **Architecture:** A dedicated, dual-core RTOS system that provides a powerful interface for diagnostics and tuning. It is designed to be lean and stable, initializing only the hardware essential for its diagnostic tasks.
 
-* **"Guided Tuning" Workflow:** The "Live Filter Tuning" feature implements a sophisticated but stable guided tuning process:
+* **"Holistic, Characterization-Driven Iterative Refinement" Algorithm:** The "Live Filter Tuning" feature implements a sophisticated and stable guided tuning process. This definitive algorithm is designed to be both intelligent and stateful.
     1.  **Entry Point:** When the user enters the `LiveFilterTuningScreen`, the `pBiosDataTask` triggers the `GuidedTuningEngine`.
-    2.  **Heuristic Analysis:** The engine uses a data-driven, heuristic algorithm (combining Statistical and FFT analysis) to measure the noise characteristics of the signal.
-    3.  **Propose Baseline:** Based on the analysis, it calculates a complete set of recommended starting parameters for both the specialized HF and LF filter stages.
-    4.  **User Fine-Tuning:** These parameters are automatically loaded, and the user is presented with the live graphs, which are already running with this intelligent baseline. The user then performs the final fine-tuning and can permanently save their setpoints.
+    2.  **Signal Characterization**: The engine first performs a deep, multi-sample analysis of the raw signal to build a high-confidence "noise fingerprint," measuring key metrics like Raw Standard Deviation (`R_std`), Peak-to-Peak Amplitude, and Peak Frequency (FFT).
+    3.  **Calculate Ideal Target**: Using this rich characterization, the engine employs a set of specialized, holistic heuristics to calculate an **"ideal" target tune**.
+        * **HF "Spike Scraper" Heuristic**: The ideal HF parameters are calculated dynamically. The `settleThreshold` is derived from a weighted average of `R_std` and amplitude, while `trackResponse` and `lockSmoothing` are inversely linked based on the noise frequency.
+        * **LF "Smoothing Squeegee" Heuristic**: A separate heuristic is used for the LF stage. It analyzes a simulation of the HF filter's output, measuring the amplitude of the remaining "wobble" to derive a proportional `settleThreshold` and a stable, aggressive set of smoothing parameters.
+    4.  **Iterative Refinement**: The engine does **not** apply this ideal tune directly. Instead, it adjusts the current, live filter parameters a fraction of the way towards the ideal target. This makes the process stateful: the first pass makes an aggressive jump, and subsequent passes perform smaller, more precise refinements, allowing the tune to converge on the optimal state.
+    5.  **User Fine-Tuning**: The user is presented with the live graphs, which are running with this new, refined setpoint. They can then run the tuner again for further refinement or switch to manual tuning.
+
+* **Implementation Note:** All long-duration or computationally intensive operations (like the multi-sample capture and FFT analysis) are performed in the `pBiosDataTask`. The implementation must include `vTaskDelay` yields to remain RTOS-friendly and prevent watchdog timer crashes. All interactions with the shared SPI bus (ADC and SD Card) must be protected by a mutex and adhere to the "bus priming" hardware constraint.
+
     * **Implementation Note:** The `GuidedTuningEngine`'s analysis and parameter derivation logic is computationally and memory-intensive. Initial implementations have led to critical heap corruption and stack overflow errors on the ESP32. The final implementation **must** be carefully designed to be RTOS-friendly. It must avoid large local variable allocations on the task stack and minimize or eliminate rapid memory allocation/deallocation patterns on the heap to ensure system stability.
 
 
