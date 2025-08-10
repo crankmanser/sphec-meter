@@ -13,7 +13,8 @@
 #include <vector>
 #include <arduinoFFT.h>
 
-#define GT_SAMPLE_COUNT 512
+// --- DEFINITIVE FIX: Reduced sample count for safe RAM-based capture ---
+#define GT_SAMPLE_COUNT 256 // Approx. 2KB per capture, well within safe RAM limits
 
 class GuidedTuningEngine {
 public:
@@ -23,14 +24,11 @@ public:
     bool proposeSettings(PBiosContext& context, AdcManager& adcManager, SdManager& sdManager, StateManager* stateManager, AutoTuningScreen& progressScreen);
 
 private:
-    // Internal stages of the heuristic algorithm
+    // --- DEFINITIVE REFACTOR: Internal stages are now RAM-based ---
     bool captureSignal(PBiosContext& context, AdcManager& adcManager, AutoTuningScreen& progressScreen);
-    bool captureLongSignalForLF(PBiosContext& context, AdcManager& adcManager, SdManager& sdManager, AutoTuningScreen& progressScreen, const char* filepath);
     void analyzeSignal(PBiosContext& context, const std::vector<double>& signal_to_analyze);
     void deriveHfParameters(PBiosContext& context);
-
-    // --- DEFINITIVE REFACTOR: Simplified signature ---
-    void deriveLfParameters(PBiosContext& context, AdcManager& adcManager, SdManager& sdManager, StateManager* stateManager);
+    void deriveLfParameters(PBiosContext& context); // LF stage no longer needs extra dependencies
     
     void applyRefinement(PI_Filter* currentFilter, const PI_Filter& idealParams);
 

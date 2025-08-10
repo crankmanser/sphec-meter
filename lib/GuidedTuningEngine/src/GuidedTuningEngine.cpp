@@ -10,108 +10,98 @@
 #include "freertos/task.h"     
 
 const float TUNING_LEARNING_RATE = 0.4f;
-const char* LF_CAPTURE_FILE_PATH = "/config/%s_capture.bin"; 
 
-// ... (map_double, constructor, destructor, proposeSettings, captureSignal, analyzeSignal, and deriveHfParameters are unchanged) ...
+// Helper function for mapping values (used in heuristics)
 double map_double(double x, double in_min, double in_max, double out_min, double out_max) {
     if (in_max - in_min == 0) return out_min;
     return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
 }
 
 GuidedTuningEngine::GuidedTuningEngine() {
+    // Constructor allocates memory for FFT on the heap
     _fftReal = new double[GT_SAMPLE_COUNT];
     _fftImag = new double[GT_SAMPLE_COUNT];
-    _FFT = new arduinoFFT(_fftReal, _fftImag, GT_SAMPLE_COUNT, 1000.0);
+    _FFT = new arduinoFFT(_fftReal, _fftImag, GT_SAMPLE_COUNT, 1000.0); // Assuming 1kHz effective sample rate
 }
 
 GuidedTuningEngine::~GuidedTuningEngine() {
+    // Destructor safely frees the heap-allocated memory
     delete _FFT;
     delete[] _fftReal;
     delete[] _fftImag;
 }
 
+/**
+ * @brief --- DEFINITIVE REFACTOR: Implements the full "Statistical Snapshot" algorithm ---
+ * This is the master function that orchestrates the new, robust, RAM-based tuning process.
+ */
 bool GuidedTuningEngine::proposeSettings(PBiosContext& context, AdcManager& adcManager, SdManager& sdManager, StateManager* stateManager, AutoTuningScreen& progressScreen) {
     if (!context.selectedFilter) return false;
 
+    // --- Stage 1: Multi-Pass RAM Capture & Averaging ---
     if (!captureSignal(context, adcManager, progressScreen)) {
         LOG_AUTO_TUNE("Failed to capture signal.");
         return false;
     }
 
-    progressScreen.setProgress(30, "Analyzing HF Signal...");
+    // --- Stage 2: Signal Analysis ---
+    progressScreen.setProgress(30, "Analyzing Noise Fingerprint...");
     analyzeSignal(context, context.captured_samples);
     
-    progressScreen.setProgress(40, "Optimizing HF Stage...");
+    // --- Stage 3: HF Optimization ---
+    progressScreen.setProgress(50, "Optimizing HF Stage...");
     deriveHfParameters(context);
 
-    progressScreen.setProgress(50, "Optimizing LF Stage...");
-    deriveLfParameters(context, adcManager, sdManager, stateManager);
+    // --- Stage 4: LF Optimization ---
+    progressScreen.setProgress(70, "Optimizing LF Stage...");
+    deriveLfParameters(context); // Now uses the same rich dataset
 
     LOG_AUTO_TUNE("Guided Tuning complete. Refinements applied.");
     return true;
 }
 
+/**
+ * @brief --- DEFINITIVE IMPLEMENTATION: The "Statistical Snapshot" capture method ---
+ * This function performs three separate, short captures directly into RAM and
+ * averages them to create a high-confidence, statistically robust signal profile.
+ * It is fast, safe, and completely avoids all SD card interaction.
+ */
 bool GuidedTuningEngine::captureSignal(PBiosContext& context, AdcManager& adcManager, AutoTuningScreen& progressScreen) {
-    progressScreen.setProgress(10, "Listening to HF Signal...");
-    context.captured_samples.clear();
-    context.captured_samples.reserve(GT_SAMPLE_COUNT);
-    
     const int num_captures = 3;
-    std::vector<double> temp_samples(GT_SAMPLE_COUNT, 0.0);
-
-    for (int c = 0; c < num_captures; ++c) {
-        for (int i = 0; i < GT_SAMPLE_COUNT; ++i) {
-            double voltage = adcManager.getVoltage(context.selectedAdcIndex, context.selectedAdcInput);
-            if(isnan(voltage)) voltage = 0;
-            temp_samples[i] += voltage;
-            delayMicroseconds(500);
-        }
-        vTaskDelay(pdMS_TO_TICKS(100));
-    }
-
-    for (int i = 0; i < GT_SAMPLE_COUNT; ++i) {
-        context.captured_samples.push_back(temp_samples[i] / num_captures);
-    }
-    
-    bool success = (context.captured_samples.size() == GT_SAMPLE_COUNT);
-    LOG_AUTO_TUNE("HF Signal capture complete. Success: %d", success);
-    return success;
-}
-
-bool GuidedTuningEngine::captureLongSignalForLF(PBiosContext& context, AdcManager& adcManager, SdManager& sdManager, AutoTuningScreen& progressScreen, const char* filepath) {
-    const int num_captures = 3;
-    const int capture_duration_s = 10;
-    const int samples_per_s = 200;
-    const int total_samples_per_capture = capture_duration_s * samples_per_s;
-
-    FsFile captureFile = sdManager.open(filepath, FILE_WRITE);
-    if (!captureFile) {
-        LOG_AUTO_TUNE("Error: Could not create capture file: %s", filepath);
-        return false;
-    }
+    const int samples_per_capture = GT_SAMPLE_COUNT;
+    std::vector<double> averaged_samples(samples_per_capture, 0.0);
 
     for (int c = 0; c < num_captures; ++c) {
         char progress_label[40];
-        snprintf(progress_label, sizeof(progress_label), "Analyzing LF Drift (%d/%d)...", c + 1, num_captures);
-        LOG_AUTO_TUNE("%s", progress_label);
+        snprintf(progress_label, sizeof(progress_label), "Sampling Pass (%d/%d)...", c + 1, num_captures);
+        progressScreen.setProgress(10 * (c + 1), progress_label);
         
-        for (int i = 0; i < total_samples_per_capture; ++i) {
-            double voltage = adcManager.getVoltage_noLock(context.selectedAdcIndex, context.selectedAdcInput);
-            if (isnan(voltage)) voltage = 0;
-            
-            captureFile.write(reinterpret_cast<uint8_t*>(&voltage), sizeof(double));
-
-            int progress = 50 + static_cast<int>(((c * total_samples_per_capture + i) / static_cast<float>(num_captures * total_samples_per_capture)) * 30.0);
-            progressScreen.setProgress(progress, progress_label);
-
-            delay(5);
+        for (int i = 0; i < samples_per_capture; ++i) {
+            // We use the safe, mutex-protected getVoltage() here as this is a short, fast capture.
+            double voltage = adcManager.getVoltage(context.selectedAdcIndex, context.selectedAdcInput);
+            if(isnan(voltage)) voltage = 0;
+            averaged_samples[i] += voltage;
+            vTaskDelay(pdMS_TO_TICKS(2)); // Corresponds to ~500Hz, well above our 44Hz Nyquist rate
         }
     }
 
-    captureFile.close();
-    LOG_AUTO_TUNE("Long-duration capture saved to: %s", filepath);
-    return true;
+    // Finalize the average
+    for (int i = 0; i < samples_per_capture; ++i) {
+        averaged_samples[i] /= num_captures;
+    }
+    
+    context.captured_samples = averaged_samples;
+    
+    bool success = (context.captured_samples.size() == samples_per_capture);
+    LOG_AUTO_TUNE("RAM Signal capture complete. Success: %d", success);
+    return success;
 }
+
+
+/**
+ * @brief --- REMOVED: The problematic disk-based capture is gone. ---
+ * The captureLongSignalForLF function has been completely deleted.
+ */
 
 
 void GuidedTuningEngine::analyzeSignal(PBiosContext& context, const std::vector<double>& signal_to_analyze) {
@@ -149,9 +139,11 @@ void GuidedTuningEngine::deriveHfParameters(PBiosContext& context) {
 
     PI_Filter idealParams;
 
+    // --- Heuristic 1: Weighted average for Settle Threshold ---
     double ideal_settle = (context.raw_std_dev * 0.7) + (context.pk_pk_amplitude * 0.3);
     idealParams.settleThreshold = ideal_settle;
 
+    // --- Heuristic 2: Inversely linked smoothing and response based on noise power ---
     if (context.pk_pk_amplitude > 25.0) {
         LOG_AUTO_TUNE("HF Strategy: Aggressive Spike Scraper");
         idealParams.trackResponse = 0.9;
@@ -162,6 +154,7 @@ void GuidedTuningEngine::deriveHfParameters(PBiosContext& context) {
         idealParams.lockSmoothing = 0.1;
     }
     
+    // --- Heuristic 3: Constrain and set static params ---
     idealParams.settleThreshold = constrain(idealParams.settleThreshold, 0.01, 25.0);
     idealParams.medianWindowSize = (context.peak_frequency > 150) ? 7 : 5;
     idealParams.trackAssist = 0.01;
@@ -172,63 +165,41 @@ void GuidedTuningEngine::deriveHfParameters(PBiosContext& context) {
         idealParams.settleThreshold, hfFilter->settleThreshold);
 }
 
-void GuidedTuningEngine::deriveLfParameters(PBiosContext& context, AdcManager& adcManager, SdManager& sdManager, StateManager* stateManager) {
-    PI_Filter* hfFilter = context.selectedFilter->getFilter(0);
+/**
+ * @brief --- DEFINITIVE REFACTOR: The LF stage now uses the same rich dataset ---
+ * This function now uses the same high-quality "noise fingerprint" from the RAM
+ * capture to derive the LF parameters. It no longer requires a separate, slow
+ * disk-based capture.
+ */
+void GuidedTuningEngine::deriveLfParameters(PBiosContext& context) {
     PI_Filter* lfFilter = context.selectedFilter->getFilter(1);
-    if (!hfFilter || !lfFilter) return;
+    if (!lfFilter) return;
 
-    AutoTuningScreen* tuneScreen = static_cast<AutoTuningScreen*>(stateManager->getScreen(ScreenState::AUTO_TUNE_RUNNING));
-    if (!tuneScreen) return;
+    PI_Filter idealParams;
+
+    // --- Heuristic 1: Settle Threshold is proportional to Pk-Pk amplitude ---
+    // This targets the slow "wobble" of the signal.
+    idealParams.settleThreshold = context.pk_pk_amplitude * 0.5;
+    idealParams.settleThreshold = constrain(idealParams.settleThreshold, 5.0, 50.0);
     
-    char capture_filepath[64];
-    snprintf(capture_filepath, sizeof(capture_filepath), LF_CAPTURE_FILE_PATH, context.selectedFilterName.c_str());
+    // --- Heuristic 2: Use fixed, aggressive smoothing for the LF stage ---
+    idealParams.trackResponse = 0.05;
+    idealParams.lockSmoothing = 0.005;
+    idealParams.medianWindowSize = 15;
+    idealParams.trackAssist = 0.0001;
     
-    if (sdManager.takeMutex()) {
-        adcManager.getVoltage_noLock(context.selectedAdcIndex, context.selectedAdcInput);
-
-        if (!captureLongSignalForLF(context, adcManager, sdManager, *tuneScreen, capture_filepath)) {
-            LOG_AUTO_TUNE("Error: Failed to capture long signal for LF analysis.");
-            sdManager.giveMutex(); 
-            return;
-        }
-
-        FsFile captureFile = sdManager.open(capture_filepath, FILE_READ);
-        if (!captureFile) {
-            LOG_AUTO_TUNE("Error: Could not open capture file for reading: %s", capture_filepath);
-            sdManager.remove(capture_filepath);
-            sdManager.giveMutex();
-            return;
-        }
-
-        std::vector<double> long_signal_samples;
-        long_signal_samples.resize(captureFile.size() / sizeof(double));
-        captureFile.read(long_signal_samples.data(), captureFile.size());
-        captureFile.close();
-        
-        sdManager.remove(capture_filepath);
-        sdManager.giveMutex();
-
-        analyzeSignal(context, long_signal_samples);
-
-        PI_Filter idealParams;
-        idealParams.settleThreshold = context.pk_pk_amplitude * 0.5;
-        idealParams.settleThreshold = constrain(idealParams.settleThreshold, 5.0, 50.0);
-        idealParams.trackResponse = 0.05;
-        idealParams.lockSmoothing = 0.005;
-        idealParams.medianWindowSize = 15;
-        idealParams.trackAssist = 0.0001;
-        
-        applyRefinement(lfFilter, idealParams);
-        
-        LOG_AUTO_TUNE("LF Stage Refined. Target Settle=%.3f, Current Settle=%.3f", 
-            idealParams.settleThreshold, lfFilter->settleThreshold);
-    }
+    applyRefinement(lfFilter, idealParams);
+    
+    LOG_AUTO_TUNE("LF Stage Refined. Target Settle=%.3f, Current Settle=%.3f", 
+        idealParams.settleThreshold, lfFilter->settleThreshold);
 }
 
 
 void GuidedTuningEngine::applyRefinement(PI_Filter* currentFilter, const PI_Filter& idealParams) {
     if (!currentFilter) return;
 
+    // The "Iterative Refinement" step: move the current parameters part of the way
+    // towards the ideal target. This creates a stateful, converging tune.
     currentFilter->settleThreshold += (idealParams.settleThreshold - currentFilter->settleThreshold) * TUNING_LEARNING_RATE;
     currentFilter->lockSmoothing += (idealParams.lockSmoothing - currentFilter->lockSmoothing) * TUNING_LEARNING_RATE;
     currentFilter->trackResponse += (idealParams.trackResponse - currentFilter->trackResponse) * TUNING_LEARNING_RATE;

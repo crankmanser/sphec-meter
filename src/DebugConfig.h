@@ -20,7 +20,7 @@
 #define DEBUG_SPI            0 // For low-level SPI bus transactions
 #define DEBUG_I2C            0 // For low-level I2C bus transactions
 #define DEBUG_FILTER         1 // For the PI Filter's state and calculations
-#define DEBUG_NOISE_ANALYSIS 0 // For the Noise Analysis Engine results
+#define DEBUG_NOISE_ANALYSIS 1 // For the Noise Analysis Engine results
 #define DEBUG_POWER          0 // For the PowerMonitor cabinet
 #define DEBUG_STORAGE        1 // For the StorageEngine and file operations
 #define DEBUG_AUTO_TUNE      1 // For the GuidedTuningEngine
