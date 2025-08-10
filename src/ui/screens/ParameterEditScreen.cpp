@@ -71,29 +71,32 @@ void ParameterEditScreen::handleInput(const InputEvent& event) {
 }
 
 /**
- * @brief --- DEFINITIVE FIX: Implements the correct "overlay" rendering logic. ---
- * This function now correctly gets the background graph properties from the
- * workbench screen and then overwrites the middle OLED and button properties
- * with its own content.
+ * @brief --- DEFINITIVE FIX: Rewritten to be self-contained. ---
+ * This function no longer inherits render properties from the hub screen.
+ * It now starts with a clean slate and calls the workbench's helper function
+ * to draw the background, preventing any "ghost text" from bleeding through.
  */
 void ParameterEditScreen::getRenderProps(UIRenderProps* props_to_fill) {
+    // Start with a clean slate to prevent any state bleed-through.
+    *props_to_fill = UIRenderProps();
+
     LiveFilterTuningScreen* workbench = static_cast<LiveFilterTuningScreen*>(_stateManager->getScreen(ScreenState::LIVE_FILTER_TUNING));
     if (!workbench) return;
 
-    // 1. Get the background graph properties from the workbench
+    // 1. Get the background graph properties from the workbench's dedicated helper.
     workbench->getManualTuneRenderProps(props_to_fill);
 
-    // 2. Overwrite the middle OLED and buttons with our content
+    // 2. Overwrite the middle OLED and buttons with our own content.
     OledProps& mid_props = props_to_fill->oled_middle_props;
-    mid_props = OledProps(); // Clear it first
-    mid_props.line1 = getSelectedParamValueString();
+    mid_props.line2 = getSelectedParamValueString();
     mid_props.menu_props.is_enabled = true;
     mid_props.menu_props.items = _param_menu_items;
     mid_props.menu_props.selected_index = _selected_index;
     if (_is_editing) {
-        mid_props.line2 = "> Editing <";
+        mid_props.line3 = "> Editing <";
     }
 
+    // 3. Set the correct button prompts for this screen.
     props_to_fill->button_props.back_text = "Cancel";
     props_to_fill->button_props.enter_text = _is_editing ? "OK" : "Edit";
     props_to_fill->button_props.down_text = "Set";

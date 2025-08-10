@@ -37,13 +37,6 @@ void UIManager::render(const UIRenderProps& props) {
     if (display_bottom) display_bottom->display();
 }
 
-/**
- * @brief --- DEFINITIVE FIX: Renders all UI blocks independently. ---
- * This resolves the bug where screens without a menu would appear blank.
- * It now correctly draws text, graphs, progress bars, and menus based on
- * whether their respective properties are enabled, ensuring all screens
- * render as intended.
- */
 void UIManager::drawOledContent(Adafruit_SSD1306* display, const OledProps& props) {
     if (!display) return;
     
@@ -51,38 +44,39 @@ void UIManager::drawOledContent(Adafruit_SSD1306* display, const OledProps& prop
     display->setFont(nullptr);
     display->setTextColor(SSD1306_WHITE);
 
-    // --- 1. Draw Text Lines (if they exist) ---
-    // This logic is now independent and will run for any screen.
     if (!props.line1.empty()) {
-        display->setCursor(2, 2);
-        display->print(props.line1.c_str());
-    }
-    if (!props.line2.empty()) {
-        // Special inverted box for the "Value" field on the tuning screens
-        if (props.line2.rfind("Value: ", 0) == 0 || props.line2.rfind("New Value:", 0) == 0) {
+        if (props.line1.rfind("Value: ", 0) == 0) {
             int16_t x1, y1;
             uint16_t w, h;
-            display->getTextBounds(props.line2.c_str(), 0, 0, &x1, &y1, &w, &h);
-            int rect_x = 2;
-            int rect_y = 12;
+            display->getTextBounds(props.line1.c_str(), 0, 0, &x1, &y1, &w, &h);
+            int rect_x = (SCREEN_WIDTH - w) / 2 - 2;
+            int rect_y = 2;
             display->fillRect(rect_x, rect_y, w + 4, h + 4, SSD1306_WHITE);
             display->setCursor(rect_x + 2, rect_y + 2);
             display->setTextColor(SSD1306_BLACK);
-            display->print(props.line2.c_str());
+            display->print(props.line1.c_str());
             display->setTextColor(SSD1306_WHITE);
+        } else {
+            display->setCursor(2, 2);
+            display->print(props.line1.c_str());
+        }
+    }
+    if (!props.line2.empty()) {
+        if (props.line2.rfind("Value: ", 0) == 0) {
+            display->setCursor(2, 16); // Adjusted Y for new layout
+            display->print(props.line2.c_str());
         } else {
             display->setCursor(2, 12);
             display->print(props.line2.c_str());
         }
     }
     if (!props.line3.empty()) {
-         // Special inverted box for the editing value
         if (props.line3[0] == '>') {
              int16_t x1, y1;
             uint16_t w, h;
             display->getTextBounds(props.line3.c_str(), 0, 0, &x1, &y1, &w, &h);
             int rect_x = (128 - w) / 2;
-            int rect_y = 22;
+            int rect_y = 50; // Adjusted Y for new layout
             display->fillRect(rect_x - 2, rect_y, w + 4, h + 4, SSD1306_WHITE);
             display->setCursor(rect_x, rect_y + 2);
             display->setTextColor(SSD1306_BLACK);
@@ -94,22 +88,17 @@ void UIManager::drawOledContent(Adafruit_SSD1306* display, const OledProps& prop
         }
     }
 
-
-    // --- 2. Draw Graph (if enabled) ---
     if (props.graph_props.is_enabled) {
         GraphBlock::draw(display, props.graph_props);
     }
 
-    // --- 3. Draw Progress Bar (if enabled) ---
     if (props.progress_bar_props.is_enabled) {
         ProgressBarBlock::draw(display, props.progress_bar_props);
     }
 
-    // --- 4. Draw Menu (if enabled) ---
     if (props.menu_props.is_enabled) {
-        // Separator Line for screens that have both status text and a menu
-        if (!props.line1.empty()) {
-            display->drawFastHLine(0, 26, 128, SSD1306_WHITE);
+        if (!props.line1.empty() || !props.line2.empty()) {
+            display->drawFastHLine(0, 28, 128, SSD1306_WHITE); // Adjusted Y for new layout
         }
         MenuBlock::draw(display, props.menu_props);
     }

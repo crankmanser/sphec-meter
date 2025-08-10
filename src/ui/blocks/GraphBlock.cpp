@@ -47,11 +47,11 @@ void GraphBlock::draw(Adafruit_GFX* display, const GraphBlockProps& props) {
     }
     // --- DEFINITIVE FIX: Adjust Y-coordinate to prevent overlap with button prompts ---
     if (!props.bottom_left_label.empty()) {
-        display->setCursor(2, 48);
+        display->setCursor(2, 44);
         display->print(props.bottom_left_label.c_str());
     }
     if (!props.bottom_right_label.empty()) {
-        display->setCursor(70, 48);
+        display->setCursor(70, 44);
         display->print(props.bottom_right_label.c_str());
     }
 }

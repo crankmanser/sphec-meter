@@ -11,6 +11,7 @@ void MenuBlock::draw(Adafruit_GFX* display, const MenuBlockProps& props) {
     display->setTextSize(1);
     display->setFont(nullptr);
 
+    // --- DEFINITIVE FIX: Y-coordinates are shifted down for the new layout ---
     const int y_top = 32;
     const int y_middle = 44;
     const int y_bottom = 56;

@@ -27,11 +27,9 @@ public:
     void getManualTuneRenderProps(UIRenderProps* props_to_fill);
 
 private:
-    // --- DEFINITIVE FIX: Restore the state variable for input delegation ---
     bool _is_in_manual_tune_mode;
 
     void handleHubMenuInput(const InputEvent& event);
-    void getHubMenuRenderProps(UIRenderProps* props_to_fill);
     
     AdcManager* _adcManager;
     PBiosContext* _context;
@@ -49,7 +47,7 @@ private:
     double _calibrated_value;
 
     std::vector<std::string> _hub_menu_items;
-    std::vector<std::string> _hub_menu_descriptions;
+    // --- DEFINITIVE FIX: The unnecessary description vector is removed ---
     int _selected_index;
 
     FilterManager _saved_tune_snapshot;

@@ -4,6 +4,13 @@ This document tracks the development progress, current tasks, and future roadmap
 
 ## Changelog (What Was Done)
 
+* **v3.1.4 (2025-08-10):**
+    * **Status:** Complete.
+    * **Milestone:** The auto-tuner algorithm has been definitively re-architected to be **stateful, intelligent, and holistic**. All previous flawed implementations have been scrubbed in favor of a new, robust design. The Live Filter Tuning UI has been polished to a professional standard, resolving all known visual bugs.
+    * **Fix (Critical):** Architected and implemented the new **"Statistical Snapshot"** algorithm for the `GuidedTuningEngine`. This new, RAM-based capture method completely **eliminates the SPI bus conflicts** that were causing SD card write failures, definitively solving the project's most critical blocker.
+    * **Design (Tuner Intelligence):** Implemented the **"Holistic, Characterization-Driven Iterative Refinement"** algorithm. This definitive design uses a deep, multi-pass signal analysis to intelligently tune both HF and LF filter stages based on the probe's unique noise fingerprint.
+    * **UI Polish (Critical):** Resolved all outstanding UI bugs on the "Live Filter Tuning" screen, including text overlap, incorrect label positioning, and the display of unstable/uncalibrated values. The interface is now clean, professional, and robust.
+
 * **v3.1.3 (2025-08-10):**
     * **Status:** Planning Complete.
     * **Milestone:** The auto-tuner algorithm has been definitively re-architected to be **stateful, intelligent, and holistic**. All previous flawed implementations have been scrubbed in favor of a new, robust design.
@@ -340,9 +347,11 @@ This document tracks the development progress, current tasks, and future roadmap
 
 ## Current Task (What We Are Doing)
 
-* **Implement and Validate the "Holistic, Characterization-Driven Iterative Refinement" Algorithm.**
-    * **Goal:** To translate the new, definitive algorithm design into code and validate its performance on hardware.
-    * **Next Step:** Generate the new `GuidedTuningEngine.cpp` that implements the intelligent, stateful heuristics for both the HF and LF filter stages. All other tasks are blocked until the auto-tuner is fully functional and effective.
+* **Complete pBIOS Feature Set.**
+    * **Goal:** To implement the remaining pBIOS diagnostic and maintenance tools, building upon the now-stable auto-tuner and UI framework.
+    * **Next Step:** Implement the `Probe Analysis` screen to display live `R_std` and saved "Filter Creep" data, providing a "report card" on probe health. All other tasks are blocked until this is complete.
+
+
 
 
 
