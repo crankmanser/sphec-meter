@@ -12,20 +12,26 @@
 class ConfigManager {
 public:
     ConfigManager();
+    
     bool begin(FaultHandler& faultHandler, SdManager& sdManager);
 
     /**
-     * @brief Saves the settings of a FilterManager to a JSON file.
-     * @param filter The FilterManager instance to save.
+     * @brief --- MODIFIED: Signature updated to accept the session timestamp. ---
+     * Saves the settings of a FilterManager to a uniquely named JSON file.
+     * The filename will be in the format: /config/filterName_timestamp_counter.json
+     * * @param filter The FilterManager instance to save.
      * @param filterName The base name for the config file (e.g., "ph_filter").
+     * @param sessionTimestamp The timestamp string for the current session.
      * @param is_saved_state If true, appends "_saved" to the filename for the user's backup.
      * @return True if saving was successful, false otherwise.
      */
-    bool saveFilterSettings(FilterManager& filter, const char* filterName, bool is_saved_state = false);
+    bool saveFilterSettings(FilterManager& filter, const char* filterName, const char* sessionTimestamp, bool is_saved_state = false);
 
     /**
      * @brief Loads the settings for a FilterManager from a JSON file.
-     * @param filter The FilterManager instance to load into.
+     * NOTE: This currently loads from the default, non-timestamped file.
+     * Loading the "latest" timestamped file is a future enhancement.
+     * * @param filter The FilterManager instance to load into.
      * @param filterName The base name for the config file (e.g., "ph_filter").
      * @param is_saved_state If true, loads from the user's "_saved" backup file.
      * @return True if loading was successful, false otherwise.

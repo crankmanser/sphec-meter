@@ -15,6 +15,7 @@
 #include <AdcManager.h>
 #include <SdManager.h>
 #include <TempManager.h>
+#include <RtcManager.h>
 #include <FilterManager.h>
 #include <CalibrationManager.h>
 #include "ui/InputManager.h"
@@ -25,8 +26,8 @@
 #include "GuidedTuningEngine.h"
 #include "HardwareTester.h"
 
-// --- DEFINITIVE UPDATE: Include all new screen headers ---
-#include "ui/screens/ProbeProfilingScreen.h" 
+// Include all screen headers
+#include "ui/screens/ProbeProfilingScreen.h"
 #include "ui/screens/MaintenanceScreen.h"
 #include "ui/screens/ShutdownScreen.h"
 #include "ui/screens/AutoTuningScreen.h"
@@ -48,13 +49,17 @@ DisplayManager displayManager;
 AdcManager adcManager;
 SdManager sdManager;
 TempManager tempManager;
+RtcManager rtcManager;
 FilterManager phFilter, ecFilter, v3_3_Filter, v5_0_Filter;
 CalibrationManager phCalManager, ecCalManager;
 InputManager inputManager;
-StateManager* stateManager = nullptr; 
+StateManager* stateManager = nullptr;
 UIManager* uiManager = nullptr;
 GuidedTuningEngine guidedTuningEngine;
 HardwareTester hardwareTester;
+
+// Global session timestamp
+char g_sessionTimestamp[20];
 
 PBiosContext pBiosContext;
 SPIClass* vspi = nullptr;
@@ -71,17 +76,24 @@ void setup() {
     delay(100);
 
     pinMode(BTN_ENTER_PIN, INPUT_PULLUP);
-    delay(50); 
+    delay(50);
     BootMode selected_mode = (digitalRead(BTN_ENTER_PIN) == LOW) ? BootMode::PBIOS : BootMode::NORMAL;
 
     faultHandler.begin();
+    
+    i2cMutex = xSemaphoreCreateMutex();
+    Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN);
+
+    rtcManager.begin(faultHandler, i2cMutex);
+    rtcManager.getTimestamp(g_sessionTimestamp, sizeof(g_sessionTimestamp));
+    LOG_BOOT("Session Timestamp: %s", g_sessionTimestamp);
+
     displayManager.begin(faultHandler);
     
     BootSelector bootAnimator(displayManager);
     bootAnimator.runBootAnimation();
     
     spiMutex = xSemaphoreCreateMutex();
-    i2cMutex = xSemaphoreCreateMutex();
     vspi = new SPIClass(VSPI);
     vspi->begin(VSPI_SCK_PIN, VSPI_MISO_PIN, VSPI_MOSI_PIN);
     
@@ -97,14 +109,14 @@ void setup() {
     phCalManager.begin(faultHandler);
     ecCalManager.begin(faultHandler);
     StaticJsonDocument<512> phCalDoc, ecCalDoc;
-    if (sdManager.loadJson("/ph_cal.json", phCalDoc)) { 
+    if (sdManager.loadJson("/ph_cal.json", phCalDoc)) {
         phCalManager.deserializeModel(phCalManager.getMutableCurrentModel(), phCalDoc);
     }
-    if (sdManager.loadJson("/ec_cal.json", ecCalDoc)) { 
+    if (sdManager.loadJson("/ec_cal.json", ecCalDoc)) {
         ecCalManager.deserializeModel(ecCalManager.getMutableCurrentModel(), ecCalDoc);
     }
 
-    inputManager.begin(); 
+    inputManager.begin();
     if (selected_mode == BootMode::PBIOS) {
         while(digitalRead(BTN_ENTER_PIN) == LOW) { delay(10); }
         inputManager.clearEnterButtonState();
@@ -119,8 +131,8 @@ void setup() {
     LOG_BOOT("Initialization Complete. Mode: %s", selected_mode == BootMode::PBIOS ? "pBIOS" : "Normal");
 }
 
-void loop() { 
-    vTaskSuspend(NULL); 
+void loop() {
+    vTaskSuspend(NULL);
 }
 
 void uiTask(void* pvParameters) {
@@ -134,10 +146,7 @@ void uiTask(void* pvParameters) {
     if (mode == BootMode::PBIOS) {
         stateManager->addScreen(ScreenState::PBIOS_MENU, new pBiosMenuScreen());
         stateManager->addScreen(ScreenState::FILTER_SELECTION, new FilterSelectionScreen(&pBiosContext));
-        
-        // --- DEFINITIVE FIX: Register the UI screen for the single running state ---
         stateManager->addScreen(ScreenState::AUTO_TUNE_RUNNING, new AutoTuningScreen());
-
         stateManager->addScreen(ScreenState::LIVE_FILTER_TUNING, new LiveFilterTuningScreen(&adcManager, &pBiosContext, &phCalManager, &ecCalManager, &tempManager));
         stateManager->addScreen(ScreenState::PARAMETER_EDIT, new ParameterEditScreen(&pBiosContext));
         stateManager->addScreen(ScreenState::MAINTENANCE_MENU, new MaintenanceScreen());
@@ -163,7 +172,7 @@ void uiTask(void* pvParameters) {
             if (inputManager.wasEnterPressed()) { event.type = InputEventType::BTN_ENTER_PRESS; activeScreen->handleInput(event); }
             if (inputManager.wasDownPressed()) { event.type = InputEventType::BTN_DOWN_PRESS; activeScreen->handleInput(event); }
             int enc_change = inputManager.getEncoderChange();
-            if (enc_change != 0) { 
+            if (enc_change != 0) {
                 event.type = enc_change > 0 ? InputEventType::ENCODER_INCREMENT : InputEventType::ENCODER_DECREMENT;
                 event.value = abs(enc_change);
                 activeScreen->handleInput(event);
@@ -183,11 +192,7 @@ void uiTask(void* pvParameters) {
     }
 }
 
-/**
- * @brief --- DEFINITIVE REFACTOR: The data task uses the simplified state machine. ---
- * It now calls the single, powerful `proposeSettings` function, which contains all
- * the necessary logic, ensuring a stable and effective tuning process.
- */
+
 void dataTask(void* pvParameters) {
     BootMode mode = static_cast<BootMode>(reinterpret_cast<intptr_t>(pvParameters));
     LOG_BOOT("Data Task started on Core %d", xPortGetCoreID());
@@ -200,13 +205,11 @@ void dataTask(void* pvParameters) {
             case ScreenState::AUTO_TUNE_RUNNING: {
                 AutoTuningScreen* tuneScreen = static_cast<AutoTuningScreen*>(stateManager->getScreen(ScreenState::AUTO_TUNE_RUNNING));
                 if (tuneScreen && pBiosContext.selectedFilter) {
-                    // --- DEFINITIVE FIX: Pass the StateManager pointer. ---
                     if (guidedTuningEngine.proposeSettings(pBiosContext, adcManager, sdManager, stateManager, *tuneScreen)) {
-                        configManager.saveFilterSettings(*pBiosContext.selectedFilter, pBiosContext.selectedFilterName.c_str(), false);
+                        configManager.saveFilterSettings(*pBiosContext.selectedFilter, pBiosContext.selectedFilterName.c_str(), g_sessionTimestamp, false);
                     }
-                    // --- DEFINITIVE FIX: Use the correct variable name. ---
                     tuneScreen->setProgress(100, "Finalizing...");
-                    vTaskDelay(pdMS_TO_TICKS(500)); 
+                    vTaskDelay(pdMS_TO_TICKS(500));
                     stateManager->changeState(ScreenState::LIVE_FILTER_TUNING);
                 }
                 break;
@@ -220,9 +223,90 @@ void dataTask(void* pvParameters) {
                  }
                 break;
             
-             case ScreenState::NOISE_ANALYSIS:
-                // ... (other diagnostic tasks remain unchanged) ...
+            case ScreenState::PROBE_PROFILING: {
+                ProbeProfilingScreen* profileScreen = static_cast<ProbeProfilingScreen*>(stateManager->getScreen(ScreenState::PROBE_PROFILING));
+                // --- DEFINITIVE FIX: The backend logic is now correctly implemented ---
+                if (profileScreen && profileScreen->isAnalyzing()) {
+                    // 1. Get identifiers for the selected probe
+                    uint8_t adcIndex = profileScreen->getSelectedAdcIndex();
+                    uint8_t adcInput = profileScreen->getSelectedAdcInput();
+                    const char* filterName = profileScreen->getSelectedFilterName().c_str();
+                    const char* calFileName = (adcIndex == 0) ? "/ph_cal.json" : "/ec_cal.json";
+
+                    // 2. Initialize variables for the report card
+                    double live_r_std = 0.0, zero_point_drift = 0.0, cal_quality_score = 0.0;
+                    char last_cal_timestamp[20] = "N/A";
+                    PI_Filter hf_snapshot, lf_snapshot;
+
+                    // 3. Load historical calibration KPIs
+                    StaticJsonDocument<512> calDoc;
+                    if (sdManager.loadJson(calFileName, calDoc)) {
+                        zero_point_drift = calDoc["zpDrift"] | 0.0;
+                        cal_quality_score = calDoc["quality"] | 0.0;
+                        strncpy(last_cal_timestamp, calDoc["timestamp"] | "N/A", sizeof(last_cal_timestamp) -1);
+                        last_cal_timestamp[sizeof(last_cal_timestamp) - 1] = '\0'; // Ensure null termination
+                    }
+
+                    // 4. Load saved filter parameters ("Filter Creep")
+                    FilterManager tempFilterManager;
+                    tempFilterManager.begin(faultHandler, configManager, "temp"); 
+                    configManager.loadFilterSettings(tempFilterManager, filterName, true); 
+                    hf_snapshot = *tempFilterManager.getFilter(0);
+                    lf_snapshot = *tempFilterManager.getFilter(1);
+
+                    // 5. Perform live signal analysis for R_std
+                    const int num_samples = 100;
+                    double sum = 0.0, sum_sq = 0.0;
+                    for (int i = 0; i < num_samples; ++i) {
+                        double voltage = adcManager.getVoltage(adcIndex, adcInput);
+                        sum += voltage;
+                        sum_sq += voltage * voltage;
+                        vTaskDelay(pdMS_TO_TICKS(5));
+                    }
+                    double mean = sum / num_samples;
+                    double variance = (sum_sq / num_samples) - (mean * mean);
+                    live_r_std = (variance > 0) ? sqrt(variance) : 0.0;
+                    
+                    // 6. Send the completed report card to the UI
+                    profileScreen->setAnalysisResults(live_r_std, hf_snapshot, lf_snapshot, zero_point_drift, cal_quality_score, std::string(last_cal_timestamp));
+                }
                 break;
+            }
+            
+            case ScreenState::NOISE_ANALYSIS: {
+                NoiseAnalysisScreen* noiseScreen = static_cast<NoiseAnalysisScreen*>(stateManager->getScreen(ScreenState::NOISE_ANALYSIS));
+                if (noiseScreen && noiseScreen->isSampling()) {
+                    uint8_t adcIndex = pBiosContext.selectedAdcIndex;
+                    uint8_t adcInput = pBiosContext.selectedAdcInput;
+
+                    std::vector<double> samples;
+                    samples.reserve(ANALYSIS_SAMPLE_COUNT);
+                    double min_val = 99999.0, max_val = -99999.0, sum = 0.0, sum_sq = 0.0;
+                    
+                    for (int i = 0; i < ANALYSIS_SAMPLE_COUNT; ++i) {
+                        double voltage = adcManager.getVoltage(adcIndex, adcInput);
+                        samples.push_back(voltage);
+                        sum += voltage;
+                        sum_sq += voltage * voltage;
+                        if (voltage < min_val) min_val = voltage;
+                        if (voltage > max_val) max_val = voltage;
+                        
+                        if (i % (ANALYSIS_SAMPLE_COUNT / 10) == 0) {
+                            noiseScreen->setSamplingProgress((i * 100) / ANALYSIS_SAMPLE_COUNT);
+                        }
+                        vTaskDelay(pdMS_TO_TICKS(2)); 
+                    }
+                    noiseScreen->setSamplingProgress(100);
+
+                    double mean = sum / ANALYSIS_SAMPLE_COUNT;
+                    double variance = (sum_sq / ANALYSIS_SAMPLE_COUNT) - (mean * mean);
+                    double std_dev = (variance > 0) ? sqrt(variance) : 0.0;
+                    double pk_pk = max_val - min_val;
+
+                    noiseScreen->setAnalysisResults(mean, min_val, max_val, pk_pk, std_dev, samples);
+                }
+                break;
+            }
             
             default:
                 // No data processing needed for other states
@@ -233,11 +317,11 @@ void dataTask(void* pvParameters) {
     }
 }
 
-void oneWireTask(void* pvParameters) { 
+void oneWireTask(void* pvParameters) {
     for (;;) {
         tempManager.requestProbeTemperature();
         vTaskDelay(pdMS_TO_TICKS(1000));
-        tempManager.update(); 
+        tempManager.update();
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }

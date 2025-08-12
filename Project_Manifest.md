@@ -4,6 +4,17 @@ This document tracks the development progress, current tasks, and future roadmap
 
 ## Changelog (What Was Done)
 
+* **v3.1.5 (2025-08-11):**
+    * **Status:** In Progress.
+    * **Milestone:** Completed the implementation of the "Probe Analysis" report card feature, including the foundational `RtcManager` for session-based timestamping and all associated UI and backend logic. All known bugs related to file saving and feature freezes have been resolved.
+    * **Design (Architecture):** Deferred several pBIOS features (`New Probe`, `pBIOS Snapshot`, `SD Card Formatter`) to be implemented after the core diagnostic and UI feature set is complete. This decision prioritizes a stable core experience and moves high-risk or "capstone" features to the end of the development cycle.
+
+* **v3.1.5 (2025-08-11):**
+    * **Status:** Planning Complete.
+    * **Milestone:** Finalized a comprehensive implementation plan for the "Probe Analysis" report card feature.
+    * **Design (UI):** Defined the final "report card" layout for the `ProbeProfilingScreen`, incorporating key historical KPIs like `Zero-Point Drift` alongside live signal integrity metrics to create a comprehensive, data-rich diagnostic tool.
+    * **Design (RTC):** Architected a robust, session-based timestamping system. A new `RtcManager` will be used once at boot to generate a unique session ID, which will be used for all subsequent file logging, ensuring data integrity and efficiency.
+
 * **v3.1.4 (2025-08-10):**
     * **Status:** Complete.
     * **Milestone:** The auto-tuner algorithm has been definitively re-architected to be **stateful, intelligent, and holistic**. All previous flawed implementations have been scrubbed in favor of a new, robust design. The Live Filter Tuning UI has been polished to a professional standard, resolving all known visual bugs.
@@ -347,9 +358,11 @@ This document tracks the development progress, current tasks, and future roadmap
 
 ## Current Task (What We Are Doing)
 
-* **Complete pBIOS Feature Set.**
-    * **Goal:** To implement the remaining pBIOS diagnostic and maintenance tools, building upon the now-stable auto-tuner and UI framework.
-    * **Next Step:** Implement the `Probe Analysis` screen to display live `R_std` and saved "Filter Creep" data, providing a "report card" on probe health. All other tasks are blocked until this is complete.
+* **Implement the `Shutdown` screen logic.**
+    * **Goal:** To create a safe shutdown workflow that ensures all pending data is saved correctly before the user powers off the device.
+    * **Next Step:** Design the shutdown workflow, including the "Safe to Power Off" message screen, and begin implementing the UI and backend logic. All other tasks are blocked until this is complete.
+
+
 
 
 
@@ -367,11 +380,11 @@ This document tracks the development progress, current tasks, and future roadmap
 ## Roadmap (What Is to Come)
 
 1.  **Complete pBIOS Feature Set:**
-    * a. Implement the `Probe Analysis` screen to display live `R_std` and saved "Filter Creep" data.
-    * b. Implement the `New Probe` utility to reset configurations.
-    * c. Implement the `pBIOS Snapshot` function to save a diagnostic file.
-    * d. Implement the `SD Card Formatter` utility.
-    * e. Implement the `Shutdown` screen logic, including the "safe to power off" message.
+    * a. Implement the `Shutdown` screen logic.
+    * b. Revisit and finalize the `Probe Analysis` screen.
+    * c. **(DEFERRED)** Implement the `New Probe` utility.
+    * d. **(DEFERRED)** Implement the `pBIOS Snapshot` function.
+    * e. **(DEFERRED)** Implement the `SD Card Formatter` utility.
 
 2.  **UI - Phase 4: Begin Normal Boot UI:**
     * a. Create the `Live Measurement Screen`, which will be the primary user-facing display.

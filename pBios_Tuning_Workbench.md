@@ -1,4 +1,4 @@
-// File Path: /pBIOS_Tuning_Workbench.md
+// File Path: /pBios_Tuning_Workbench.md
 // MODIFIED FILE
 
 # Architecture Blueprint: The pBIOS Tuning Workbench v3.1.3
@@ -72,3 +72,10 @@ An interactive, step-by-step process. Live graphs are paused and replaced with p
 * **Layout:** This screen is an overlay. It displays live graphs on the top and bottom OLEDs (rendered by the `LiveFilterTuningScreen`) and its own parameter list in the middle.
 * **Controls:** Encoder to scroll/edit, buttons for `Cancel`, `Set`, and `Edit/OK`.
 * **Feature: "Compare Mode" (Optimized)**: When toggled on, the system performs a one-time, background simulation using the `saved_params` to generate a static "ghost" dataset for the graphs, ensuring minimal CPU load.
+
+### 3.5. Probe Analysis Screen (`ProbeProfilingScreen`)
+
+* **Layout:** A data-rich, three-OLED "report card" that provides a comprehensive overview of a single probe's health.
+* **Top OLED (Health KPIs):** Displays the most critical, direct indicators of probe health: `Zero-Point Drift (mV)` and `Live R_std (mV)`.
+* **Middle OLED (Filter Load):** Displays the saved `settleThreshold` and `lockSmoothing` parameters for both HF and LF filters. This shows the "filter creep," an indirect measure of how hard the system is working to compensate for noise.
+* **Bottom OLED (History):** Displays the `Last Calibrated Timestamp` and the `Calibration Quality Score (%)` to provide historical context for the probe's current state.

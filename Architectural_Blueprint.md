@@ -1,3 +1,6 @@
+// File Path: /Architectural_Blueprint.md
+// MODIFIED FILE
+
 # SpHEC Meter - Architectural Blueprint v3.1.3
 
 This document is the "genesis document" and official architectural summary for the SpHEC Meter firmware. It encapsulates all design decisions made during our initial planning phase and serves as the foundational context for all future development.
@@ -21,6 +24,7 @@ The system uses a dual-core FreeRTOS architecture to ensure UI responsiveness an
 
 * **Asynchronous Request Queues:** Used for slow or blocking operations. The `sdTask` uses a queue to receive file requests, decoupling other tasks from slow SD card I/O.
 * **Mutex-Protected Shared Data:** A central `GlobalDataModel` struct, protected by a FreeRTOS mutex, will hold the latest aggregated and processed sensor data for thread-safe access by any task. This prevents race conditions and is superior to critical sections for inter-task resource sharing.
+* **Session-Based Timestamps**: To ensure efficient and consistent logging, a global timestamp string is generated once at boot by the `RtcManager`. This `g_sessionTimestamp` is then used by all other modules for file naming, providing a unique ID for each power-on session without requiring constant hardware access.
 
 ### 1.3. Key Constraints
 
@@ -55,7 +59,12 @@ The system uses a dual-core FreeRTOS architecture to ensure UI responsiveness an
 ### 2.3. Power Monitor ("Intelligent Power Monitor")
 * **(Design Unchanged)**
 
-### 2.4. Storage, Backup, and "Limp Mode"
+### 2.4. `RtcManager`
+* **Purpose:** To encapsulate all interaction with the PCF8563 Real-Time Clock hardware.
+* **Initialization:** The `RtcManager` is initialized once in the main `setup()` function, before the RTOS scheduler starts. This pre-emptive initialization guarantees that the RTC is ready before any other task needs it, preventing race conditions.
+* **Thread Safety:** All public methods that communicate with the hardware use the global `i2cMutex` to ensure that I2C transactions do not conflict with other devices on the bus, such as the OLED displays.
+
+### 2.5. Storage, Backup, and "Limp Mode"
 * **Dual-Save Strategy:** To ensure robustness, the system uses a dual-save approach.
     * **ESP32 NVS (Internal Flash):** Stores the essential operational data: the latest **Filter Setpoints** and the current **Calibration Model**. This allows the device to boot quickly and function perfectly even if the SD card is missing ("Limp Mode").
     * **SD Card:** Stores detailed **Tuning Log Files** and configuration backups for the companion Android suite. Each log contains a snapshot of the noise analysis, the auto-tuner's proposed values, the user's final values, and the resulting KPIs.
@@ -84,13 +93,12 @@ The system uses a dual-core FreeRTOS architecture to ensure UI responsiveness an
     * **`NA Drift Trending`**: A tool for performing a long-duration FFT (Fast Fourier Transform) analysis to identify low-frequency signal drift and interference.
     * **`Live Filter Tuning`**: The main interface for running the Guided Tuning algorithm and performing manual fine-tuning of the two-stage filter pipeline.
     * **`Maintenance` (Sub-Menu)**:
-        * **`Probe Analysis`**: A pBIOS-centric "report card" for a probe, displaying its live signal integrity (`R_std`) and its current "Filter Creep" (the saved filter parameters), which serve as an indirect measure of probe aging.
-        * **`New Probe`**: A utility to reset the filter configuration for a specific probe to factory defaults.
+        * **`Probe Analysis`**: A comprehensive "report card" for a selected probe. It displays a combination of live data and historical KPIs to give a full picture of probe health. Key metrics include: **Live Signal Integrity** (`Live R_std`), **Filter Creep** (the saved HF/LF filter parameters), **Zero-Point Drift** (the change in neutral voltage since the last calibration), and **Calibration History** (timestamp and quality score of the last calibration).
         * **`Hardware Self-Test`**: A lean, pBIOS-safe diagnostic routine that verifies the function of the SD Card, all three OLEDs, both ADCs, and the temperature probe.
         * **`Live ADC Voltmeter`**: A utility to display the live, raw millivolt reading from any ADC channel for low-level hardware debugging.
-        * **`pBIOS Snapshot`**: A function to save a complete diagnostic file to the SD card, containing current filter settings and the results of a fresh noise analysis.
-        * **`SD Card Formatter`**: A utility to format the SD card.
-        * **`Android Suite`**: (Placeholder)
+        * **`(DEFERRED) New Probe`**: A utility to reset the filter configuration for a specific probe to factory defaults.
+        * **`(DEFERRED) pBIOS Snapshot`**: A function to save a complete diagnostic file to the SD card, containing current filter settings and the results of a fresh noise analysis.
+        * **`(DEFERRED) SD Card Formatter`**: A utility to format the SD card.
     * **`Shutdown` (Sub-Menu)**: A menu to ensure the safe persistence of settings before the user turns off the physical power switch. Provides options to `Save & Shutdown`, `Discard & Shutdown`, or `Restore Defaults & Shutdown`.
 
 

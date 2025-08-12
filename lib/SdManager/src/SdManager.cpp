@@ -63,17 +63,11 @@ bool SdManager::remove(const char* path) {
     return success;
 }
 
-/**
- * @brief --- NEW: Implementation for takeMutex. ---
- */
 bool SdManager::takeMutex() {
     if (!_spiMutex) return false;
     return xSemaphoreTake(_spiMutex, portMAX_DELAY) == pdTRUE;
 }
 
-/**
- * @brief --- NEW: Implementation for giveMutex. ---
- */
 void SdManager::giveMutex() {
     if (_spiMutex) {
         xSemaphoreGive(_spiMutex);
@@ -95,15 +89,24 @@ bool SdManager::saveJson(const char* path, const JsonDocument& doc) {
         FsFile tmpFile = sd.open(tmpPath, FILE_WRITE);
         if (tmpFile) {
             if (serializeJson(doc, tmpFile) > 0) {
-                tmpFile.close();
-                if (sd.exists(bakPath)) sd.remove(bakPath);
-                if (sd.exists(path)) {
-                    sd.rename(path, bakPath);
-                }
-                if (sd.rename(tmpPath, path)) {
-                    success = true;
+                
+                // --- DEFINITIVE FIX: Manually flush the file cache to the SD card. ---
+                // This is the critical step that ensures data is physically written
+                // and not just left in a buffer, resolving the empty file bug.
+                if (!tmpFile.sync()) {
+                    tmpFile.close();
+                    success = false;
                 } else {
-                    sd.rename(bakPath, path);
+                    tmpFile.close();
+                    if (sd.exists(bakPath)) sd.remove(bakPath);
+                    if (sd.exists(path)) {
+                        sd.rename(path, bakPath);
+                    }
+                    if (sd.rename(tmpPath, path)) {
+                        success = true;
+                    } else {
+                        sd.rename(bakPath, path);
+                    }
                 }
             } else {
                 tmpFile.close();

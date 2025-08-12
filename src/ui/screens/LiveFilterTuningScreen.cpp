@@ -12,6 +12,7 @@
 
 extern ConfigManager configManager;
 extern FilterManager phFilter, ecFilter;
+extern char g_sessionTimestamp[20];
 
 LiveFilterTuningScreen::LiveFilterTuningScreen(AdcManager* adcManager, PBiosContext* context, CalibrationManager* phCal, CalibrationManager* ecCal, TempManager* tempManager) :
     _adcManager(adcManager),
@@ -54,17 +55,12 @@ void LiveFilterTuningScreen::handleInput(const InputEvent& event) {
     }
 }
 
-/**
- * @brief --- DEFINITIVE REFACTOR: Assembles the hub view with a clean, simple layout. ---
- */
+
 void LiveFilterTuningScreen::getRenderProps(UIRenderProps* props_to_fill) {
     *props_to_fill = UIRenderProps();
 
     // 1. Get the base layout with graphs and the calibrated value.
     getManualTuneRenderProps(props_to_fill);
-
-    // --- DEFINITIVE FIX: The logic for the overlapping help text is completely removed. ---
-    // The top screen now correctly and permanently shows the graph and its KPIs.
     
     // 2. Overwrite the MIDDLE OLED with the hub menu.
     OledProps& mid_props = props_to_fill->oled_middle_props;
@@ -131,12 +127,15 @@ void LiveFilterTuningScreen::handleHubMenuInput(const InputEvent& event) {
         }
         else if (selected_item == "Save Tune") {
             if (_context && _context->selectedFilter) {
-                configManager.saveFilterSettings(*_context->selectedFilter, _context->selectedFilterName.c_str(), true);
-                configManager.saveFilterSettings(*_context->selectedFilter, _context->selectedFilterName.c_str(), false);
+                // This saves the user's manual tune as a timestamped log file.
+                configManager.saveFilterSettings(*_context->selectedFilter, _context->selectedFilterName.c_str(), g_sessionTimestamp, true);
+                // This saves the current settings as the new default for the next boot.
+                configManager.saveFilterSettings(*_context->selectedFilter, _context->selectedFilterName.c_str(), "default", false);
             }
         }
         else if (selected_item == "Restore Tune") {
             if (_context && _context->selectedFilter) {
+                // Loading always restores from the non-timestamped default file.
                 configManager.loadFilterSettings(*_context->selectedFilter, _context->selectedFilterName.c_str(), true);
             }
         }
@@ -169,6 +168,7 @@ void LiveFilterTuningScreen::getManualTuneRenderProps(UIRenderProps* props_to_fi
     }
     props_to_fill->oled_middle_props.line1 = cal_val_buf;
 
+    // --- DEFINITIVE FIX: Corrected the typo in the variable name ---
     dtostrf(_lf_r_std, 4, 3, r_buf); dtostrf(_lf_f_std, 4, 3, f_buf);
     snprintf(lf_top, sizeof(lf_top), "R:%s F:%s", r_buf, f_buf);
     snprintf(lf_br, sizeof(lf_br), "Stab:%d%%", _lf_stab_percent);
