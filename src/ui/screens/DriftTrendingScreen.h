@@ -19,11 +19,11 @@ public:
     DriftTrendingScreen(PBiosContext* context, AdcManager* adcManager);
     void handleInput(const InputEvent& event) override;
     void getRenderProps(UIRenderProps* props_to_fill) override;
-    void onEnter(StateManager* stateManager) override;
+    // --- DEFINITIVE FIX: Update signature to match the base class ---
+    void onEnter(StateManager* stateManager, int context = 0) override;
 
     void setAnalysisResults(const double* fft_magnitudes);
     void setSamplingProgress(int percent);
-    // --- NEW: Public method for the data task to trigger the analyzing state ---
     void setAnalyzing();
     bool isSampling() const;
     int getSelectedDurationSec() const;

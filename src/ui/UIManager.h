@@ -9,6 +9,9 @@
 #include "blocks/ButtonBlock.h"
 #include "blocks/GraphBlock.h"
 #include "blocks/ProgressBarBlock.h"
+// --- NEW: Include the new block's header ---
+#include "blocks/CalibrationCurveBlock.h"
+
 
 struct OledProps {
     std::string line1;
@@ -18,6 +21,8 @@ struct OledProps {
     MenuBlockProps menu_props;
     GraphBlockProps graph_props;
     ProgressBarProps progress_bar_props;
+    // --- NEW: Add props for the new block ---
+    CalibrationCurveBlockProps cal_curve_props;
 };
 
 struct UIRenderProps {

@@ -8,7 +8,6 @@
 #include <stdio.h>   
 #include "ui/UIManager.h" // Include for UIRenderProps definition
 
-// ... (constructor and other methods are unchanged) ...
 NoiseAnalysisScreen::NoiseAnalysisScreen(PBiosContext* context, AdcManager* adcManager) :
     _context(context),
     _adcManager(adcManager),
@@ -29,11 +28,17 @@ NoiseAnalysisScreen::NoiseAnalysisScreen(PBiosContext* context, AdcManager* adcM
         _result_samples[i] = 0.0;
     }
 }
-void NoiseAnalysisScreen::onEnter(StateManager* stateManager) {
+
+/**
+ * @brief --- DEFINITIVE FIX: Update signature to match the base class ---
+ */
+void NoiseAnalysisScreen::onEnter(StateManager* stateManager, int context) {
     Screen::onEnter(stateManager);
     _current_state = AnalysisState::SELECT_SOURCE;
     _sampling_progress_percent = 0;
 }
+
+// ... (rest of the file is unchanged) ...
 void NoiseAnalysisScreen::handleInput(const InputEvent& event) {
     switch (_current_state) {
         case AnalysisState::SELECT_SOURCE: handleSelectSourceInput(event); break;
@@ -110,24 +115,15 @@ void NoiseAnalysisScreen::getSamplingRenderProps(UIRenderProps* props_to_fill) {
     props_to_fill->oled_middle_props.progress_bar_props.label = "Sampling...";
     props_to_fill->oled_middle_props.progress_bar_props.progress_percent = _sampling_progress_percent;
 }
-
-
-/**
- * @brief --- FIX: Populates render properties for VIEW_RESULTS with a redesigned, data-centric layout ---
- * This new layout removes the unhelpful raw signal graph and instead presents a
- * clean, readable summary of the key statistical results.
- */
 void NoiseAnalysisScreen::getViewResultsRenderProps(UIRenderProps* props_to_fill) {
     char buffer[32];
 
-    // --- Top OLED: Header and Primary KPIs ---
     props_to_fill->oled_top_props.line1 = "Results: " + _source_menu_items[_selected_source_index];
     snprintf(buffer, sizeof(buffer), "Mean:   %.2f mV", _result_mean);
     props_to_fill->oled_top_props.line2 = buffer;
     snprintf(buffer, sizeof(buffer), "StdDev: %.2f mV", _result_std_dev);
     props_to_fill->oled_top_props.line3 = buffer;
 
-    // --- Middle OLED: Secondary KPIs ---
     snprintf(buffer, sizeof(buffer), "Min:   %.2f mV", _result_min);
     props_to_fill->oled_middle_props.line1 = buffer;
     snprintf(buffer, sizeof(buffer), "Max:   %.2f mV", _result_max);
@@ -135,11 +131,9 @@ void NoiseAnalysisScreen::getViewResultsRenderProps(UIRenderProps* props_to_fill
     snprintf(buffer, sizeof(buffer), "Pk-Pk: %.2f mV", _result_pk_pk);
     props_to_fill->oled_middle_props.line3 = buffer;
 
-    // --- Bottom OLED: Contextual Help ---
     props_to_fill->oled_bottom_props.line1 = "Press any button to continue.";
 
-    // --- Button Prompts: FIX - Only one "Done" button ---
     props_to_fill->button_props.back_text = "Done";
     props_to_fill->button_props.enter_text = "";
-    props_to_fill->button_props.down_text = ""; // Removed duplicate
+    props_to_fill->button_props.down_text = "";
 }

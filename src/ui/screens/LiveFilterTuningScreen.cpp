@@ -37,13 +37,17 @@ LiveFilterTuningScreen::LiveFilterTuningScreen(AdcManager* adcManager, PBiosCont
     _hub_menu_items.push_back("Exit");
 }
 
-void LiveFilterTuningScreen::onEnter(StateManager* stateManager) {
+/**
+ * @brief --- DEFINITIVE FIX: Update signature to match the base class ---
+ */
+void LiveFilterTuningScreen::onEnter(StateManager* stateManager, int context) {
     Screen::onEnter(stateManager);
     _is_in_manual_tune_mode = false; 
     _selected_index = 0;
     _is_compare_mode_active = false;
 }
 
+// ... (rest of the file is unchanged) ...
 void LiveFilterTuningScreen::handleInput(const InputEvent& event) {
     if (_is_in_manual_tune_mode) {
         if (_stateManager) {
@@ -54,8 +58,6 @@ void LiveFilterTuningScreen::handleInput(const InputEvent& event) {
         handleHubMenuInput(event);
     }
 }
-
-
 void LiveFilterTuningScreen::getRenderProps(UIRenderProps* props_to_fill) {
     *props_to_fill = UIRenderProps();
 
@@ -71,8 +73,6 @@ void LiveFilterTuningScreen::getRenderProps(UIRenderProps* props_to_fill) {
     // 3. Set the correct button prompts for the hub.
     props_to_fill->button_props.down_text = "Select";
 }
-
-
 void LiveFilterTuningScreen::update() {
     if (!_context || !_context->selectedFilter) return;
     PI_Filter* hfFilter = _context->selectedFilter->getFilter(0);
@@ -111,7 +111,6 @@ void LiveFilterTuningScreen::update() {
         }
     }
 }
-
 void LiveFilterTuningScreen::handleHubMenuInput(const InputEvent& event) {
     if (event.type == InputEventType::ENCODER_INCREMENT) {
         if (_selected_index < _hub_menu_items.size() - 1) _selected_index++;
@@ -142,7 +141,6 @@ void LiveFilterTuningScreen::handleHubMenuInput(const InputEvent& event) {
         else if (selected_item == "Exit") { if (_stateManager) _stateManager->changeState(ScreenState::FILTER_SELECTION); }
     }
 }
-
 void LiveFilterTuningScreen::getManualTuneRenderProps(UIRenderProps* props_to_fill) {
     static char hf_top[40], hf_br[20], lf_top[40], lf_br[20], r_buf[10], f_buf[10];
     
@@ -167,8 +165,7 @@ void LiveFilterTuningScreen::getManualTuneRenderProps(UIRenderProps* props_to_fi
         snprintf(cal_val_buf, sizeof(cal_val_buf), "Value: %.0f uS", _calibrated_value); 
     }
     props_to_fill->oled_middle_props.line1 = cal_val_buf;
-
-    // --- DEFINITIVE FIX: Corrected the typo in the variable name ---
+    
     dtostrf(_lf_r_std, 4, 3, r_buf); dtostrf(_lf_f_std, 4, 3, f_buf);
     snprintf(lf_top, sizeof(lf_top), "R:%s F:%s", r_buf, f_buf);
     snprintf(lf_br, sizeof(lf_br), "Stab:%d%%", _lf_stab_percent);

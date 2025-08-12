@@ -11,8 +11,6 @@ StateManager::StateManager() :
 {}
 
 StateManager::~StateManager() {
-    // --- DEFINITIVE FIX: Revert to a C++11 compatible iterator loop ---
-    // This resolves the compiler warning about structured bindings.
     for (std::map<ScreenState, Screen*>::iterator it = _screens.begin(); it != _screens.end(); ++it) {
         delete it->second;
     }
@@ -35,7 +33,12 @@ void StateManager::addScreen(ScreenState state, Screen* screen) {
     }
 }
 
-void StateManager::changeState(ScreenState new_state) {
+/**
+ * @brief --- MODIFIED: Accepts an optional context integer. ---
+ * This integer is passed to the new screen's onEnter method, allowing for
+ * stateful transitions (e.g., telling the measurement screen which probe to display).
+ */
+void StateManager::changeState(ScreenState new_state, int context) {
     if (_activeScreen != nullptr) {
         _activeScreen->onExit();
     }
@@ -43,7 +46,7 @@ void StateManager::changeState(ScreenState new_state) {
     if (it != _screens.end()) {
         _currentState = new_state;
         _activeScreen = it->second;
-        _activeScreen->onEnter(this);
+        _activeScreen->onEnter(this, context);
     } else {
         _activeScreen = nullptr;
         _currentState = ScreenState::NONE;

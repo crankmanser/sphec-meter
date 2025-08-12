@@ -10,24 +10,20 @@
 
 class StateManager;
 
-/**
- * @brief --- DEFINITIVE REFACTOR: Simplifies the wizard states. ---
- * The complex multi-stage states are replaced by a single `AUTO_TUNE_RUNNING`
- * state to reflect the new, monolithic `proposeSettings` function.
- */
 enum class ScreenState {
     NONE,
-    // Main App States
+    // --- NEW: Main App States ---
     MAIN_MENU,
+    MEASURE_MENU,
+    PROBE_MEASUREMENT,
+    LIGHT_SENSOR,
     // pBIOS States
     PBIOS_MENU,
     FILTER_SELECTION,
     LIVE_FILTER_TUNING,
     PARAMETER_EDIT,
     AUTO_TUNE_SUB_MENU,
-    // --- Wizard State ---
-    AUTO_TUNE_RUNNING, // Simplified from four states to one
-    // --- Standalone Diagnostic States ---
+    AUTO_TUNE_RUNNING,
     NOISE_ANALYSIS,
     DRIFT_TRENDING,
     MAINTENANCE_MENU,
@@ -35,14 +31,15 @@ enum class ScreenState {
     LIVE_VOLTMETER,
     HARDWARE_SELF_TEST,
     PROBE_PROFILING,
-    // --- NEW: Add the final power off state ---
     POWER_OFF
 };
 
 class Screen {
 public:
     virtual ~Screen() {}
-    virtual void onEnter(StateManager* stateManager) { _stateManager = stateManager; }
+    // --- NEW: Add an optional integer argument to onEnter ---
+    // This allows us to pass context, like the probe type, when changing state.
+    virtual void onEnter(StateManager* stateManager, int context = 0) { _stateManager = stateManager; }
     virtual void onExit() {}
     virtual void handleInput(const InputEvent& event) = 0;
     virtual void getRenderProps(UIRenderProps* props_to_fill) = 0;
@@ -56,7 +53,8 @@ public:
     ~StateManager();
     void begin();
     void addScreen(ScreenState state, Screen* screen);
-    void changeState(ScreenState new_state);
+    // --- NEW: Add an optional integer argument to changeState ---
+    void changeState(ScreenState new_state, int context = 0);
     Screen* getActiveScreen();
     Screen* getScreen(ScreenState state);
     ScreenState getActiveScreenState() const;

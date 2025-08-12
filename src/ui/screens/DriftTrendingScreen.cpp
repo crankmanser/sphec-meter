@@ -9,7 +9,6 @@
 #include <algorithm>
 #include "ui/UIManager.h" // Include for UIRenderProps definition
 
-// ... (constructor and all other existing methods are unchanged) ...
 DriftTrendingScreen::DriftTrendingScreen(PBiosContext* context, AdcManager* adcManager) :
     _context(context),
     _adcManager(adcManager),
@@ -30,11 +29,17 @@ DriftTrendingScreen::DriftTrendingScreen(PBiosContext* context, AdcManager* adcM
         _fft_results[i] = 0.0;
     }
 }
-void DriftTrendingScreen::onEnter(StateManager* stateManager) {
+
+/**
+ * @brief --- DEFINITIVE FIX: Update signature to match the base class ---
+ */
+void DriftTrendingScreen::onEnter(StateManager* stateManager, int context) {
     Screen::onEnter(stateManager);
     _current_state = TrendingState::SELECT_SOURCE;
     _sampling_progress_percent = 0;
 }
+
+// ... (rest of the file is unchanged) ...
 void DriftTrendingScreen::handleInput(const InputEvent& event) {
     switch (_current_state) {
         case TrendingState::SELECT_SOURCE: handleSelectSourceInput(event); break;
@@ -146,16 +151,9 @@ void DriftTrendingScreen::getViewResultsRenderProps(UIRenderProps* props_to_fill
     props_to_fill->oled_bottom_props.line1 = "Press any button to continue.";
     props_to_fill->button_props.back_text = "Done";
 }
-
-/**
- * @brief --- NEW: Implementation for the state-setting method ---
- * This function is called by the pBiosDataTask to transition the UI into
- * the "Analyzing" state after sampling is complete.
- */
 void DriftTrendingScreen::setAnalyzing() {
     _current_state = TrendingState::ANALYZING;
 }
-
 void DriftTrendingScreen::setAnalysisResults(const double* fft_magnitudes) {
     for (int i = 0; i < FFT_BIN_COUNT; ++i) {
         _fft_results[i] = fft_magnitudes[i];

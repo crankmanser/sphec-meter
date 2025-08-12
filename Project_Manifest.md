@@ -4,6 +4,15 @@ This document tracks the development progress, current tasks, and future roadmap
 
 ## Changelog (What Was Done)
 
+* **v3.1.6 (2025-08-12):**
+    * **Status:** Complete.
+    * **Milestone:** Implemented the complete user-facing measurement workflow for Normal Boot mode.
+    * **Feature (UI):** Created a new `MeasureMenuScreen` to allow the user to select which probe they want to view.
+    * **Feature (UI):** Created a powerful, generic `ProbeMeasurementScreen` that displays a rich set of data for the selected probe, including live values, raw data, and a graphical plot of the calibration curve.
+    * **Feature (UI):** Created a new, specialized `CalibrationCurveBlock` to render the static calibration model and a live crosshair, keeping it architecturally separate from the time-series `GraphBlock`.
+    * **Feature (Backend):** Implemented a comprehensive "Capture" feature. When triggered, the system saves a detailed JSON snapshot of all current sensor readings, filter parameters, calibration data, and system status to the SD card for later analysis.
+    * **Architecture:** Implemented an on-demand probe activation system. Probes are now kept in a low-power `DORMANT` state by default and are only activated when the user navigates to the measurement screen, significantly preserving the probe's operational lifespan.
+
 * **v3.1.5 (2025-08-11):**
     * **Status:** In Progress.
     * **Milestone:** Completed the implementation of the "Probe Analysis" report card feature, including the foundational `RtcManager` for session-based timestamping and all associated UI and backend logic. All known bugs related to file saving and feature freezes have been resolved.
@@ -358,9 +367,10 @@ This document tracks the development progress, current tasks, and future roadmap
 
 ## Current Task (What We Are Doing)
 
-* **Implement the `Shutdown` screen logic.**
-    * **Goal:** To create a safe shutdown workflow that ensures all pending data is saved correctly before the user powers off the device.
-    * **Next Step:** Design the shutdown workflow, including the "Safe to Power Off" message screen, and begin implementing the UI and backend logic. All other tasks are blocked until this is complete.
+* **Implement the multi-step `Calibration Wizard Screen`.**
+    * **Goal:** To create a user-friendly, guided workflow in the main application for performing a 3-point calibration for the pH and EC probes.
+    * **Next Step:** Design the screen layouts and state transitions for the wizard and begin implementing the UI and backend logic.
+
 
 
 
@@ -379,17 +389,14 @@ This document tracks the development progress, current tasks, and future roadmap
 
 ## Roadmap (What Is to Come)
 
-1.  **Complete pBIOS Feature Set:**
-    * a. Implement the `Shutdown` screen logic.
-    * b. Revisit and finalize the `Probe Analysis` screen.
-    * c. **(DEFERRED)** Implement the `New Probe` utility.
-    * d. **(DEFERRED)** Implement the `pBIOS Snapshot` function.
-    * e. **(DEFERRED)** Implement the `SD Card Formatter` utility.
+1.  **UI - Phase 4: Normal Boot UI:**
+    * a. Implement the multi-step `Calibration Wizard Screen`, including the guided "Hardware Calibration" for setting the amplifier's 2500 mV zero-point.
 
-2.  **UI - Phase 4: Begin Normal Boot UI:**
-    * a. Create the `Live Measurement Screen`, which will be the primary user-facing display.
-    * b. Begin implementation of the multi-step `Calibration Wizard Screen`, including the guided "Hardware Calibration" for setting the amplifier's 2500 mV zero-point.
+2.  **Implement the `SystemStatus` Manager** for detecting and reporting non-fatal errors like "Probe Disconnected."
 
-3.  **Implement the `SystemStatus` Manager** for detecting and reporting non-fatal errors like "Probe Disconnected."
+3.  **Implement the `ConnectivityManager`** for the Android Suite feedback loop.
 
-4.  **Implement the `ConnectivityManager`** for the Android Suite feedback loop.
+4.  **Complete pBIOS Feature Set:**
+    * a. **(DEFERRED)** Implement the `New Probe` utility.
+    * b. **(DEFERRED)** Implement the `pBIOS Snapshot` function.
+    * c. **(DEFERRED)** Implement the `SD Card Formatter` utility.

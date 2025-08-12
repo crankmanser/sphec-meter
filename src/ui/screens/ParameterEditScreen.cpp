@@ -20,7 +20,10 @@ ParameterEditScreen::ParameterEditScreen(PBiosContext* context) :
     _param_menu_items.push_back("LF Track Assist");
 }
 
-void ParameterEditScreen::onEnter(StateManager* stateManager) {
+/**
+ * @brief --- DEFINITIVE FIX: Update signature to match the base class ---
+ */
+void ParameterEditScreen::onEnter(StateManager* stateManager, int context) {
     Screen::onEnter(stateManager);
     _is_editing = false;
     _selected_index = 0;
@@ -30,6 +33,7 @@ void ParameterEditScreen::onEnter(StateManager* stateManager) {
     }
 }
 
+// ... (rest of the file is unchanged) ...
 void ParameterEditScreen::handleInput(const InputEvent& event) {
     if (event.type == InputEventType::BTN_BACK_PRESS) {
         if (_is_editing) {
@@ -69,13 +73,6 @@ void ParameterEditScreen::handleInput(const InputEvent& event) {
         else if (event.type == InputEventType::ENCODER_DECREMENT) { if (_selected_index > 0) _selected_index--; }
     }
 }
-
-/**
- * @brief --- DEFINITIVE FIX: Rewritten to be self-contained. ---
- * This function no longer inherits render properties from the hub screen.
- * It now starts with a clean slate and calls the workbench's helper function
- * to draw the background, preventing any "ghost text" from bleeding through.
- */
 void ParameterEditScreen::getRenderProps(UIRenderProps* props_to_fill) {
     // Start with a clean slate to prevent any state bleed-through.
     *props_to_fill = UIRenderProps();
@@ -101,7 +98,6 @@ void ParameterEditScreen::getRenderProps(UIRenderProps* props_to_fill) {
     props_to_fill->button_props.enter_text = _is_editing ? "OK" : "Edit";
     props_to_fill->button_props.down_text = "Set";
 }
-
 std::string ParameterEditScreen::getSelectedParamValueString() {
     if (!_context || !_context->selectedFilter) return "N/A";
     PI_Filter* filter = (_selected_index < 4) ? _context->selectedFilter->getFilter(0) : _context->selectedFilter->getFilter(1);

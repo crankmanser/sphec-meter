@@ -1,5 +1,5 @@
 // File Path: /src/ui/screens/ParameterEditScreen.h
-// NEW FILE
+// MODIFIED FILE
 
 #ifndef PARAMETER_EDIT_SCREEN_H
 #define PARAMETER_EDIT_SCREEN_H
@@ -11,7 +11,8 @@
 class ParameterEditScreen : public Screen {
 public:
     ParameterEditScreen(PBiosContext* context);
-    void onEnter(StateManager* stateManager) override;
+    // --- DEFINITIVE FIX: Update signature to match the base class ---
+    void onEnter(StateManager* stateManager, int context = 0) override;
     void handleInput(const InputEvent& event) override;
     void getRenderProps(UIRenderProps* props_to_fill) override;
 

@@ -8,8 +8,6 @@
 #include <vector>
 #include <string>
 
-// --- NEW: Define a constant for the number of samples ---
-// This must be a power of 2 for the FFT algorithm to work efficiently.
 #define ANALYSIS_SAMPLE_COUNT 512
 
 struct PBiosContext;
@@ -20,14 +18,11 @@ public:
     NoiseAnalysisScreen(PBiosContext* context, AdcManager* adcManager);
     void handleInput(const InputEvent& event) override;
     void getRenderProps(UIRenderProps* props_to_fill) override;
-    void onEnter(StateManager* stateManager) override;
+    // --- DEFINITIVE FIX: Update signature to match the base class ---
+    void onEnter(StateManager* stateManager, int context = 0) override;
 
-    // --- FIX: Signature updated to accept the raw sample data buffer ---
     void setAnalysisResults(double mean, double min, double max, double pk_pk, double std_dev, const std::vector<double>& samples);
-    
-    // --- NEW: Public method for the data task to update progress ---
     void setSamplingProgress(int percent);
-
     bool isSampling() const;
 
 private:
@@ -50,9 +45,8 @@ private:
     std::vector<std::string> _source_menu_items;
     int _selected_source_index;
 
-    // --- NEW: Member variables for progress and graph data ---
     int _sampling_progress_percent;
-    double _result_samples[ANALYSIS_SAMPLE_COUNT]; // Fixed-size array for graph data
+    double _result_samples[ANALYSIS_SAMPLE_COUNT];
 
     double _result_mean;
     double _result_min;

@@ -1,5 +1,5 @@
 // File Path: /src/ui/screens/HardwareTestScreen.h
-// NEW FILE
+// MODIFIED FILE
 
 #ifndef HARDWARE_TEST_SCREEN_H
 #define HARDWARE_TEST_SCREEN_H
@@ -17,7 +17,8 @@ public:
     HardwareTestScreen();
     void handleInput(const InputEvent& event) override;
     void getRenderProps(UIRenderProps* props_to_fill) override;
-    void onEnter(StateManager* stateManager) override;
+    // --- DEFINITIVE FIX: Update signature to match the base class ---
+    void onEnter(StateManager* stateManager, int context = 0) override;
 
     /**
      * @brief Updates the list of test results to be displayed.

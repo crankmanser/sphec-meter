@@ -1,5 +1,5 @@
 // File Path: /src/ui/screens/LiveVoltmeterScreen.cpp
-// NEW FILE
+// MODIFIED FILE
 
 #include "LiveVoltmeterScreen.h"
 #include "ADS1118.h" // For ADC channel definitions
@@ -17,13 +17,17 @@ LiveVoltmeterScreen::LiveVoltmeterScreen() :
     _source_menu_items.push_back("5.0V Bus");
 }
 
-void LiveVoltmeterScreen::onEnter(StateManager* stateManager) {
+/**
+ * @brief --- DEFINITIVE FIX: Update signature to match the base class ---
+ */
+void LiveVoltmeterScreen::onEnter(StateManager* stateManager, int context) {
     Screen::onEnter(stateManager);
     // Reset to the selection state every time the user enters this screen.
     _current_state = VoltmeterState::SELECT_SOURCE;
     _live_voltage_mv = 0.0;
 }
 
+// ... (rest of the file is unchanged) ...
 void LiveVoltmeterScreen::handleInput(const InputEvent& event) {
     if (_current_state == VoltmeterState::SELECT_SOURCE) {
         handleSelectSourceInput(event);
@@ -31,7 +35,6 @@ void LiveVoltmeterScreen::handleInput(const InputEvent& event) {
         handleMeasuringInput(event);
     }
 }
-
 void LiveVoltmeterScreen::getRenderProps(UIRenderProps* props_to_fill) {
     if (_current_state == VoltmeterState::SELECT_SOURCE) {
         props_to_fill->oled_top_props.line1 = "pBios > ADC Voltmeter";
@@ -54,16 +57,13 @@ void LiveVoltmeterScreen::getRenderProps(UIRenderProps* props_to_fill) {
         props_to_fill->button_props.back_text = "Back";
     }
 }
-
 void LiveVoltmeterScreen::setLiveVoltage(double voltage) {
     _live_voltage_mv = voltage;
 }
-
 uint8_t LiveVoltmeterScreen::getSelectedAdcIndex() const {
     // pH and 3.3V are on ADC 0, EC and 5.0V are on ADC 1
     return (_selected_index == 1 || _selected_index == 3) ? 1 : 0;
 }
-
 uint8_t LiveVoltmeterScreen::getSelectedAdcInput() const {
     switch (_selected_index) {
         case 0: return ADS1118::DIFF_0_1; // pH
@@ -73,11 +73,9 @@ uint8_t LiveVoltmeterScreen::getSelectedAdcInput() const {
         default: return 0;
     }
 }
-
 bool LiveVoltmeterScreen::isMeasuring() const {
     return _current_state == VoltmeterState::MEASURING;
 }
-
 void LiveVoltmeterScreen::handleSelectSourceInput(const InputEvent& event) {
     if (event.type == InputEventType::ENCODER_INCREMENT) {
         if (_selected_index < _source_menu_items.size() - 1) _selected_index++;
@@ -89,7 +87,6 @@ void LiveVoltmeterScreen::handleSelectSourceInput(const InputEvent& event) {
         if (_stateManager) _stateManager->changeState(ScreenState::MAINTENANCE_MENU);
     }
 }
-
 void LiveVoltmeterScreen::handleMeasuringInput(const InputEvent& event) {
     if (event.type == InputEventType::BTN_BACK_PRESS) {
         _current_state = VoltmeterState::SELECT_SOURCE;

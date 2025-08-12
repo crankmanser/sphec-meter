@@ -17,11 +17,15 @@ ProbeProfilingScreen::ProbeProfilingScreen() :
     _menu_items.push_back("EC Probe");
 }
 
-void ProbeProfilingScreen::onEnter(StateManager* stateManager) {
+/**
+ * @brief --- DEFINITIVE FIX: Update signature to match the base class ---
+ */
+void ProbeProfilingScreen::onEnter(StateManager* stateManager, int context) {
     Screen::onEnter(stateManager);
     _current_state = ProfilingState::SELECT_PROBE;
 }
 
+// ... (rest of the file is unchanged) ...
 void ProbeProfilingScreen::handleInput(const InputEvent& event) {
     switch (_current_state) {
         case ProfilingState::SELECT_PROBE:
@@ -35,12 +39,6 @@ void ProbeProfilingScreen::handleInput(const InputEvent& event) {
             break;
     }
 }
-
-/**
- * @brief --- MODIFIED: Renders the full, three-OLED "Report Card". ---
- * This function now displays the complete set of live and historical KPIs
- * according to our finalized design.
- */
 void ProbeProfilingScreen::getRenderProps(UIRenderProps* props_to_fill) {
     *props_to_fill = UIRenderProps(); // Clear previous props
 
@@ -93,28 +91,20 @@ void ProbeProfilingScreen::getRenderProps(UIRenderProps* props_to_fill) {
             break;
     }
 }
-
 bool ProbeProfilingScreen::isAnalyzing() const {
     return _current_state == ProfilingState::ANALYZING;
 }
-
 uint8_t ProbeProfilingScreen::getSelectedAdcIndex() const {
     return _selected_index; // 0 for pH, 1 for EC
 }
-
 uint8_t ProbeProfilingScreen::getSelectedAdcInput() const {
     return ADS1118::DIFF_0_1;
 }
-
 const std::string& ProbeProfilingScreen::getSelectedFilterName() const {
     static const std::string ph_name = "ph_filter";
     static const std::string ec_name = "ec_filter";
     return (_selected_index == 0) ? ph_name : ec_name;
 }
-
-/**
- * @brief --- MODIFIED: Stores the full set of report card KPIs. ---
- */
 void ProbeProfilingScreen::setAnalysisResults(double live_r_std, const PI_Filter& hfFilter, const PI_Filter& lfFilter, double zero_point_drift, double cal_quality_score, const std::string& last_cal_timestamp) {
     _live_r_std = live_r_std;
     _hf_params_snapshot = hfFilter; // Uses safe copy assignment
@@ -124,7 +114,6 @@ void ProbeProfilingScreen::setAnalysisResults(double live_r_std, const PI_Filter
     _last_cal_timestamp = last_cal_timestamp;
     _current_state = ProfilingState::VIEW_REPORT;
 }
-
 void ProbeProfilingScreen::handleSelectProbeInput(const InputEvent& event) {
     if (event.type == InputEventType::ENCODER_INCREMENT) {
         if (_selected_index < _menu_items.size() - 1) _selected_index++;
@@ -136,7 +125,6 @@ void ProbeProfilingScreen::handleSelectProbeInput(const InputEvent& event) {
         if (_stateManager) _stateManager->changeState(ScreenState::MAINTENANCE_MENU);
     }
 }
-
 void ProbeProfilingScreen::handleViewReportInput(const InputEvent& event) {
     if (event.type == InputEventType::BTN_BACK_PRESS || event.type == InputEventType::BTN_DOWN_PRESS) {
         _current_state = ProfilingState::SELECT_PROBE;

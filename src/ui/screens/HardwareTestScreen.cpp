@@ -1,5 +1,5 @@
 // File Path: /src/ui/screens/HardwareTestScreen.cpp
-// NEW FILE
+// MODIFIED FILE
 
 #include "HardwareTestScreen.h"
 #include <string>
@@ -7,12 +7,16 @@
 
 HardwareTestScreen::HardwareTestScreen() {}
 
-void HardwareTestScreen::onEnter(StateManager* stateManager) {
+/**
+ * @brief --- DEFINITIVE FIX: Update signature to match the base class ---
+ */
+void HardwareTestScreen::onEnter(StateManager* stateManager, int context) {
     Screen::onEnter(stateManager);
     _results.clear();
     _final_message = "";
 }
 
+// ... (rest of the file is unchanged) ...
 void HardwareTestScreen::handleInput(const InputEvent& event) {
     // Only allow exiting after the tests are complete.
     if (!_final_message.empty()) {
@@ -21,7 +25,6 @@ void HardwareTestScreen::handleInput(const InputEvent& event) {
         }
     }
 }
-
 void HardwareTestScreen::getRenderProps(UIRenderProps* props_to_fill) {
     props_to_fill->oled_top_props.line1 = "pBios > Hardware Self-Test";
     
@@ -54,11 +57,9 @@ void HardwareTestScreen::getRenderProps(UIRenderProps* props_to_fill) {
         props_to_fill->button_props.down_text = "Done";
     }
 }
-
 void HardwareTestScreen::updateResults(const std::vector<TestResult>& results) {
     _results = results;
 }
-
 void HardwareTestScreen::setFinalMessage(const std::string& message) {
     _final_message = message;
 }

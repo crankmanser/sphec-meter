@@ -1,5 +1,5 @@
 // File Path: /src/ui/screens/MainMenuScreen.cpp
-// NEW FILE
+// MODIFIED FILE
 
 #include "MainMenuScreen.h"
 #include "ui/UIManager.h" // Include for UIRenderProps definition
@@ -26,7 +26,14 @@ void MainMenuScreen::handleInput(const InputEvent& event) {
             _selected_index--;
         }
     } else if (event.type == InputEventType::BTN_ENTER_PRESS) {
-        // STUB: Add navigation logic to other main app screens here.
+        // --- DEFINITIVE FIX: Navigate to the correct sub-menu ---
+        if (_stateManager) {
+            const std::string& selected_item = _menu_items[_selected_index];
+            if (selected_item == "Measure") {
+                _stateManager->changeState(ScreenState::MEASURE_MENU);
+            }
+            // STUB: Add navigation for other main app screens here.
+        }
     }
 }
 
