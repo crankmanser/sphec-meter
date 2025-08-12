@@ -41,6 +41,7 @@
 #include "ui/screens/DriftTrendingScreen.h"
 #include "ui/screens/AutoTuneSubMenuScreen.h"
 #include "ui/screens/MainMenuScreen.h"
+#include "ui/screens/PowerOffScreen.h" // --- NEW: Include the PowerOffScreen header ---
 
 // Global objects
 FaultHandler faultHandler;
@@ -157,6 +158,8 @@ void uiTask(void* pvParameters) {
         stateManager->addScreen(ScreenState::NOISE_ANALYSIS, new NoiseAnalysisScreen(&pBiosContext, &adcManager));
         stateManager->addScreen(ScreenState::DRIFT_TRENDING, new DriftTrendingScreen(&pBiosContext, &adcManager));
         stateManager->addScreen(ScreenState::AUTO_TUNE_SUB_MENU, new AutoTuneSubMenuScreen());
+        // --- NEW: Register the PowerOffScreen with the state manager ---
+        stateManager->addScreen(ScreenState::POWER_OFF, new PowerOffScreen());
         stateManager->changeState(ScreenState::PBIOS_MENU);
     } else {
         stateManager->addScreen(ScreenState::MAIN_MENU, new MainMenuScreen());
@@ -225,36 +228,30 @@ void dataTask(void* pvParameters) {
             
             case ScreenState::PROBE_PROFILING: {
                 ProbeProfilingScreen* profileScreen = static_cast<ProbeProfilingScreen*>(stateManager->getScreen(ScreenState::PROBE_PROFILING));
-                // --- DEFINITIVE FIX: The backend logic is now correctly implemented ---
                 if (profileScreen && profileScreen->isAnalyzing()) {
-                    // 1. Get identifiers for the selected probe
                     uint8_t adcIndex = profileScreen->getSelectedAdcIndex();
                     uint8_t adcInput = profileScreen->getSelectedAdcInput();
                     const char* filterName = profileScreen->getSelectedFilterName().c_str();
                     const char* calFileName = (adcIndex == 0) ? "/ph_cal.json" : "/ec_cal.json";
 
-                    // 2. Initialize variables for the report card
                     double live_r_std = 0.0, zero_point_drift = 0.0, cal_quality_score = 0.0;
                     char last_cal_timestamp[20] = "N/A";
                     PI_Filter hf_snapshot, lf_snapshot;
 
-                    // 3. Load historical calibration KPIs
                     StaticJsonDocument<512> calDoc;
                     if (sdManager.loadJson(calFileName, calDoc)) {
                         zero_point_drift = calDoc["zpDrift"] | 0.0;
                         cal_quality_score = calDoc["quality"] | 0.0;
                         strncpy(last_cal_timestamp, calDoc["timestamp"] | "N/A", sizeof(last_cal_timestamp) -1);
-                        last_cal_timestamp[sizeof(last_cal_timestamp) - 1] = '\0'; // Ensure null termination
+                        last_cal_timestamp[sizeof(last_cal_timestamp) - 1] = '\0';
                     }
 
-                    // 4. Load saved filter parameters ("Filter Creep")
                     FilterManager tempFilterManager;
                     tempFilterManager.begin(faultHandler, configManager, "temp"); 
                     configManager.loadFilterSettings(tempFilterManager, filterName, true); 
                     hf_snapshot = *tempFilterManager.getFilter(0);
                     lf_snapshot = *tempFilterManager.getFilter(1);
 
-                    // 5. Perform live signal analysis for R_std
                     const int num_samples = 100;
                     double sum = 0.0, sum_sq = 0.0;
                     for (int i = 0; i < num_samples; ++i) {
@@ -267,7 +264,6 @@ void dataTask(void* pvParameters) {
                     double variance = (sum_sq / num_samples) - (mean * mean);
                     live_r_std = (variance > 0) ? sqrt(variance) : 0.0;
                     
-                    // 6. Send the completed report card to the UI
                     profileScreen->setAnalysisResults(live_r_std, hf_snapshot, lf_snapshot, zero_point_drift, cal_quality_score, std::string(last_cal_timestamp));
                 }
                 break;

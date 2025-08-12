@@ -35,6 +35,8 @@ enum class ScreenState {
     LIVE_VOLTMETER,
     HARDWARE_SELF_TEST,
     PROBE_PROFILING,
+    // --- NEW: Add the final power off state ---
+    POWER_OFF
 };
 
 class Screen {
