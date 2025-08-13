@@ -27,6 +27,8 @@
 #include "pBiosContext.h"
 #include "GuidedTuningEngine.h"
 #include "HardwareTester.h"
+// --- NEW: Add the FFT library include ---
+#include <arduinoFFT.h>
 
 // Screen Headers
 #include "ui/screens/MainMenuScreen.h"
@@ -153,7 +155,7 @@ void uiTask(void* pvParameters) {
         stateManager->addScreen(ScreenState::PROBE_PROFILING, new ProbeProfilingScreen());
         stateManager->addScreen(ScreenState::NOISE_ANALYSIS, new NoiseAnalysisScreen(&pBiosContext, &adcManager));
         stateManager->addScreen(ScreenState::DRIFT_TRENDING, new DriftTrendingScreen(&pBiosContext, &adcManager));
-        stateManager->addScreen(ScreenState::AUTO_TUNE_SUB_MENU, new AutoTuneSubMenuScreen());
+        stateManager->addScreen(ScreenState::AUTO_TUNE_SUB_MENU, new AutoTuneSubMenuScreen(&adcManager));
         stateManager->addScreen(ScreenState::POWER_OFF, new PowerOffScreen());
         stateManager->changeState(ScreenState::PBIOS_MENU);
     } else {
@@ -194,13 +196,6 @@ void uiTask(void* pvParameters) {
     }
 }
 
-/**
- * @brief --- DEFINITIVE FIX: Re-architected for robust mode handling. ---
- * This function is now correctly structured with two separate, mutually exclusive
- * logic blocks for NORMAL and PBIOS modes. This guarantees that the correct
- * data processing loop is always active for the current boot mode and prevents
- * regressions like the previously "dead" filter pipeline.
- */
 void dataTask(void* pvParameters) {
     BootMode mode = static_cast<BootMode>(reinterpret_cast<intptr_t>(pvParameters));
     LOG_BOOT("Data Task started on Core %d", xPortGetCoreID());
@@ -212,7 +207,6 @@ void dataTask(void* pvParameters) {
         if (!stateManager) { vTaskDelay(pdMS_TO_TICKS(100)); continue; }
         ScreenState currentState = stateManager->getActiveScreenState();
         
-        // --- NORMAL MODE LOGIC ---
         if (mode == BootMode::NORMAL) {
             switch(currentState) {
                 case ScreenState::PROBE_MEASUREMENT: {
@@ -301,13 +295,13 @@ void dataTask(void* pvParameters) {
                 default: break;
             }
         }
-        // --- PBIOS MODE LOGIC ---
         else if (mode == BootMode::PBIOS) {
             switch (currentState) {
                 case ScreenState::LIVE_FILTER_TUNING:
                 case ScreenState::PARAMETER_EDIT:
                      if (pBiosContext.selectedFilter) {
                         double raw_voltage = adcManager.getVoltage(pBiosContext.selectedAdcIndex, pBiosContext.selectedAdcInput);
+                        LOG_FILTER("dataTask: Processing raw voltage: %.4f", raw_voltage);
                         pBiosContext.selectedFilter->process(raw_voltage);
                      }
                     break;
@@ -386,6 +380,41 @@ void dataTask(void* pvParameters) {
                         double std_dev = (variance > 0) ? sqrt(variance) : 0.0;
                         double pk_pk = max_val - min_val;
                         noiseScreen->setAnalysisResults(mean, min_val, max_val, pk_pk, std_dev, samples);
+                    }
+                    break;
+                }
+                // --- DEFINITIVE FIX: Add the complete backend logic for Drift Trending Analysis ---
+                case ScreenState::DRIFT_TRENDING: {
+                    DriftTrendingScreen* driftScreen = static_cast<DriftTrendingScreen*>(stateManager->getScreen(ScreenState::DRIFT_TRENDING));
+                    if (driftScreen && driftScreen->isSampling()) {
+                        uint8_t adcIndex = pBiosContext.selectedAdcIndex;
+                        uint8_t adcInput = pBiosContext.selectedAdcInput;
+                        
+                        // 1. Data Capture
+                        double vReal[DRIFT_SAMPLE_COUNT];
+                        double vImag[DRIFT_SAMPLE_COUNT];
+                        
+                        int duration_ms = driftScreen->getSelectedDurationSec() * 1000;
+                        int delay_between_samples = duration_ms / DRIFT_SAMPLE_COUNT;
+
+                        for (int i = 0; i < DRIFT_SAMPLE_COUNT; ++i) {
+                            vReal[i] = adcManager.getVoltage(adcIndex, adcInput);
+                            vImag[i] = 0.0;
+                            driftScreen->setSamplingProgress((i * 100) / DRIFT_SAMPLE_COUNT);
+                            vTaskDelay(pdMS_TO_TICKS(delay_between_samples));
+                        }
+                        driftScreen->setSamplingProgress(100);
+                        driftScreen->setAnalyzing(); // Tell the UI to switch to "Analyzing..." message
+                        
+                        // 2. FFT Calculation
+                        float sample_rate = (float)DRIFT_SAMPLE_COUNT / driftScreen->getSelectedDurationSec();
+                        arduinoFFT FFT = arduinoFFT(vReal, vImag, DRIFT_SAMPLE_COUNT, sample_rate);
+                        FFT.Windowing(FFT_WIN_TYP_HAMMING, FFT_FORWARD);
+                        FFT.Compute(FFT_FORWARD);
+                        FFT.ComplexToMagnitude();
+                        
+                        // 3. Send results to the screen
+                        driftScreen->setAnalysisResults(vReal);
                     }
                     break;
                 }

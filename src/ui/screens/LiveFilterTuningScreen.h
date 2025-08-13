@@ -20,8 +20,9 @@ public:
     LiveFilterTuningScreen(AdcManager* adcManager, PBiosContext* context, CalibrationManager* phCal, CalibrationManager* ecCal, TempManager* tempManager);
     
     void onEnter(StateManager* stateManager, int context = 0) override;
-    // --- NEW: Add the onExit method to deactivate the probe ---
-    void onExit() override;
+    // --- DEFINITIVE FIX: The onExit method is removed. ---
+    // Probe deactivation is now handled by the "Exit" button's input handler,
+    // ensuring the probe remains active during manual parameter editing.
     void handleInput(const InputEvent& event) override;
     void getRenderProps(UIRenderProps* props_to_fill) override;
     void update();

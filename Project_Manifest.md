@@ -4,6 +4,14 @@ This document tracks the development progress, current tasks, and future roadmap
 
 ## Changelog (What Was Done)
 
+* **v3.1.8 (2025-08-14):**
+    * **Status:** Complete.
+    * **Milestone:** All known pBIOS stability issues have been resolved. The data processing pipeline and diagnostic tools are now fully functional and robust.
+    * **Fix (Critical):** Resolved a persistent "dead graphs" issue in the pBIOS Live Filter Tuning screen. The root cause was a multi-faceted state management flaw where probes were being prematurely deactivated. The probe activation/deactivation logic is now correctly tied to the user's explicit entry and exit from the diagnostic screens, ensuring all data pipelines remain live.
+    * **Fix (Critical):** Corrected a subtle mathematical typo in the `FilterManager` that prevented the LF filter from correctly processing the output of the HF filter. This resolves all issues of slow signal convergence and ensures the two-stage pipeline functions as designed.
+    * **Fix (Critical):** Resolved critical freezes and incorrect "perfect signal" readings in the `Noise Analysis` and `NA Drift Trending` screens. The bug was identical to the tuning screen issue, where the probe was dormant during the analysis phase. Both screens now correctly manage probe power state.
+    * **Architecture:** Refactored the `ConfigManager` and associated UI screens to correctly implement the "dual-save" strategy. The system now correctly saves primary operational files (for loading) and separate, timestamped log files (for historical analysis), resolving all file loading errors.
+
 * **v3.1.7 (2025-08-13):**
     * **Status:** Complete.
     * **Milestone:** Implemented the complete user interface structure for the main application's Calibration workflow.
@@ -372,22 +380,11 @@ This document tracks the development progress, current tasks, and future roadmap
 
 
 
-
-
 ## Current Task (What We Are Doing)
 
-* **Integrate the backend logic for the Calibration workflow.**
+* **Implement the backend logic for the Calibration workflow.**
     * **Goal:** To connect the newly created UI screens to the existing `CalibrationManager` and `TempManager` backend functions.
     * **Next Step:** Implement the logic in the `dataTask` to handle point capture, model calculation, result display, and saving for the `CalibrationWizardScreen`, as well as the logic for the health check and temperature calibration screens.
-
-
-
-
-
-
-
-
-
 
 
 

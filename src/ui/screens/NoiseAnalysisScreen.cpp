@@ -29,13 +29,21 @@ NoiseAnalysisScreen::NoiseAnalysisScreen(PBiosContext* context, AdcManager* adcM
     }
 }
 
-/**
- * @brief --- DEFINITIVE FIX: Update signature to match the base class ---
- */
 void NoiseAnalysisScreen::onEnter(StateManager* stateManager, int context) {
     Screen::onEnter(stateManager);
     _current_state = AnalysisState::SELECT_SOURCE;
     _sampling_progress_percent = 0;
+}
+
+/**
+ * @brief --- NEW: Implements the onExit fail-safe. ---
+ * Deactivates the currently selected probe to ensure it doesn't stay on
+ * if the user leaves this screen.
+ */
+void NoiseAnalysisScreen::onExit() {
+    if (_context && _adcManager) {
+        _adcManager->setProbeState(_context->selectedAdcIndex, ProbeState::DORMANT);
+    }
 }
 
 void NoiseAnalysisScreen::handleInput(const InputEvent& event) {
@@ -83,13 +91,17 @@ void NoiseAnalysisScreen::handleSelectSourceInput(const InputEvent& event) {
     } else if (event.type == InputEventType::ENCODER_DECREMENT) {
         if (_selected_source_index > 0) _selected_source_index--;
     } else if (event.type == InputEventType::BTN_DOWN_PRESS) {
-        if (_context) {
+        if (_context && _adcManager) {
+            // Set the context for which ADC to use
             switch (_selected_source_index) {
                 case 0: _context->selectedAdcIndex = 0; _context->selectedAdcInput = ADS1118::DIFF_0_1; break;
                 case 1: _context->selectedAdcIndex = 1; _context->selectedAdcInput = ADS1118::DIFF_0_1; break;
                 case 2: _context->selectedAdcIndex = 0; _context->selectedAdcInput = ADS1118::AIN_2; break;
                 case 3: _context->selectedAdcIndex = 1; _context->selectedAdcInput = ADS1118::AIN_2; break;
             }
+            // --- DEFINITIVE FIX: Activate the selected probe before sampling. ---
+            _adcManager->setProbeState(_context->selectedAdcIndex, ProbeState::ACTIVE);
+            
             _sampling_progress_percent = 0;
             _current_state = AnalysisState::SAMPLING;
         }
@@ -100,6 +112,10 @@ void NoiseAnalysisScreen::handleSelectSourceInput(const InputEvent& event) {
 
 void NoiseAnalysisScreen::handleViewResultsInput(const InputEvent& event) {
     if (event.type == InputEventType::BTN_BACK_PRESS || event.type == InputEventType::BTN_DOWN_PRESS) {
+        // --- DEFINITIVE FIX: Deactivate the probe after viewing results. ---
+        if (_context && _adcManager) {
+            _adcManager->setProbeState(_context->selectedAdcIndex, ProbeState::DORMANT);
+        }
         _current_state = AnalysisState::SELECT_SOURCE;
     }
 }
@@ -143,5 +159,5 @@ void NoiseAnalysisScreen::getViewResultsRenderProps(UIRenderProps* props_to_fill
 
     props_to_fill->button_props.back_text = "Done";
     props_to_fill->button_props.enter_text = "";
-    props_to_fill->button_props.down_text = "";
+    props_to_fill->button_props.down_text = "Done";
 }

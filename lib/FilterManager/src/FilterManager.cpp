@@ -3,8 +3,7 @@
 
 #include "FilterManager.h"
 #include "ConfigManager.h" 
-// --- FIX: Use a direct relative path to find the header in the src directory ---
-#include "../../src/DebugConfig.h"
+#include "DebugConfig.h"
 
 FilterManager::FilterManager() :
     _faultHandler(nullptr),
@@ -15,11 +14,8 @@ bool FilterManager::begin(FaultHandler& faultHandler, ConfigManager& configManag
     _faultHandler = &faultHandler;
     _name = name;
 
-    // --- NEW: Load settings from ConfigManager ---
-    // Try to load the settings from the default file on the SD card.
     if (!configManager.loadFilterSettings(*this, _name.c_str())) {
         LOG_STORAGE("No default config file for '%s', creating with defaults.", _name.c_str());
-        // If loading fails (e.g., file not found), set default values first.
         _hfFilter.medianWindowSize = 5;
         _hfFilter.settleThreshold = 0.1;
         _hfFilter.lockSmoothing = 0.1;
@@ -32,8 +28,9 @@ bool FilterManager::begin(FaultHandler& faultHandler, ConfigManager& configManag
         _lfFilter.trackResponse = 0.05;
         _lfFilter.trackAssist = 0.0001;
         
-        // This saves these default settings to the main, non-timestamped config file (e.g., "ph_filter.json")
-        configManager.saveFilterSettings(*this, _name.c_str(), "default", false);
+        // --- DEFINITIVE FIX: Aligns with the new save logic. ---
+        // This correctly saves the initial parameters to the primary operational file (e.g., "ph_filter.json").
+        configManager.saveFilterSettings(*this, _name.c_str(), "default");
     }
 
     _initialized = true;
@@ -44,9 +41,14 @@ double FilterManager::process(double rawVoltage) {
     if (!_initialized) {
         return rawVoltage;
     }
-    // --- DEFINITIVE FIX: Corrected the variable name from a previous typo ---
+    LOG_FILTER("FilterManager '%s' received raw value: %.4f", _name.c_str(), rawVoltage);
+    
     double hfFiltered = _hfFilter.process(rawVoltage);
+    LOG_FILTER(" > HF Filter output: %.4f", hfFiltered);
+
     double lfFiltered = _lfFilter.process(hfFiltered);
+    LOG_FILTER(" > LF Filter output: %.4f", lfFiltered);
+    
     return lfFiltered;
 }
 

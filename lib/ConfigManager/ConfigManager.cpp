@@ -15,16 +15,19 @@ bool ConfigManager::begin(FaultHandler& faultHandler, SdManager& sdManager) {
     _sdManager = &sdManager;
     _initialized = true;
     if (_sdManager) {
-        // Ensure the base config directory exists
         _sdManager->mkdir("/config");
     }
     return true;
 }
 
+/**
+ * @brief --- DEFINITIVE REFACTOR: Implements the robust, dual-save logic. ---
+ * This function now correctly handles saving both primary operational files and
+ * timestamped log files based on the provided sessionTimestamp.
+ */
 bool ConfigManager::saveFilterSettings(FilterManager& filter, const char* filterName, const char* sessionTimestamp, bool is_saved_state) {
     if (!_initialized || !_sdManager) return false;
 
-    // 1. Serialize the filter settings into a JSON document
     StaticJsonDocument<512> doc;
     PI_Filter* hfFilter = filter.getFilter(0);
     if (hfFilter) {
@@ -45,27 +48,18 @@ bool ConfigManager::saveFilterSettings(FilterManager& filter, const char* filter
         lf["medianWindowSize"] = lfFilter->medianWindowSize;
     }
 
-    // 2. Construct a unique filename to prevent overwrites
     char filepath[128];
-    // If timestamp is "default", save to the main config file.
+    // If timestamp is "default", save to the main operational config file.
     if (strcmp(sessionTimestamp, "default") == 0) {
          snprintf(filepath, sizeof(filepath), "/config/%s.json", filterName);
-    } else {
-        int counter = 0;
-        do {
-            const char* saved_suffix = is_saved_state ? "_saved" : "";
-            if (counter == 0) {
-                snprintf(filepath, sizeof(filepath), "/config/%s%s_%s.json", filterName, saved_suffix, sessionTimestamp);
-            } else {
-                snprintf(filepath, sizeof(filepath), "/config/%s%s_%s_%d.json", filterName, saved_suffix, sessionTimestamp, counter);
-            }
-            counter++;
-        } while (_sdManager->open(filepath, FILE_READ));
+         LOG_STORAGE("Saving operational filter settings to %s", filepath);
+    } 
+    // Otherwise, create a unique, timestamped log file.
+    else {
+        snprintf(filepath, sizeof(filepath), "/config/%s_log_%s.json", filterName, sessionTimestamp);
+        LOG_STORAGE("Saving timestamped filter log to %s", filepath);
     }
-
-    LOG_STORAGE("Saving unique filter settings to %s", filepath);
     
-    // 3. Save the JSON document to the unique file
     return _sdManager->saveJson(filepath, doc);
 }
 
@@ -74,6 +68,8 @@ bool ConfigManager::loadFilterSettings(FilterManager& filter, const char* filter
     if (!_initialized || !_sdManager) return false;
 
     char filepath[64];
+    // The "is_saved_state" parameter is now effectively a way to choose which file to load.
+    // True = load the user's saved tune. False = load the system's default startup tune.
     if (is_saved_state) {
         snprintf(filepath, sizeof(filepath), "/config/%s_saved.json", filterName);
     } else {
@@ -84,7 +80,8 @@ bool ConfigManager::loadFilterSettings(FilterManager& filter, const char* filter
     LOG_STORAGE("Loading filter settings from %s", filepath);
     if (!_sdManager->loadJson(filepath, doc)) {
         LOG_STORAGE("Failed to load %s. Creating a new default.", filepath);
-        saveFilterSettings(filter, filterName, "default", is_saved_state);
+        // This call now correctly saves a file named "filterName.json"
+        saveFilterSettings(filter, filterName, "default", false);
         return false;
     }
 
@@ -105,7 +102,6 @@ bool ConfigManager::loadFilterSettings(FilterManager& filter, const char* filter
         lfFilter->lockSmoothing = lf["lockSmoothing"];
         lfFilter->trackResponse = lf["trackResponse"];
         lfFilter->trackAssist = lf["trackAssist"];
-        // --- DEFINITIVE FIX: Corrected the typo in the variable name ---
         lfFilter->medianWindowSize = lf["medianWindowSize"];
     }
     

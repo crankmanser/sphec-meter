@@ -30,13 +30,21 @@ DriftTrendingScreen::DriftTrendingScreen(PBiosContext* context, AdcManager* adcM
     }
 }
 
-/**
- * @brief --- DEFINITIVE FIX: Update signature to match the base class ---
- */
 void DriftTrendingScreen::onEnter(StateManager* stateManager, int context) {
     Screen::onEnter(stateManager);
     _current_state = TrendingState::SELECT_SOURCE;
     _sampling_progress_percent = 0;
+}
+
+/**
+ * @brief --- NEW: Implements the onExit fail-safe. ---
+ * Deactivates the currently selected probe to ensure it doesn't stay on
+ * if the user leaves this screen.
+ */
+void DriftTrendingScreen::onExit() {
+    if (_context && _adcManager) {
+        _adcManager->setProbeState(_context->selectedAdcIndex, ProbeState::DORMANT);
+    }
 }
 
 void DriftTrendingScreen::handleInput(const InputEvent& event) {
@@ -81,6 +89,10 @@ void DriftTrendingScreen::handleSelectDurationInput(const InputEvent& event) {
     } else if (event.type == InputEventType::ENCODER_DECREMENT) {
         if (_selected_duration_index > 0) _selected_duration_index--;
     } else if (event.type == InputEventType::BTN_DOWN_PRESS) {
+        // --- DEFINITIVE FIX: Activate the selected probe right before sampling. ---
+        if (_context && _adcManager) {
+            _adcManager->setProbeState(_context->selectedAdcIndex, ProbeState::ACTIVE);
+        }
         _sampling_progress_percent = 0;
         _current_state = TrendingState::SAMPLING;
     } else if (event.type == InputEventType::BTN_BACK_PRESS) {
@@ -90,6 +102,10 @@ void DriftTrendingScreen::handleSelectDurationInput(const InputEvent& event) {
 
 void DriftTrendingScreen::handleViewResultsInput(const InputEvent& event) {
     if (event.type == InputEventType::BTN_BACK_PRESS || event.type == InputEventType::BTN_DOWN_PRESS) {
+        // --- DEFINITIVE FIX: Deactivate the probe after viewing results. ---
+        if (_context && _adcManager) {
+            _adcManager->setProbeState(_context->selectedAdcIndex, ProbeState::DORMANT);
+        }
         _current_state = TrendingState::SELECT_SOURCE;
     }
 }

@@ -8,15 +8,23 @@
 #include <vector>
 #include <string>
 
+// Forward declare AdcManager to avoid circular dependencies
+class AdcManager;
+
 class AutoTuneSubMenuScreen : public Screen {
 public:
-    AutoTuneSubMenuScreen();
+    /**
+     * @brief --- NEW: The constructor now accepts the AdcManager. ---
+     * This is required so the screen can activate the probe before tuning.
+     * @param adcManager A pointer to the global AdcManager instance.
+     */
+    AutoTuneSubMenuScreen(AdcManager* adcManager);
     void handleInput(const InputEvent& event) override;
     void getRenderProps(UIRenderProps* props_to_fill) override;
 
 private:
+    AdcManager* _adcManager; // Pointer to the ADC manager
     std::vector<std::string> _menu_items;
-    // --- DEFINITIVE FIX: Declare the missing member variable ---
     std::vector<std::string> _menu_descriptions;
     int _selected_index;
 };

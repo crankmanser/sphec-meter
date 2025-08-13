@@ -2,11 +2,10 @@
 // MODIFIED FILE
 
 #include "ShutdownScreen.h"
-#include "ui/UIManager.h" // Include for UIRenderProps definition
+#include "ui/UIManager.h"
 #include "ConfigManager.h"
 #include "SdManager.h"
 
-// Make the global managers available to this screen
 extern ConfigManager configManager;
 extern SdManager sdManager;
 extern FilterManager phFilter, ecFilter, v3_3_Filter, v5_0_Filter;
@@ -25,30 +24,25 @@ void ShutdownScreen::handleInput(const InputEvent& event) {
     } else if (event.type == InputEventType::ENCODER_DECREMENT) {
         if (_selected_index > 0) _selected_index--;
     } else if (event.type == InputEventType::BTN_DOWN_PRESS) {
-        // --- DEFINITIVE FIX: Implement the shutdown logic for each option ---
         switch (_selected_index) {
             case 0: // Save & Shutdown
-                // Save the current working state of all filters to their default files
-                configManager.saveFilterSettings(phFilter, "ph_filter", "default", false);
-                configManager.saveFilterSettings(ecFilter, "ec_filter", "default", false);
-                configManager.saveFilterSettings(v3_3_Filter, "v3_3_filter", "default", false);
-                configManager.saveFilterSettings(v5_0_Filter, "v5_0_filter", "default", false);
+                // --- DEFINITIVE FIX: Save the current working state to the primary operational files. ---
+                configManager.saveFilterSettings(phFilter, "ph_filter", "default");
+                configManager.saveFilterSettings(ecFilter, "ec_filter", "default");
+                configManager.saveFilterSettings(v3_3_Filter, "v3_3_filter", "default");
+                configManager.saveFilterSettings(v5_0_Filter, "v5_0_filter", "default");
                 break;
 
             case 1: // Discard & Shutdown
-                // Do nothing, any in-memory changes will be lost.
                 break;
 
             case 2: // Restore Defaults & Shutdown
-                // Delete the default config files. They will be recreated with
-                // hardcoded defaults on the next boot.
                 sdManager.remove("/config/ph_filter.json");
                 sdManager.remove("/config/ec_filter.json");
                 sdManager.remove("/config/v3_3_filter.json");
                 sdManager.remove("/config/v5_0_filter.json");
                 break;
         }
-        // After the action is complete, transition to the final power off screen.
         if (_stateManager) _stateManager->changeState(ScreenState::POWER_OFF);
 
     } else if (event.type == InputEventType::BTN_BACK_PRESS) {

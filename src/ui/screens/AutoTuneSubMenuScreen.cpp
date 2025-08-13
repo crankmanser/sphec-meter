@@ -5,10 +5,17 @@
 #include "ui/StateManager.h" 
 #include "ui/UIManager.h" 
 #include "pBiosContext.h" 
+#include "AdcManager.h" // Include the full AdcManager header
 
 extern PBiosContext pBiosContext;
 
-AutoTuneSubMenuScreen::AutoTuneSubMenuScreen() : _selected_index(0) {
+/**
+ * @brief --- MODIFIED: The constructor now initializes the AdcManager pointer. ---
+ */
+AutoTuneSubMenuScreen::AutoTuneSubMenuScreen(AdcManager* adcManager) : 
+    _adcManager(adcManager),
+    _selected_index(0) 
+{
     _menu_items.push_back("Tuner Wizard");
     _menu_items.push_back("Signal Profile");
     _menu_items.push_back("HF Optimization");
@@ -31,13 +38,15 @@ void AutoTuneSubMenuScreen::handleInput(const InputEvent& event) {
         const std::string& selected_item = _menu_items[_selected_index];
         
         if (selected_item == "Tuner Wizard") {
-            if (_stateManager && pBiosContext.selectedFilter) {
-                // The snapshot is no longer needed for the engine, but is good practice
-                // for a potential "cancel" feature in the future.
+            if (_stateManager && pBiosContext.selectedFilter && _adcManager) {
+                // --- DEFINITIVE FIX: Wake up the correct probe before tuning. ---
+                // This ensures the GuidedTuningEngine analyzes a live signal
+                // instead of a stream of zeros from a dormant probe.
+                _adcManager->setProbeState(pBiosContext.selectedAdcIndex, ProbeState::ACTIVE);
+
                 pBiosContext.hf_params_snapshot = *pBiosContext.selectedFilter->getFilter(0);
                 pBiosContext.lf_params_snapshot = *pBiosContext.selectedFilter->getFilter(1);
                 
-                // --- DEFINITIVE FIX: Transition to the single running state. ---
                 _stateManager->changeState(ScreenState::AUTO_TUNE_RUNNING);
             }
         }

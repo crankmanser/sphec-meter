@@ -17,10 +17,17 @@ class AdcManager;
 class DriftTrendingScreen : public Screen {
 public:
     DriftTrendingScreen(PBiosContext* context, AdcManager* adcManager);
+    void onEnter(StateManager* stateManager, int context = 0) override;
+    
+    /**
+     * @brief --- NEW: Ensures the probe is deactivated on exit. ---
+     * This is a fail-safe to prevent the probe from being left in an
+     * active state if the user navigates away from this screen unexpectedly.
+     */
+    void onExit() override;
+
     void handleInput(const InputEvent& event) override;
     void getRenderProps(UIRenderProps* props_to_fill) override;
-    // --- DEFINITIVE FIX: Update signature to match the base class ---
-    void onEnter(StateManager* stateManager, int context = 0) override;
 
     void setAnalysisResults(const double* fft_magnitudes);
     void setSamplingProgress(int percent);

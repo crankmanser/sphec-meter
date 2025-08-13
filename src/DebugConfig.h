@@ -13,17 +13,18 @@
 // space and execution time.
 
 // --- MASTER DEBUG SWITCHES ---
-#define DEBUG_BOOT           1 // For boot sequence, mode selection, initializations
-#define DEBUG_UI             1 // For UIEngine and screen-specific logs
-#define DEBUG_COMM           0 // For WiFi, BLE, and API communication
-#define DEBUG_SENSORS        0 // For raw and processed sensor data from managers
-#define DEBUG_SPI            1 // For low-level SPI bus transactions
-#define DEBUG_I2C            1 // For low-level I2C bus transactions
-#define DEBUG_FILTER         1 // For the PI Filter's state and calculations
-#define DEBUG_NOISE_ANALYSIS 1 // For the Noise Analysis Engine results
-#define DEBUG_POWER          0 // For the PowerMonitor cabinet
-#define DEBUG_STORAGE        1 // For the StorageEngine and file operations
-#define DEBUG_AUTO_TUNE      1 // For the GuidedTuningEngine
+#define DEBUG_BOOT            1 // For boot sequence, mode selection, initializations
+#define DEBUG_UI              1 // For UIEngine and screen-specific logs
+#define DEBUG_COMM            0 // For WiFi, BLE, and API communication
+#define DEBUG_SENSORS         0 // For raw and processed sensor data from managers
+#define DEBUG_SPI             1 // For low-level SPI bus transactions
+#define DEBUG_I2C             1 // For low-level I2C bus transactions
+#define DEBUG_FILTER          1 // For the PI Filter's state and calculations
+#define DEBUG_NOISE_ANALYSIS  1 // For the Noise Analysis Engine results
+#define DEBUG_POWER           0 // For the PowerMonitor cabinet
+#define DEBUG_STORAGE         1 // For the StorageEngine and file operations
+#define DEBUG_AUTO_TUNE       1 // For the GuidedTuningEngine
+#define DEBUG_FILTER_PIPELINE 0 // For tracing data flow through the HF/LF pipeline
 
 // --- HELPER MACROS ---
 // Example Usage: LOG_BOOT("Initializing %s...", "DisplayManager");
@@ -46,16 +47,17 @@
     #define LOG_STORAGE(x, ...)
 #endif
 
-/**
- * @brief --- DEFINITIVE FIX: Ensures the macro compiles to nothing when debugging is off. ---
- * This prevents the Serial.printf call from blocking execution when the serial
- * monitor is disconnected, which is the root cause of the "Heisenbug" crash.
- *
- */
 #if DEBUG_AUTO_TUNE == 1
     #define LOG_AUTO_TUNE(x, ...) Serial.printf("[AUTOTUNE] " x "\n", ##__VA_ARGS__)
 #else
-    #define LOG_AUTO_TUNE(x, ...) // This line is critical.
+    #define LOG_AUTO_TUNE(x, ...)
+#endif
+
+// --- NEW: Helper macro for the new pipeline switch ---
+#if DEBUG_FILTER_PIPELINE == 1
+    #define LOG_FILTER_PIPELINE(x, ...) Serial.printf("[PIPELINE] " x "\n", ##__VA_ARGS__)
+#else
+    #define LOG_FILTER_PIPELINE(x, ...)
 #endif
 
 

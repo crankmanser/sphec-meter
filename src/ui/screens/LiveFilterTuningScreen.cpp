@@ -13,7 +13,7 @@
 extern ConfigManager configManager;
 extern FilterManager phFilter, ecFilter;
 extern char g_sessionTimestamp[20];
-extern AdcManager adcManager; // Make global AdcManager available
+extern AdcManager adcManager;
 
 LiveFilterTuningScreen::LiveFilterTuningScreen(AdcManager* adcManager, PBiosContext* context, CalibrationManager* phCal, CalibrationManager* ecCal, TempManager* tempManager) :
     _adcManager(adcManager),
@@ -38,34 +38,16 @@ LiveFilterTuningScreen::LiveFilterTuningScreen(AdcManager* adcManager, PBiosCont
     _hub_menu_items.push_back("Exit");
 }
 
-/**
- * @brief --- DEFINITIVE FIX: Activates the correct probe on entry. ---
- * This ensures that when the user navigates to this screen, the ADC for
- * the selected probe is powered on and ready to provide live data.
- */
 void LiveFilterTuningScreen::onEnter(StateManager* stateManager, int context) {
     Screen::onEnter(stateManager);
     _is_in_manual_tune_mode = false; 
     _selected_index = 0;
     _is_compare_mode_active = false;
 
-    // Wake up the probe associated with the currently selected filter
     if (_context) {
         adcManager.setProbeState(_context->selectedAdcIndex, ProbeState::ACTIVE);
     }
 }
-
-/**
- * @brief --- NEW: Deactivates the probe on exit. ---
- * When the user navigates away from this screen, the ADC is put back into
- * a low-power dormant state to preserve the probe's lifespan.
- */
-void LiveFilterTuningScreen::onExit() {
-    if (_context) {
-        adcManager.setProbeState(_context->selectedAdcIndex, ProbeState::DORMANT);
-    }
-}
-
 
 void LiveFilterTuningScreen::handleInput(const InputEvent& event) {
     if (_is_in_manual_tune_mode) {
@@ -141,16 +123,28 @@ void LiveFilterTuningScreen::handleHubMenuInput(const InputEvent& event) {
         }
         else if (selected_item == "Save Tune") {
             if (_context && _context->selectedFilter) {
-                configManager.saveFilterSettings(*_context->selectedFilter, _context->selectedFilterName.c_str(), g_sessionTimestamp, true);
-                configManager.saveFilterSettings(*_context->selectedFilter, _context->selectedFilterName.c_str(), "default", false);
+                // --- DEFINITIVE FIX: Implement the correct dual-save strategy. ---
+                // 1. Save the user's preferred tune to a special "_saved" file for the "Restore" function.
+                char saved_file_name[32];
+                snprintf(saved_file_name, sizeof(saved_file_name), "%s_saved", _context->selectedFilterName.c_str());
+                configManager.saveFilterSettings(*_context->selectedFilter, saved_file_name, "default");
+
+                // 2. Save a timestamped log file for historical analysis.
+                configManager.saveFilterSettings(*_context->selectedFilter, _context->selectedFilterName.c_str(), g_sessionTimestamp);
             }
         }
         else if (selected_item == "Restore Tune") {
             if (_context && _context->selectedFilter) {
+                // Load the user's last saved tune.
                 configManager.loadFilterSettings(*_context->selectedFilter, _context->selectedFilterName.c_str(), true);
             }
         }
-        else if (selected_item == "Exit") { if (_stateManager) _stateManager->changeState(ScreenState::FILTER_SELECTION); }
+        else if (selected_item == "Exit") {
+            if (_context) {
+                adcManager.setProbeState(_context->selectedAdcIndex, ProbeState::DORMANT);
+            }
+            if (_stateManager) _stateManager->changeState(ScreenState::FILTER_SELECTION);
+        }
     }
 }
 
@@ -182,6 +176,7 @@ void LiveFilterTuningScreen::getManualTuneRenderProps(UIRenderProps* props_to_fi
     props_to_fill->oled_bottom_props.graph_props.is_enabled = true;
     props_to_fill->oled_bottom_props.graph_props.pre_filter_data = _hf_filtered_buffer;
     props_to_fill->oled_bottom_props.graph_props.post_filter_data = _lf_filtered_buffer;
+    
     props_to_fill->oled_bottom_props.graph_props.top_left_label = lf_top;
     props_to_fill->oled_bottom_props.graph_props.bottom_left_label = "LF";
     props_to_fill->oled_bottom_props.graph_props.bottom_right_label = lf_br;
