@@ -14,17 +14,20 @@
 struct PBiosContext;
 class AdcManager;
 
+/**
+ * @class DriftTrendingScreen
+ * @brief A pBIOS diagnostic screen for performing a long-duration FFT
+ * analysis to identify low-frequency signal drift.
+ * --- DEFINITIVE REFACTOR: This screen no longer manages hardware state. ---
+ */
 class DriftTrendingScreen : public Screen {
 public:
-    DriftTrendingScreen(PBiosContext* context, AdcManager* adcManager);
+    // --- DEFINITIVE REFACTOR: Constructor no longer needs the AdcManager ---
+    DriftTrendingScreen(PBiosContext* context);
     void onEnter(StateManager* stateManager, int context = 0) override;
-    
-    /**
-     * @brief --- NEW: Ensures the probe is deactivated on exit. ---
-     * This is a fail-safe to prevent the probe from being left in an
-     * active state if the user navigates away from this screen unexpectedly.
-     */
-    void onExit() override;
+
+    // --- DEFINITIVE REFACTOR: onExit method is removed. ---
+    // Probe power state is now handled centrally by the dataTask in main.cpp.
 
     void handleInput(const InputEvent& event) override;
     void getRenderProps(UIRenderProps* props_to_fill) override;
@@ -54,8 +57,8 @@ private:
     void getAnalyzingRenderProps(UIRenderProps* props_to_fill);
     void getViewResultsRenderProps(UIRenderProps* props_to_fill);
 
+    // --- DEFINITIVE REFACTOR: AdcManager pointer is removed ---
     PBiosContext* _context;
-    AdcManager* _adcManager;
     TrendingState _current_state;
 
     std::vector<std::string> _source_menu_items;

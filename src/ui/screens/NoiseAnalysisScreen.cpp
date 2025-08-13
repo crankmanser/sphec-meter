@@ -5,12 +5,16 @@
 #include "pBiosContext.h"
 #include "AdcManager.h"
 #include "ADS1118.h"
-#include <stdio.h>   
+#include <stdio.h>
 #include "ui/UIManager.h" // Include for UIRenderProps definition
 
-NoiseAnalysisScreen::NoiseAnalysisScreen(PBiosContext* context, AdcManager* adcManager) :
+/**
+ * @brief --- DEFINITIVE REFACTOR: Constructor signature updated ---
+ * The AdcManager is no longer passed in, as this screen is no longer
+ * responsible for managing the probe's power state.
+ */
+NoiseAnalysisScreen::NoiseAnalysisScreen(PBiosContext* context) :
     _context(context),
-    _adcManager(adcManager),
     _current_state(AnalysisState::SELECT_SOURCE),
     _selected_source_index(0),
     _sampling_progress_percent(0),
@@ -33,17 +37,6 @@ void NoiseAnalysisScreen::onEnter(StateManager* stateManager, int context) {
     Screen::onEnter(stateManager);
     _current_state = AnalysisState::SELECT_SOURCE;
     _sampling_progress_percent = 0;
-}
-
-/**
- * @brief --- NEW: Implements the onExit fail-safe. ---
- * Deactivates the currently selected probe to ensure it doesn't stay on
- * if the user leaves this screen.
- */
-void NoiseAnalysisScreen::onExit() {
-    if (_context && _adcManager) {
-        _adcManager->setProbeState(_context->selectedAdcIndex, ProbeState::DORMANT);
-    }
 }
 
 void NoiseAnalysisScreen::handleInput(const InputEvent& event) {
@@ -85,23 +78,24 @@ bool NoiseAnalysisScreen::isSampling() const {
     return _current_state == AnalysisState::SAMPLING;
 }
 
+/**
+ * @brief --- DEFINITIVE REFACTOR: Input handler no longer controls hardware ---
+ * This method now only sets the shared context and changes the UI state.
+ * The controller in main.cpp will see the state change and activate the probe.
+ */
 void NoiseAnalysisScreen::handleSelectSourceInput(const InputEvent& event) {
     if (event.type == InputEventType::ENCODER_INCREMENT) {
         if (_selected_source_index < _source_menu_items.size() - 1) _selected_source_index++;
     } else if (event.type == InputEventType::ENCODER_DECREMENT) {
         if (_selected_source_index > 0) _selected_source_index--;
     } else if (event.type == InputEventType::BTN_DOWN_PRESS) {
-        if (_context && _adcManager) {
-            // Set the context for which ADC to use
+        if (_context) {
             switch (_selected_source_index) {
                 case 0: _context->selectedAdcIndex = 0; _context->selectedAdcInput = ADS1118::DIFF_0_1; break;
                 case 1: _context->selectedAdcIndex = 1; _context->selectedAdcInput = ADS1118::DIFF_0_1; break;
                 case 2: _context->selectedAdcIndex = 0; _context->selectedAdcInput = ADS1118::AIN_2; break;
                 case 3: _context->selectedAdcIndex = 1; _context->selectedAdcInput = ADS1118::AIN_2; break;
             }
-            // --- DEFINITIVE FIX: Activate the selected probe before sampling. ---
-            _adcManager->setProbeState(_context->selectedAdcIndex, ProbeState::ACTIVE);
-            
             _sampling_progress_percent = 0;
             _current_state = AnalysisState::SAMPLING;
         }
@@ -110,12 +104,12 @@ void NoiseAnalysisScreen::handleSelectSourceInput(const InputEvent& event) {
     }
 }
 
+/**
+ * @brief --- DEFINITIVE REFACTOR: Input handler no longer controls hardware ---
+ * Deactivation is handled automatically when the state changes.
+ */
 void NoiseAnalysisScreen::handleViewResultsInput(const InputEvent& event) {
     if (event.type == InputEventType::BTN_BACK_PRESS || event.type == InputEventType::BTN_DOWN_PRESS) {
-        // --- DEFINITIVE FIX: Deactivate the probe after viewing results. ---
-        if (_context && _adcManager) {
-            _adcManager->setProbeState(_context->selectedAdcIndex, ProbeState::DORMANT);
-        }
         _current_state = AnalysisState::SELECT_SOURCE;
     }
 }

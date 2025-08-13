@@ -2,19 +2,21 @@
 // MODIFIED FILE
 
 #include "AutoTuneSubMenuScreen.h"
-#include "ui/StateManager.h" 
-#include "ui/UIManager.h" 
-#include "pBiosContext.h" 
+#include "ui/StateManager.h"
+#include "ui/UIManager.h"
+#include "pBiosContext.h"
 #include "AdcManager.h" // Include the full AdcManager header
 
+// Extern declaration for the global pBiosContext
 extern PBiosContext pBiosContext;
 
 /**
- * @brief --- MODIFIED: The constructor now initializes the AdcManager pointer. ---
+ * @brief --- DEFINITIVE REFACTOR: Constructor signature updated ---
+ * The AdcManager is no longer passed in, as this screen is no longer
+ * responsible for managing the probe's power state.
  */
-AutoTuneSubMenuScreen::AutoTuneSubMenuScreen(AdcManager* adcManager) : 
-    _adcManager(adcManager),
-    _selected_index(0) 
+AutoTuneSubMenuScreen::AutoTuneSubMenuScreen() :
+    _selected_index(0)
 {
     _menu_items.push_back("Tuner Wizard");
     _menu_items.push_back("Signal Profile");
@@ -29,6 +31,12 @@ AutoTuneSubMenuScreen::AutoTuneSubMenuScreen(AdcManager* adcManager) :
     _menu_descriptions.push_back("Apply corrections from probe profile.");
 }
 
+/**
+ * @brief --- DEFINITIVE REFACTOR: Input handler no longer controls hardware ---
+ * This method now only takes a snapshot of the current filter parameters
+ * and changes the UI state. The controller in main.cpp will see the state
+ * change and handle the probe activation and stabilization.
+ */
 void AutoTuneSubMenuScreen::handleInput(const InputEvent& event) {
     if (event.type == InputEventType::ENCODER_INCREMENT) {
         if (_selected_index < _menu_items.size() - 1) _selected_index++;
@@ -36,17 +44,14 @@ void AutoTuneSubMenuScreen::handleInput(const InputEvent& event) {
         if (_selected_index > 0) _selected_index--;
     } else if (event.type == InputEventType::BTN_DOWN_PRESS) {
         const std::string& selected_item = _menu_items[_selected_index];
-        
-        if (selected_item == "Tuner Wizard") {
-            if (_stateManager && pBiosContext.selectedFilter && _adcManager) {
-                // --- DEFINITIVE FIX: Wake up the correct probe before tuning. ---
-                // This ensures the GuidedTuningEngine analyzes a live signal
-                // instead of a stream of zeros from a dormant probe.
-                _adcManager->setProbeState(pBiosContext.selectedAdcIndex, ProbeState::ACTIVE);
 
+        if (selected_item == "Tuner Wizard") {
+            if (_stateManager && pBiosContext.selectedFilter) {
+                // Take a snapshot of the current parameters for the "Restore" feature
                 pBiosContext.hf_params_snapshot = *pBiosContext.selectedFilter->getFilter(0);
                 pBiosContext.lf_params_snapshot = *pBiosContext.selectedFilter->getFilter(1);
-                
+
+                // Transition to the screen that shows the progress bar
                 _stateManager->changeState(ScreenState::AUTO_TUNE_RUNNING);
             }
         }
@@ -59,7 +64,7 @@ void AutoTuneSubMenuScreen::getRenderProps(UIRenderProps* props_to_fill) {
     if (_selected_index < _menu_descriptions.size()) {
         props_to_fill->oled_top_props.line1 = _menu_descriptions[_selected_index];
     }
-    
+
     props_to_fill->oled_middle_props.menu_props.is_enabled = true;
     props_to_fill->oled_middle_props.menu_props.items = _menu_items;
     props_to_fill->oled_middle_props.menu_props.selected_index = _selected_index;

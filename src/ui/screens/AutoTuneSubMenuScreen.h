@@ -11,19 +11,21 @@
 // Forward declare AdcManager to avoid circular dependencies
 class AdcManager;
 
+/**
+ * @class AutoTuneSubMenuScreen
+ * @brief The sub-menu for the auto-tuner, providing access to the main
+ * guided wizard and individual diagnostic steps.
+ * --- DEFINITIVE REFACTOR: This screen no longer manages hardware state. ---
+ */
 class AutoTuneSubMenuScreen : public Screen {
 public:
-    /**
-     * @brief --- NEW: The constructor now accepts the AdcManager. ---
-     * This is required so the screen can activate the probe before tuning.
-     * @param adcManager A pointer to the global AdcManager instance.
-     */
-    AutoTuneSubMenuScreen(AdcManager* adcManager);
+    // --- DEFINITIVE REFACTOR: Constructor no longer needs the AdcManager ---
+    AutoTuneSubMenuScreen();
     void handleInput(const InputEvent& event) override;
     void getRenderProps(UIRenderProps* props_to_fill) override;
 
 private:
-    AdcManager* _adcManager; // Pointer to the ADC manager
+    // --- DEFINITIVE REFACTOR: AdcManager pointer is removed ---
     std::vector<std::string> _menu_items;
     std::vector<std::string> _menu_descriptions;
     int _selected_index;

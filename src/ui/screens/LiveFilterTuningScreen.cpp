@@ -15,8 +15,12 @@ extern FilterManager phFilter, ecFilter;
 extern char g_sessionTimestamp[20];
 extern AdcManager adcManager;
 
-LiveFilterTuningScreen::LiveFilterTuningScreen(AdcManager* adcManager, PBiosContext* context, CalibrationManager* phCal, CalibrationManager* ecCal, TempManager* tempManager) :
-    _adcManager(adcManager),
+/**
+ * @brief --- DEFINITIVE REFACTOR: Constructor signature updated ---
+ * The AdcManager is no longer passed in, as this screen is no longer
+ * responsible for managing the probe's power state.
+ */
+LiveFilterTuningScreen::LiveFilterTuningScreen(PBiosContext* context, CalibrationManager* phCal, CalibrationManager* ecCal, TempManager* tempManager) :
     _context(context),
     _phCalManager(phCal),
     _ecCalManager(ecCal),
@@ -26,8 +30,8 @@ LiveFilterTuningScreen::LiveFilterTuningScreen(AdcManager* adcManager, PBiosCont
     _is_compare_mode_active(false),
     _calibrated_value(NAN)
 {
-    for (int i = 0; i < GRAPH_DATA_POINTS; ++i) { 
-        _hf_raw_buffer[i] = 0.0; _hf_filtered_buffer[i] = 0.0; 
+    for (int i = 0; i < GRAPH_DATA_POINTS; ++i) {
+        _hf_raw_buffer[i] = 0.0; _hf_filtered_buffer[i] = 0.0;
         _lf_filtered_buffer[i] = 0.0; _ghost_lf_filtered_buffer[i] = 0.0;
     }
 
@@ -38,15 +42,16 @@ LiveFilterTuningScreen::LiveFilterTuningScreen(AdcManager* adcManager, PBiosCont
     _hub_menu_items.push_back("Exit");
 }
 
+/**
+ * @brief Called when the screen becomes active.
+ * --- DEFINITIVE REFACTOR: This method no longer activates the probe. ---
+ * The centralized controller in main.cpp is now responsible for this.
+ */
 void LiveFilterTuningScreen::onEnter(StateManager* stateManager, int context) {
     Screen::onEnter(stateManager);
-    _is_in_manual_tune_mode = false; 
+    _is_in_manual_tune_mode = false;
     _selected_index = 0;
     _is_compare_mode_active = false;
-
-    if (_context) {
-        adcManager.setProbeState(_context->selectedAdcIndex, ProbeState::ACTIVE);
-    }
 }
 
 void LiveFilterTuningScreen::handleInput(const InputEvent& event) {
@@ -62,13 +67,14 @@ void LiveFilterTuningScreen::handleInput(const InputEvent& event) {
 
 void LiveFilterTuningScreen::getRenderProps(UIRenderProps* props_to_fill) {
     *props_to_fill = UIRenderProps();
+    update();
     getManualTuneRenderProps(props_to_fill);
-    
+
     OledProps& mid_props = props_to_fill->oled_middle_props;
     mid_props.menu_props.is_enabled = true;
     mid_props.menu_props.items = _hub_menu_items;
     mid_props.menu_props.selected_index = _selected_index;
-    
+
     props_to_fill->button_props.down_text = "Select";
 }
 
@@ -76,6 +82,7 @@ void LiveFilterTuningScreen::update() {
     if (!_context || !_context->selectedFilter) return;
     PI_Filter* hfFilter = _context->selectedFilter->getFilter(0);
     PI_Filter* lfFilter = _context->selectedFilter->getFilter(1);
+
     if (hfFilter) {
         hfFilter->getRawHistory(_hf_raw_buffer, GRAPH_DATA_POINTS);
         hfFilter->getFilteredHistory(_hf_filtered_buffer, GRAPH_DATA_POINTS);
@@ -83,12 +90,19 @@ void LiveFilterTuningScreen::update() {
         _hf_f_std = hfFilter->getFilteredStandardDeviation();
         _hf_stab_percent = hfFilter->getStabilityPercentage();
     }
+
     if (lfFilter) {
         lfFilter->getFilteredHistory(_lf_filtered_buffer, GRAPH_DATA_POINTS);
         _lf_r_std = hfFilter ? hfFilter->getFilteredStandardDeviation() : 0.0;
         _lf_f_std = lfFilter->getFilteredStandardDeviation();
-        _lf_stab_percent = lfFilter->getStabilityPercentage();
+        if (_hf_r_std > 1e-9) {
+             double improvement = 1.0 - (_lf_f_std / _hf_r_std);
+            _lf_stab_percent = (int)constrain(improvement * 100.0, 0.0, 100.0);
+        } else {
+            _lf_stab_percent = 100;
+        }
     }
+
     if (lfFilter) {
         double filtered_voltage = lfFilter->getFilteredValue();
         float temp = _tempManager->getProbeTemp();
@@ -109,6 +123,10 @@ void LiveFilterTuningScreen::update() {
     }
 }
 
+/**
+ * @brief Handles input for the main hub menu.
+ * --- DEFINITIVE REFACTOR: This method no longer deactivates the probe. ---
+ */
 void LiveFilterTuningScreen::handleHubMenuInput(const InputEvent& event) {
     if (event.type == InputEventType::ENCODER_INCREMENT) {
         if (_selected_index < _hub_menu_items.size() - 1) _selected_index++;
@@ -123,26 +141,20 @@ void LiveFilterTuningScreen::handleHubMenuInput(const InputEvent& event) {
         }
         else if (selected_item == "Save Tune") {
             if (_context && _context->selectedFilter) {
-                // --- DEFINITIVE FIX: Implement the correct dual-save strategy. ---
-                // 1. Save the user's preferred tune to a special "_saved" file for the "Restore" function.
                 char saved_file_name[32];
                 snprintf(saved_file_name, sizeof(saved_file_name), "%s_saved", _context->selectedFilterName.c_str());
                 configManager.saveFilterSettings(*_context->selectedFilter, saved_file_name, "default");
-
-                // 2. Save a timestamped log file for historical analysis.
                 configManager.saveFilterSettings(*_context->selectedFilter, _context->selectedFilterName.c_str(), g_sessionTimestamp);
             }
         }
         else if (selected_item == "Restore Tune") {
             if (_context && _context->selectedFilter) {
-                // Load the user's last saved tune.
                 configManager.loadFilterSettings(*_context->selectedFilter, _context->selectedFilterName.c_str(), true);
             }
         }
         else if (selected_item == "Exit") {
-            if (_context) {
-                adcManager.setProbeState(_context->selectedAdcIndex, ProbeState::DORMANT);
-            }
+            // The probe is automatically deactivated by the controller in main.cpp
+            // when the state changes away from a screen that requires it.
             if (_stateManager) _stateManager->changeState(ScreenState::FILTER_SELECTION);
         }
     }
@@ -150,33 +162,37 @@ void LiveFilterTuningScreen::handleHubMenuInput(const InputEvent& event) {
 
 void LiveFilterTuningScreen::getManualTuneRenderProps(UIRenderProps* props_to_fill) {
     static char hf_top[40], hf_br[20], lf_top[40], lf_br[20], r_buf[10], f_buf[10];
+
     dtostrf(_hf_r_std, 4, 3, r_buf); dtostrf(_hf_f_std, 4, 3, f_buf);
     snprintf(hf_top, sizeof(hf_top), "R:%s F:%s", r_buf, f_buf);
     snprintf(hf_br, sizeof(hf_br), "Stab:%d%%", _hf_stab_percent);
+
     props_to_fill->oled_top_props.graph_props.is_enabled = true;
     props_to_fill->oled_top_props.graph_props.pre_filter_data = _hf_raw_buffer;
     props_to_fill->oled_top_props.graph_props.post_filter_data = _hf_filtered_buffer;
     props_to_fill->oled_top_props.graph_props.top_left_label = hf_top;
     props_to_fill->oled_top_props.graph_props.bottom_left_label = "HF";
     props_to_fill->oled_top_props.graph_props.bottom_right_label = hf_br;
+
     char cal_val_buf[20];
-    if (isnan(_calibrated_value)) { 
-        snprintf(cal_val_buf, sizeof(cal_val_buf), "Value: ---"); 
+    if (isnan(_calibrated_value)) {
+        snprintf(cal_val_buf, sizeof(cal_val_buf), "Value: ---");
     }
-    else if (_context->selectedFilter == &phFilter) { 
-        snprintf(cal_val_buf, sizeof(cal_val_buf), "Value: %.2f pH", _calibrated_value); 
+    else if (_context->selectedFilter == &phFilter) {
+        snprintf(cal_val_buf, sizeof(cal_val_buf), "Value: %.2f pH", _calibrated_value);
     }
-    else { 
-        snprintf(cal_val_buf, sizeof(cal_val_buf), "Value: %.0f uS", _calibrated_value); 
+    else {
+        snprintf(cal_val_buf, sizeof(cal_val_buf), "Value: %.0f uS", _calibrated_value);
     }
     props_to_fill->oled_middle_props.line1 = cal_val_buf;
+
     dtostrf(_lf_r_std, 4, 3, r_buf); dtostrf(_lf_f_std, 4, 3, f_buf);
     snprintf(lf_top, sizeof(lf_top), "R:%s F:%s", r_buf, f_buf);
     snprintf(lf_br, sizeof(lf_br), "Stab:%d%%", _lf_stab_percent);
+
     props_to_fill->oled_bottom_props.graph_props.is_enabled = true;
     props_to_fill->oled_bottom_props.graph_props.pre_filter_data = _hf_filtered_buffer;
     props_to_fill->oled_bottom_props.graph_props.post_filter_data = _lf_filtered_buffer;
-    
     props_to_fill->oled_bottom_props.graph_props.top_left_label = lf_top;
     props_to_fill->oled_bottom_props.graph_props.bottom_left_label = "LF";
     props_to_fill->oled_bottom_props.graph_props.bottom_right_label = lf_br;

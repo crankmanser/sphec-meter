@@ -28,8 +28,6 @@ bool FilterManager::begin(FaultHandler& faultHandler, ConfigManager& configManag
         _lfFilter.trackResponse = 0.05;
         _lfFilter.trackAssist = 0.0001;
         
-        // --- DEFINITIVE FIX: Aligns with the new save logic. ---
-        // This correctly saves the initial parameters to the primary operational file (e.g., "ph_filter.json").
         configManager.saveFilterSettings(*this, _name.c_str(), "default");
     }
 
@@ -37,17 +35,33 @@ bool FilterManager::begin(FaultHandler& faultHandler, ConfigManager& configManag
     return true;
 }
 
+/**
+ * @brief Processes a raw voltage value through the two-stage filter pipeline.
+ *
+ * This is the core of the filtering engine. It implements the sequential,
+ * two-stage process defined in the architectural blueprint:
+ * 1. The raw signal is first passed to the High-Frequency (HF) filter.
+ * 2. The *output* of the HF filter is then passed to the Low-Frequency (LF) filter.
+ *
+ * @param rawVoltage The raw, unfiltered voltage from the ADC.
+ * @return The final, filtered voltage value.
+ */
 double FilterManager::process(double rawVoltage) {
     if (!_initialized) {
         return rawVoltage;
     }
-    LOG_FILTER("FilterManager '%s' received raw value: %.4f", _name.c_str(), rawVoltage);
+    LOG_FILTER_PIPELINE("FilterManager '%s' received raw value: %.4f", _name.c_str(), rawVoltage);
     
+    // Stage 1: The "Spike Scraper"
+    // The raw signal is processed by the HF filter to remove fast, sharp noise.
     double hfFiltered = _hfFilter.process(rawVoltage);
-    LOG_FILTER(" > HF Filter output: %.4f", hfFiltered);
+    LOG_FILTER_PIPELINE(" > HF Filter output: %.4f", hfFiltered);
 
+    // --- DEFINITIVE FIX: The LF filter now processes the output of the HF filter. ---
+    // This corrects the pipeline logic, ensuring the LF "Smoothing Squeegee"
+    // receives the pre-cleaned signal it is designed to work with.
     double lfFiltered = _lfFilter.process(hfFiltered);
-    LOG_FILTER(" > LF Filter output: %.4f", lfFiltered);
+    LOG_FILTER_PIPELINE(" > LF Filter output: %.4f", lfFiltered);
     
     return lfFiltered;
 }
