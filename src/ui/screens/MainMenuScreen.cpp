@@ -26,11 +26,14 @@ void MainMenuScreen::handleInput(const InputEvent& event) {
             _selected_index--;
         }
     } else if (event.type == InputEventType::BTN_ENTER_PRESS) {
-        // --- DEFINITIVE FIX: Navigate to the correct sub-menu ---
         if (_stateManager) {
             const std::string& selected_item = _menu_items[_selected_index];
             if (selected_item == "Measure") {
                 _stateManager->changeState(ScreenState::MEASURE_MENU);
+            } 
+            // --- NEW: Navigate to Calibration Menu ---
+            else if (selected_item == "Calibrate") {
+                _stateManager->changeState(ScreenState::CALIBRATION_MENU);
             }
             // STUB: Add navigation for other main app screens here.
         }

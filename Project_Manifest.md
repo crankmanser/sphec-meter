@@ -4,6 +4,15 @@ This document tracks the development progress, current tasks, and future roadmap
 
 ## Changelog (What Was Done)
 
+* **v3.1.7 (2025-08-13):**
+    * **Status:** Complete.
+    * **Milestone:** Implemented the complete user interface structure for the main application's Calibration workflow.
+    * **Feature (UI):** Created a new `CalibrationMenuScreen` to act as a central hub for all calibration tasks.
+    * **Feature (UI):** Implemented the full, multi-step UI for the `CalibrationWizardScreen`, including introduction, measurement steps with live stability feedback, a "Calculating" progress bar, and a final results/confirmation screen.
+    * **Feature (UI):** Created the UI for the `ProbeHealthCheckScreen` to handle the 1-point probe health verification.
+    * **Feature (UI):** Created the UI for the `TempCalibrationScreen` to allow for manual offset calibration of the temperature sensors.
+    * **Architecture:** All new screens have been fully integrated into the `StateManager`, and the backend data hooks are in place in the `dataTask` to drive the UI with live data.
+
 * **v3.1.6 (2025-08-12):**
     * **Status:** Complete.
     * **Milestone:** Implemented the complete user-facing measurement workflow for Normal Boot mode.
@@ -367,9 +376,10 @@ This document tracks the development progress, current tasks, and future roadmap
 
 ## Current Task (What We Are Doing)
 
-* **Implement the multi-step `Calibration Wizard Screen`.**
-    * **Goal:** To create a user-friendly, guided workflow in the main application for performing a 3-point calibration for the pH and EC probes.
-    * **Next Step:** Design the screen layouts and state transitions for the wizard and begin implementing the UI and backend logic.
+* **Integrate the backend logic for the Calibration workflow.**
+    * **Goal:** To connect the newly created UI screens to the existing `CalibrationManager` and `TempManager` backend functions.
+    * **Next Step:** Implement the logic in the `dataTask` to handle point capture, model calculation, result display, and saving for the `CalibrationWizardScreen`, as well as the logic for the health check and temperature calibration screens.
+
 
 
 

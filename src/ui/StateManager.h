@@ -12,11 +12,16 @@ class StateManager;
 
 enum class ScreenState {
     NONE,
-    // --- NEW: Main App States ---
+    // --- Main App States ---
     MAIN_MENU,
     MEASURE_MENU,
     PROBE_MEASUREMENT,
     LIGHT_SENSOR,
+    // --- NEW: Calibration States ---
+    CALIBRATION_MENU,
+    CALIBRATION_WIZARD,
+    PROBE_HEALTH_CHECK,
+    TEMP_CALIBRATION,
     // pBIOS States
     PBIOS_MENU,
     FILTER_SELECTION,
@@ -37,8 +42,6 @@ enum class ScreenState {
 class Screen {
 public:
     virtual ~Screen() {}
-    // --- NEW: Add an optional integer argument to onEnter ---
-    // This allows us to pass context, like the probe type, when changing state.
     virtual void onEnter(StateManager* stateManager, int context = 0) { _stateManager = stateManager; }
     virtual void onExit() {}
     virtual void handleInput(const InputEvent& event) = 0;
@@ -53,7 +56,6 @@ public:
     ~StateManager();
     void begin();
     void addScreen(ScreenState state, Screen* screen);
-    // --- NEW: Add an optional integer argument to changeState ---
     void changeState(ScreenState new_state, int context = 0);
     Screen* getActiveScreen();
     Screen* getScreen(ScreenState state);

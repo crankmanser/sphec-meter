@@ -1,4 +1,5 @@
 // File Path: /lib/CalibrationManager/src/CalibrationManager.h
+// MODIFIED FILE
 
 #ifndef CALIBRATION_MANAGER_H
 #define CALIBRATION_MANAGER_H
@@ -21,14 +22,12 @@ struct CalibrationModel {
     double calibrationTemperature = 25.0;
     CalibrationPoint points[CALIBRATION_POINT_COUNT];
 
-    // --- Key Performance Indicators (KPIs) ---
     double qualityScore = 0.0;
     double sensorDrift = 0.0;
     double healthScore = 0.0;
     
-    // --- NEW: Zero-Point Drift KPI ---
-    double neutralVoltage = 0.0; // Raw voltage measured at the neutral (pH 7) point
-    double zeroPointDrift = 0.0; // The change in neutralVoltage since the last calibration (mV)
+    double neutralVoltage = 0.0;
+    double zeroPointDrift = 0.0;
 
     bool isCalibrated = false;
     time_t lastCalibratedTimestamp = 0;
@@ -47,7 +46,8 @@ public:
     CalibrationModel& getMutableCurrentModel();
     const CalibrationModel& getNewModel() const;
     void acceptNewModel();
-    void serializeModel(const CalibrationModel& model, JsonDocument& doc);
+    // --- DEFINITIVE FIX: Change signature to accept JsonObject ---
+    void serializeModel(const CalibrationModel& model, JsonObject& doc);
     bool deserializeModel(CalibrationModel& model, JsonDocument& doc);
 
 private:

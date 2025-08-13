@@ -14,11 +14,11 @@
 
 // --- MASTER DEBUG SWITCHES ---
 #define DEBUG_BOOT           1 // For boot sequence, mode selection, initializations
-#define DEBUG_UI             0 // For UIEngine and screen-specific logs
+#define DEBUG_UI             1 // For UIEngine and screen-specific logs
 #define DEBUG_COMM           0 // For WiFi, BLE, and API communication
 #define DEBUG_SENSORS        0 // For raw and processed sensor data from managers
-#define DEBUG_SPI            0 // For low-level SPI bus transactions
-#define DEBUG_I2C            0 // For low-level I2C bus transactions
+#define DEBUG_SPI            1 // For low-level SPI bus transactions
+#define DEBUG_I2C            1 // For low-level I2C bus transactions
 #define DEBUG_FILTER         1 // For the PI Filter's state and calculations
 #define DEBUG_NOISE_ANALYSIS 1 // For the Noise Analysis Engine results
 #define DEBUG_POWER          0 // For the PowerMonitor cabinet

@@ -19,8 +19,9 @@ class LiveFilterTuningScreen : public Screen {
 public:
     LiveFilterTuningScreen(AdcManager* adcManager, PBiosContext* context, CalibrationManager* phCal, CalibrationManager* ecCal, TempManager* tempManager);
     
-    // --- DEFINITIVE FIX: Update signature to match the base class ---
     void onEnter(StateManager* stateManager, int context = 0) override;
+    // --- NEW: Add the onExit method to deactivate the probe ---
+    void onExit() override;
     void handleInput(const InputEvent& event) override;
     void getRenderProps(UIRenderProps* props_to_fill) override;
     void update();

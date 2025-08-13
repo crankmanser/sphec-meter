@@ -33,7 +33,6 @@ void ParameterEditScreen::onEnter(StateManager* stateManager, int context) {
     }
 }
 
-// ... (rest of the file is unchanged) ...
 void ParameterEditScreen::handleInput(const InputEvent& event) {
     if (event.type == InputEventType::BTN_BACK_PRESS) {
         if (_is_editing) {
@@ -73,17 +72,15 @@ void ParameterEditScreen::handleInput(const InputEvent& event) {
         else if (event.type == InputEventType::ENCODER_DECREMENT) { if (_selected_index > 0) _selected_index--; }
     }
 }
+
 void ParameterEditScreen::getRenderProps(UIRenderProps* props_to_fill) {
-    // Start with a clean slate to prevent any state bleed-through.
     *props_to_fill = UIRenderProps();
 
     LiveFilterTuningScreen* workbench = static_cast<LiveFilterTuningScreen*>(_stateManager->getScreen(ScreenState::LIVE_FILTER_TUNING));
     if (!workbench) return;
 
-    // 1. Get the background graph properties from the workbench's dedicated helper.
     workbench->getManualTuneRenderProps(props_to_fill);
 
-    // 2. Overwrite the middle OLED and buttons with our own content.
     OledProps& mid_props = props_to_fill->oled_middle_props;
     mid_props.line2 = getSelectedParamValueString();
     mid_props.menu_props.is_enabled = true;
@@ -93,11 +90,11 @@ void ParameterEditScreen::getRenderProps(UIRenderProps* props_to_fill) {
         mid_props.line3 = "> Editing <";
     }
 
-    // 3. Set the correct button prompts for this screen.
     props_to_fill->button_props.back_text = "Cancel";
     props_to_fill->button_props.enter_text = _is_editing ? "OK" : "Edit";
     props_to_fill->button_props.down_text = "Set";
 }
+
 std::string ParameterEditScreen::getSelectedParamValueString() {
     if (!_context || !_context->selectedFilter) return "N/A";
     PI_Filter* filter = (_selected_index < 4) ? _context->selectedFilter->getFilter(0) : _context->selectedFilter->getFilter(1);

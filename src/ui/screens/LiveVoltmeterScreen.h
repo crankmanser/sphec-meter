@@ -8,10 +8,6 @@
 #include <vector>
 #include <string>
 
-/**
- * @class LiveVoltmeterScreen
- * @brief A pBIOS utility to display live, raw ADC voltage readings.
- */
 class LiveVoltmeterScreen : public Screen {
 public:
     LiveVoltmeterScreen();
@@ -20,12 +16,7 @@ public:
     // --- DEFINITIVE FIX: Update signature to match the base class ---
     void onEnter(StateManager* stateManager, int context = 0) override;
 
-    /**
-     * @brief Sets the live voltage value to be displayed.
-     * @param voltage The raw voltage in millivolts.
-     */
     void setLiveVoltage(double voltage);
-
     uint8_t getSelectedAdcIndex() const;
     uint8_t getSelectedAdcInput() const;
     bool isMeasuring() const;

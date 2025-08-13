@@ -1,11 +1,12 @@
 // File Path: /lib/CalibrationManager/src/CalibrationManager.cpp
+// MODIFIED FILE
 
 #include "CalibrationManager.h"
 #include <cmath>
 #include <numeric>
 
-// ... (getTemperatureCorrectedBufferValue and other top functions are unchanged) ...
 double getTemperatureCorrectedBufferValue(double nominalValue, double temperature);
+
 CalibrationManager::CalibrationManager() : _faultHandler(nullptr), _initialized(false), _newPointsCount(0) {}
 bool CalibrationManager::begin(FaultHandler& faultHandler) { _faultHandler = &faultHandler; _initialized = true; return true; }
 double CalibrationManager::getCalibratedValue(double filteredVoltage) {
@@ -33,11 +34,9 @@ bool CalibrationManager::addCalibrationPoint(double voltage, double knownValue, 
     return true;
 }
 
-
 double CalibrationManager::calculateNewModel(const CalibrationModel& previousModel) {
     if (_newPointsCount != CALIBRATION_POINT_COUNT) return 0.0;
 
-    // ... (quadratic regression logic is unchanged) ...
     double x[3] = { _newModel.points[0].voltage, _newModel.points[1].voltage, _newModel.points[2].voltage };
     double y[3] = { _newModel.points[0].value,   _newModel.points[1].value,   _newModel.points[2].value };
     double den = (x[0] - x[1]) * (x[0] - x[2]) * (x[1] - x[2]);
@@ -48,7 +47,6 @@ double CalibrationManager::calculateNewModel(const CalibrationModel& previousMod
     _newModel.isCalibrated = true;
     _newModel.lastCalibratedTimestamp = time(nullptr);
 
-    // ... (Quality Score and Sensor Drift calculations are unchanged) ...
     double y_mean = (y[0] + y[1] + y[2]) / 3.0;
     double ss_tot = 0.0; double ss_res = 0.0;
     for(int i = 0; i < 3; ++i) {
@@ -79,8 +77,6 @@ double CalibrationManager::calculateNewModel(const CalibrationModel& previousMod
         _newModel.sensorDrift = (model_span > 1e-9) ? (total_deviation / model_span) * 100.0 / steps : 0.0;
     } else { _newModel.sensorDrift = 0.0; }
 
-    // --- NEW: Calculate Zero-Point Drift ---
-    // Find the point closest to neutral pH (7.0) to get the neutral voltage.
     for (int i=0; i < CALIBRATION_POINT_COUNT; ++i) {
         if (std::abs(_newModel.points[i].value - 7.0) < 0.5) {
             _newModel.neutralVoltage = _newModel.points[i].voltage;
@@ -88,22 +84,25 @@ double CalibrationManager::calculateNewModel(const CalibrationModel& previousMod
         }
     }
     
-    // If we have a previous calibration, calculate the drift.
     if (previousModel.isCalibrated && previousModel.neutralVoltage != 0) {
         _newModel.zeroPointDrift = _newModel.neutralVoltage - previousModel.neutralVoltage;
     } else {
-        _newModel.zeroPointDrift = 0.0; // No previous data, so no drift.
+        _newModel.zeroPointDrift = 0.0;
     }
 
     return _newModel.qualityScore;
 }
-// ... (Model Management functions are unchanged) ...
 const CalibrationModel& CalibrationManager::getCurrentModel() const { return _currentModel; }
 CalibrationModel& CalibrationManager::getMutableCurrentModel() { return _currentModel; }
 const CalibrationModel& CalibrationManager::getNewModel() const { return _newModel; }
 void CalibrationManager::acceptNewModel() { _currentModel = _newModel; }
 
-void CalibrationManager::serializeModel(const CalibrationModel& model, JsonDocument& doc) {
+/**
+ * @brief --- DEFINITIVE FIX: Change signature to accept JsonObject. ---
+ * This allows the model to be serialized into a nested object within a
+ * larger JSON document, as required by the "Capture" snapshot feature.
+ */
+void CalibrationManager::serializeModel(const CalibrationModel& model, JsonObject& doc) {
     doc["isCalibrated"] = model.isCalibrated;
     doc["coeff_a"] = model.coeff_a;
     doc["coeff_b"] = model.coeff_b;
@@ -119,10 +118,10 @@ void CalibrationManager::serializeModel(const CalibrationModel& model, JsonDocum
     doc["quality"] = model.qualityScore;
     doc["drift"] = model.sensorDrift;
     doc["health"] = model.healthScore;
-    // --- NEW: Serialize Zero-Point KPI data ---
     doc["neutralV"] = model.neutralVoltage;
     doc["zpDrift"] = model.zeroPointDrift;
 }
+
 
 bool CalibrationManager::deserializeModel(CalibrationModel& model, JsonDocument& doc) {
     if (doc.isNull() || !doc.containsKey("isCalibrated")) return false;
@@ -142,13 +141,11 @@ bool CalibrationManager::deserializeModel(CalibrationModel& model, JsonDocument&
     model.qualityScore = doc["quality"] | 0.0;
     model.sensorDrift = doc["drift"] | 0.0;
     model.healthScore = doc["health"] | 100.0;
-    // --- NEW: Deserialize Zero-Point KPI data ---
     model.neutralVoltage = doc["neutralV"] | 0.0;
     model.zeroPointDrift = doc["zpDrift"] | 0.0;
     return true;
 }
 
-// --- Buffer Temperature Correction Logic (Unchanged) ---
 double getTemperatureCorrectedBufferValue(double nominalValue, double temperature) {
     const float temps[] = {0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50};
     const float ph4_01[] = {4.01, 4.00, 4.00, 4.00, 4.00, 4.01, 4.01, 4.02, 4.03, 4.04, 4.06};

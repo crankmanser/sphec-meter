@@ -38,7 +38,6 @@ void NoiseAnalysisScreen::onEnter(StateManager* stateManager, int context) {
     _sampling_progress_percent = 0;
 }
 
-// ... (rest of the file is unchanged) ...
 void NoiseAnalysisScreen::handleInput(const InputEvent& event) {
     switch (_current_state) {
         case AnalysisState::SELECT_SOURCE: handleSelectSourceInput(event); break;
@@ -46,6 +45,7 @@ void NoiseAnalysisScreen::handleInput(const InputEvent& event) {
         case AnalysisState::VIEW_RESULTS: handleViewResultsInput(event); break;
     }
 }
+
 void NoiseAnalysisScreen::getRenderProps(UIRenderProps* props_to_fill) {
     *props_to_fill = UIRenderProps();
     switch (_current_state) {
@@ -54,6 +54,7 @@ void NoiseAnalysisScreen::getRenderProps(UIRenderProps* props_to_fill) {
         case AnalysisState::VIEW_RESULTS: getViewResultsRenderProps(props_to_fill); break;
     }
 }
+
 void NoiseAnalysisScreen::setAnalysisResults(double mean, double min, double max, double pk_pk, double std_dev, const std::vector<double>& samples) {
     _result_mean = mean;
     _result_min = min;
@@ -67,12 +68,15 @@ void NoiseAnalysisScreen::setAnalysisResults(double mean, double min, double max
     }
     _current_state = AnalysisState::VIEW_RESULTS;
 }
+
 void NoiseAnalysisScreen::setSamplingProgress(int percent) {
     _sampling_progress_percent = percent;
 }
+
 bool NoiseAnalysisScreen::isSampling() const {
     return _current_state == AnalysisState::SAMPLING;
 }
+
 void NoiseAnalysisScreen::handleSelectSourceInput(const InputEvent& event) {
     if (event.type == InputEventType::ENCODER_INCREMENT) {
         if (_selected_source_index < _source_menu_items.size() - 1) _selected_source_index++;
@@ -93,11 +97,13 @@ void NoiseAnalysisScreen::handleSelectSourceInput(const InputEvent& event) {
         if (_stateManager) _stateManager->changeState(ScreenState::PBIOS_MENU);
     }
 }
+
 void NoiseAnalysisScreen::handleViewResultsInput(const InputEvent& event) {
     if (event.type == InputEventType::BTN_BACK_PRESS || event.type == InputEventType::BTN_DOWN_PRESS) {
         _current_state = AnalysisState::SELECT_SOURCE;
     }
 }
+
 void NoiseAnalysisScreen::getSelectSourceRenderProps(UIRenderProps* props_to_fill) {
     props_to_fill->oled_top_props.line1 = "pBios > Noise Analysis";
     props_to_fill->oled_middle_props.menu_props.is_enabled = true;
@@ -108,6 +114,7 @@ void NoiseAnalysisScreen::getSelectSourceRenderProps(UIRenderProps* props_to_fil
     props_to_fill->button_props.enter_text = "";
     props_to_fill->button_props.down_text = "Analyze";
 }
+
 void NoiseAnalysisScreen::getSamplingRenderProps(UIRenderProps* props_to_fill) {
     props_to_fill->oled_top_props.line1 = "Noise Analysis";
     props_to_fill->oled_bottom_props.line1 = "Acquiring high-speed data...";
@@ -115,6 +122,7 @@ void NoiseAnalysisScreen::getSamplingRenderProps(UIRenderProps* props_to_fill) {
     props_to_fill->oled_middle_props.progress_bar_props.label = "Sampling...";
     props_to_fill->oled_middle_props.progress_bar_props.progress_percent = _sampling_progress_percent;
 }
+
 void NoiseAnalysisScreen::getViewResultsRenderProps(UIRenderProps* props_to_fill) {
     char buffer[32];
 

@@ -25,7 +25,6 @@ void ProbeProfilingScreen::onEnter(StateManager* stateManager, int context) {
     _current_state = ProfilingState::SELECT_PROBE;
 }
 
-// ... (rest of the file is unchanged) ...
 void ProbeProfilingScreen::handleInput(const InputEvent& event) {
     switch (_current_state) {
         case ProfilingState::SELECT_PROBE:
@@ -39,6 +38,7 @@ void ProbeProfilingScreen::handleInput(const InputEvent& event) {
             break;
     }
 }
+
 void ProbeProfilingScreen::getRenderProps(UIRenderProps* props_to_fill) {
     *props_to_fill = UIRenderProps(); // Clear previous props
 
@@ -62,58 +62,59 @@ void ProbeProfilingScreen::getRenderProps(UIRenderProps* props_to_fill) {
         case ProfilingState::VIEW_REPORT:
             char buffer[40];
 
-            // --- Top OLED: Primary Health Indicators ---
             props_to_fill->oled_top_props.line1 = "Profile: " + _menu_items[_selected_index];
             snprintf(buffer, sizeof(buffer), "ZP Drift: %.3f mV", _zero_point_drift);
             props_to_fill->oled_top_props.line2 = buffer;
             snprintf(buffer, sizeof(buffer), "Live R_std: %.3f mV", _live_r_std);
             props_to_fill->oled_top_props.line3 = buffer;
 
-            // --- Middle OLED: Filter Load (Creep) ---
             props_to_fill->oled_middle_props.line1 = "--- Filter Load ---";
             snprintf(buffer, sizeof(buffer), "HF Settle: %.2f | LF: %.2f", _hf_params_snapshot.settleThreshold, _lf_params_snapshot.settleThreshold);
             props_to_fill->oled_middle_props.line2 = buffer;
             snprintf(buffer, sizeof(buffer), "HF Smooth: %.2f | LF: %.3f", _hf_params_snapshot.lockSmoothing, _lf_params_snapshot.lockSmoothing);
             props_to_fill->oled_middle_props.line3 = buffer;
             
-            // --- Bottom OLED: Historical Context ---
             props_to_fill->oled_bottom_props.line1 = "--- History ---";
-            // Extract just the date part (YYYYMMDD) from the timestamp for display
             std::string date_part = _last_cal_timestamp.substr(0, 8);
             snprintf(buffer, sizeof(buffer), "Last Cal: %s", date_part.c_str());
             props_to_fill->oled_bottom_props.line2 = buffer;
             snprintf(buffer, sizeof(buffer), "Cal Quality: %.1f %%", _cal_quality_score);
             props_to_fill->oled_bottom_props.line3 = buffer;
             
-            // --- Buttons ---
             props_to_fill->button_props.back_text = "Done";
             props_to_fill->button_props.down_text = "Done";
             break;
     }
 }
+
 bool ProbeProfilingScreen::isAnalyzing() const {
     return _current_state == ProfilingState::ANALYZING;
 }
+
 uint8_t ProbeProfilingScreen::getSelectedAdcIndex() const {
-    return _selected_index; // 0 for pH, 1 for EC
+    return _selected_index;
 }
+
 uint8_t ProbeProfilingScreen::getSelectedAdcInput() const {
     return ADS1118::DIFF_0_1;
 }
+
 const std::string& ProbeProfilingScreen::getSelectedFilterName() const {
     static const std::string ph_name = "ph_filter";
     static const std::string ec_name = "ec_filter";
     return (_selected_index == 0) ? ph_name : ec_name;
 }
+
 void ProbeProfilingScreen::setAnalysisResults(double live_r_std, const PI_Filter& hfFilter, const PI_Filter& lfFilter, double zero_point_drift, double cal_quality_score, const std::string& last_cal_timestamp) {
     _live_r_std = live_r_std;
-    _hf_params_snapshot = hfFilter; // Uses safe copy assignment
-    _lf_params_snapshot = lfFilter; // Uses safe copy assignment
+    _hf_params_snapshot = hfFilter;
+    _lf_params_snapshot = lfFilter;
     _zero_point_drift = zero_point_drift;
     _cal_quality_score = cal_quality_score;
     _last_cal_timestamp = last_cal_timestamp;
     _current_state = ProfilingState::VIEW_REPORT;
 }
+
 void ProbeProfilingScreen::handleSelectProbeInput(const InputEvent& event) {
     if (event.type == InputEventType::ENCODER_INCREMENT) {
         if (_selected_index < _menu_items.size() - 1) _selected_index++;
@@ -125,6 +126,7 @@ void ProbeProfilingScreen::handleSelectProbeInput(const InputEvent& event) {
         if (_stateManager) _stateManager->changeState(ScreenState::MAINTENANCE_MENU);
     }
 }
+
 void ProbeProfilingScreen::handleViewReportInput(const InputEvent& event) {
     if (event.type == InputEventType::BTN_BACK_PRESS || event.type == InputEventType::BTN_DOWN_PRESS) {
         _current_state = ProfilingState::SELECT_PROBE;

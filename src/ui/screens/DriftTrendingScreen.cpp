@@ -7,7 +7,7 @@
 #include "ADS1118.h"
 #include <stdio.h>
 #include <algorithm>
-#include "ui/UIManager.h" // Include for UIRenderProps definition
+#include "ui/UIManager.h"
 
 DriftTrendingScreen::DriftTrendingScreen(PBiosContext* context, AdcManager* adcManager) :
     _context(context),
@@ -39,7 +39,6 @@ void DriftTrendingScreen::onEnter(StateManager* stateManager, int context) {
     _sampling_progress_percent = 0;
 }
 
-// ... (rest of the file is unchanged) ...
 void DriftTrendingScreen::handleInput(const InputEvent& event) {
     switch (_current_state) {
         case TrendingState::SELECT_SOURCE: handleSelectSourceInput(event); break;
@@ -48,6 +47,7 @@ void DriftTrendingScreen::handleInput(const InputEvent& event) {
         case TrendingState::SAMPLING: case TrendingState::ANALYZING: break;
     }
 }
+
 void DriftTrendingScreen::getRenderProps(UIRenderProps* props_to_fill) {
     *props_to_fill = UIRenderProps();
     switch (_current_state) {
@@ -58,6 +58,7 @@ void DriftTrendingScreen::getRenderProps(UIRenderProps* props_to_fill) {
         case TrendingState::VIEW_RESULTS: getViewResultsRenderProps(props_to_fill); break;
     }
 }
+
 void DriftTrendingScreen::handleSelectSourceInput(const InputEvent& event) {
     if (event.type == InputEventType::ENCODER_INCREMENT) {
         if (_selected_source_index < _source_menu_items.size() - 1) _selected_source_index++;
@@ -73,6 +74,7 @@ void DriftTrendingScreen::handleSelectSourceInput(const InputEvent& event) {
         if (_stateManager) _stateManager->changeState(ScreenState::PBIOS_MENU);
     }
 }
+
 void DriftTrendingScreen::handleSelectDurationInput(const InputEvent& event) {
     if (event.type == InputEventType::ENCODER_INCREMENT) {
         if (_selected_duration_index < _duration_menu_items.size() - 1) _selected_duration_index++;
@@ -85,11 +87,13 @@ void DriftTrendingScreen::handleSelectDurationInput(const InputEvent& event) {
         _current_state = TrendingState::SELECT_SOURCE;
     }
 }
+
 void DriftTrendingScreen::handleViewResultsInput(const InputEvent& event) {
     if (event.type == InputEventType::BTN_BACK_PRESS || event.type == InputEventType::BTN_DOWN_PRESS) {
         _current_state = TrendingState::SELECT_SOURCE;
     }
 }
+
 void DriftTrendingScreen::getSelectSourceRenderProps(UIRenderProps* props_to_fill) {
     props_to_fill->oled_top_props.line1 = "pBios > Drift Trending";
     props_to_fill->oled_bottom_props.line1 = "Step 1: Select signal source.";
@@ -99,6 +103,7 @@ void DriftTrendingScreen::getSelectSourceRenderProps(UIRenderProps* props_to_fil
     props_to_fill->button_props.back_text = "Back";
     props_to_fill->button_props.down_text = "Next";
 }
+
 void DriftTrendingScreen::getSelectDurationRenderProps(UIRenderProps* props_to_fill) {
     props_to_fill->oled_top_props.line1 = "Source: " + _source_menu_items[_selected_source_index];
     props_to_fill->oled_bottom_props.line1 = "Step 2: Select analysis duration.";
@@ -108,6 +113,7 @@ void DriftTrendingScreen::getSelectDurationRenderProps(UIRenderProps* props_to_f
     props_to_fill->button_props.back_text = "Back";
     props_to_fill->button_props.down_text = "Analyze";
 }
+
 void DriftTrendingScreen::getSamplingRenderProps(UIRenderProps* props_to_fill) {
     props_to_fill->oled_top_props.line1 = "Drift Trending Analysis";
     props_to_fill->oled_bottom_props.line1 = "Acquiring long-duration data...";
@@ -115,12 +121,14 @@ void DriftTrendingScreen::getSamplingRenderProps(UIRenderProps* props_to_fill) {
     props_to_fill->oled_middle_props.progress_bar_props.label = "Sampling...";
     props_to_fill->oled_middle_props.progress_bar_props.progress_percent = _sampling_progress_percent;
 }
+
 void DriftTrendingScreen::getAnalyzingRenderProps(UIRenderProps* props_to_fill) {
     props_to_fill->oled_top_props.line1 = "Drift Trending Analysis";
     props_to_fill->oled_middle_props.line1 = "Analyzing...";
     props_to_fill->oled_middle_props.line2 = "Performing FFT...";
     props_to_fill->oled_bottom_props.line1 = "Please wait.";
 }
+
 void DriftTrendingScreen::getViewResultsRenderProps(UIRenderProps* props_to_fill) {
     char buffer[32];
     props_to_fill->oled_top_props.line1 = "FFT Results for:";
@@ -151,21 +159,26 @@ void DriftTrendingScreen::getViewResultsRenderProps(UIRenderProps* props_to_fill
     props_to_fill->oled_bottom_props.line1 = "Press any button to continue.";
     props_to_fill->button_props.back_text = "Done";
 }
+
 void DriftTrendingScreen::setAnalyzing() {
     _current_state = TrendingState::ANALYZING;
 }
+
 void DriftTrendingScreen::setAnalysisResults(const double* fft_magnitudes) {
     for (int i = 0; i < FFT_BIN_COUNT; ++i) {
         _fft_results[i] = fft_magnitudes[i];
     }
     _current_state = TrendingState::VIEW_RESULTS;
 }
+
 void DriftTrendingScreen::setSamplingProgress(int percent) {
     _sampling_progress_percent = percent;
 }
+
 bool DriftTrendingScreen::isSampling() const {
     return _current_state == TrendingState::SAMPLING;
 }
+
 int DriftTrendingScreen::getSelectedDurationSec() const {
     if (_selected_duration_index < _duration_values_sec.size()) {
         return _duration_values_sec[_selected_duration_index];

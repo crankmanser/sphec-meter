@@ -23,7 +23,6 @@ private:
     int _selected_index;
     bool _is_editing;
     
-    // Snapshot for the "Cancel" feature
     PI_Filter _hf_snapshot;
     PI_Filter _lf_snapshot;
     
