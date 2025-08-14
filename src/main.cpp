@@ -100,14 +100,6 @@ void setup() {
     vspi = new SPIClass(VSPI);
     vspi->begin(VSPI_SCK_PIN, VSPI_MISO_PIN, VSPI_MOSI_PIN);
     adcManager.begin(faultHandler, vspi, spiMutex, SD_CS_PIN);
-
-    // --- DEFINITIVE FIX: Electrically Prime the SPI Bus ---
-    // This single "dummy read" is the critical step that was missing. It forces
-    // a complete data transaction on the SPI bus, which allows its electrical
-    // characteristics to stabilize before the complex SD card initialization
-    // sequence is attempted. This resolves the root cause of the file system failure.
-    adcManager.getVoltage(0, ADS1118::AIN_0);
-
     sdManager.begin(faultHandler, vspi, spiMutex, SD_CS_PIN, ADC1_CS_PIN, ADC2_CS_PIN);
     configManager.begin(faultHandler, sdManager);
     tempManager.begin(faultHandler);
@@ -208,7 +200,17 @@ void uiTask(void* pvParameters) {
                 activeScreen->handleInput(event);
             }
         }
+        
         UIRenderProps props;
+        
+        // --- DEFINITIVE FIX: Ensure data is refreshed for both screens ---
+        // This block ensures that the LiveFilterTuningScreen's data buffers are
+        // updated every frame, even when the ParameterEditScreen is the active
+        // "overlay". This keeps the graphs live at all times.
+        if (stateManager->getActiveScreenState() == ScreenState::LIVE_FILTER_TUNING || stateManager->getActiveScreenState() == ScreenState::PARAMETER_EDIT) {
+            static_cast<LiveFilterTuningScreen*>(stateManager->getScreen(ScreenState::LIVE_FILTER_TUNING))->update();
+        }
+
         if (activeScreen) {
             activeScreen->getRenderProps(&props);
         }
@@ -226,20 +228,23 @@ void dataTask(void* pvParameters) {
     for (;;) {
         if (!stateManager) { vTaskDelay(pdMS_TO_TICKS(100)); continue; }
         ScreenState currentState = stateManager->getActiveScreenState();
+        Screen* activeScreen = stateManager->getActiveScreen();
 
         if (currentState != lastState) {
+            // Deactivate all probes when the screen changes
             adcManager.setProbeState(0, ProbeState::DORMANT);
             adcManager.setProbeState(1, ProbeState::DORMANT);
 
+            // Activate probes based on the new screen
             if (mode == BootMode::NORMAL) {
                 if (currentState == ScreenState::PROBE_MEASUREMENT) {
-                    ProbeMeasurementScreen* screen = static_cast<ProbeMeasurementScreen*>(stateManager->getActiveScreen());
+                    ProbeMeasurementScreen* screen = static_cast<ProbeMeasurementScreen*>(activeScreen);
                     if (screen) {
                         uint8_t probe_index = (screen->getActiveProbeType() == ProbeType::PH) ? 0 : 1;
                         adcManager.setProbeState(probe_index, ProbeState::ACTIVE);
                     }
                 } else if (currentState == ScreenState::CALIBRATION_WIZARD) {
-                    CalibrationWizardScreen* screen = static_cast<CalibrationWizardScreen*>(stateManager->getActiveScreen());
+                    CalibrationWizardScreen* screen = static_cast<CalibrationWizardScreen*>(activeScreen);
                     if(screen) {
                         uint8_t probe_index = (screen->getProbeType() == ProbeType::PH) ? 0 : 1;
                         adcManager.setProbeState(probe_index, ProbeState::ACTIVE);
@@ -250,7 +255,8 @@ void dataTask(void* pvParameters) {
                      currentState == ScreenState::PARAMETER_EDIT ||
                      currentState == ScreenState::NOISE_ANALYSIS ||
                      currentState == ScreenState::DRIFT_TRENDING ||
-                     currentState == ScreenState::LIVE_VOLTMETER) {
+                     currentState == ScreenState::LIVE_VOLTMETER ||
+                     currentState == ScreenState::PROBE_PROFILING) {
                     adcManager.setProbeState(pBiosContext.selectedAdcIndex, ProbeState::ACTIVE);
                  }
             }
@@ -258,7 +264,7 @@ void dataTask(void* pvParameters) {
         }
 
         if (mode == BootMode::NORMAL) {
-            // ... (Normal mode logic) ...
+            // ... (Normal mode logic will be added here) ...
         } else if (mode == BootMode::PBIOS) {
             switch (currentState) {
                 case ScreenState::LIVE_FILTER_TUNING:
@@ -269,11 +275,11 @@ void dataTask(void* pvParameters) {
                      }
                     break;
                 case ScreenState::AUTO_TUNE_RUNNING: {
-                    AutoTuningScreen* tuneScreen = static_cast<AutoTuningScreen*>(stateManager->getScreen(ScreenState::AUTO_TUNE_RUNNING));
+                    AutoTuningScreen* tuneScreen = static_cast<AutoTuningScreen*>(activeScreen);
                     if (tuneScreen && pBiosContext.selectedFilter) {
                         adcManager.setProbeState(pBiosContext.selectedAdcIndex, ProbeState::ACTIVE);
-                        vTaskDelay(pdMS_TO_TICKS(100));
-                        adcManager.getVoltage(pBiosContext.selectedAdcIndex, pBiosContext.selectedAdcInput);
+                        vTaskDelay(pdMS_TO_TICKS(100)); // Allow time for probe to stabilize
+                        adcManager.getVoltage(pBiosContext.selectedAdcIndex, pBiosContext.selectedAdcInput); // Priming read
 
                         if (guidedTuningEngine.proposeSettings(pBiosContext, adcManager, sdManager, stateManager, *tuneScreen)) {
                             configManager.saveFilterSettings(*pBiosContext.selectedFilter, pBiosContext.selectedFilterName.c_str(), g_sessionTimestamp, false);
@@ -285,15 +291,95 @@ void dataTask(void* pvParameters) {
                     break;
                 }
                 case ScreenState::PROBE_PROFILING: {
-                    // ... (Probe profiling logic) ...
+                    ProbeProfilingScreen* screen = static_cast<ProbeProfilingScreen*>(activeScreen);
+                    if (screen && screen->isAnalyzing()) {
+                        for (int i = 0; i < 50; i++) {
+                             double voltage = adcManager.getVoltage(screen->getSelectedAdcIndex(), screen->getSelectedAdcInput());
+                             phFilter.process(voltage);
+                             screen->setProgress((i*100)/50);
+                             vTaskDelay(pdMS_TO_TICKS(22));
+                        }
+
+                        FilterManager* filterToProfile = (screen->getSelectedAdcIndex() == 0) ? &phFilter : &ecFilter;
+                        CalibrationManager* calManagerToUse = (screen->getSelectedAdcIndex() == 0) ? &phCalManager : &ecCalManager;
+                        const CalibrationModel& model = calManagerToUse->getCurrentModel();
+
+                        double live_r_std = filterToProfile->getFilter(0)->getRawStandardDeviation();
+                        double zp_drift = model.zeroPointDrift;
+                        double cal_quality = model.qualityScore;
+                        
+                        char time_buf[20];
+                        strftime(time_buf, sizeof(time_buf), "%Y%m%d-%H%M%S", localtime(&model.lastCalibratedTimestamp));
+
+                        screen->setAnalysisResults(live_r_std,
+                                                   *filterToProfile->getFilter(0),
+                                                   *filterToProfile->getFilter(1),
+                                                   zp_drift,
+                                                   cal_quality,
+                                                   std::string(time_buf));
+                    }
                     break;
                 }
                 case ScreenState::NOISE_ANALYSIS: {
-                    // ... (Noise analysis logic) ...
+                    NoiseAnalysisScreen* screen = static_cast<NoiseAnalysisScreen*>(activeScreen);
+                    if (screen && screen->isSampling()) {
+                        std::vector<double> samples;
+                        samples.reserve(ANALYSIS_SAMPLE_COUNT);
+                        for (int i = 0; i < ANALYSIS_SAMPLE_COUNT; ++i) {
+                            double voltage = adcManager.getVoltage(pBiosContext.selectedAdcIndex, pBiosContext.selectedAdcInput);
+                            if (!isnan(voltage)) {
+                                samples.push_back(voltage);
+                            }
+                            screen->setSamplingProgress((i * 100) / ANALYSIS_SAMPLE_COUNT);
+                            vTaskDelay(pdMS_TO_TICKS(22));
+                        }
+                        if (!samples.empty()) {
+                            double sum = std::accumulate(samples.begin(), samples.end(), 0.0);
+                            double mean = sum / samples.size();
+                            double sq_sum = std::inner_product(samples.begin(), samples.end(), samples.begin(), 0.0);
+                            double std_dev = std::sqrt(sq_sum / samples.size() - mean * mean);
+                            auto minmax = std::minmax_element(samples.begin(), samples.end());
+                            screen->setAnalysisResults(mean, *minmax.first, *minmax.second, *minmax.second - *minmax.first, std_dev, samples);
+                        }
+                    }
                     break;
                 }
                 case ScreenState::DRIFT_TRENDING: {
-                   // ... (Drift trending logic) ...
+                   DriftTrendingScreen* screen = static_cast<DriftTrendingScreen*>(activeScreen);
+                    if (screen && screen->isSampling()) {
+                        long duration_ms = screen->getSelectedDurationSec() * 1000;
+                        long start_time = millis();
+                        std::vector<double> samples;
+                        samples.reserve(DRIFT_SAMPLE_COUNT);
+                        double fft_real[DRIFT_SAMPLE_COUNT];
+                        double fft_imag[DRIFT_SAMPLE_COUNT];
+
+                        for (int i = 0; i < DRIFT_SAMPLE_COUNT; ++i) {
+                            double voltage = adcManager.getVoltage(pBiosContext.selectedAdcIndex, pBiosContext.selectedAdcInput);
+                            if (!isnan(voltage)) {
+                                samples.push_back(voltage);
+                            }
+                            screen->setSamplingProgress((i * 100) / DRIFT_SAMPLE_COUNT);
+                            vTaskDelay(pdMS_TO_TICKS(22));
+                        }
+
+                        screen->setAnalyzing();
+                        vTaskDelay(pdMS_TO_TICKS(100));
+
+                        if (samples.size() == DRIFT_SAMPLE_COUNT) {
+                            double sum = std::accumulate(samples.begin(), samples.end(), 0.0);
+                            double mean = sum / samples.size();
+                            for(int i=0; i<DRIFT_SAMPLE_COUNT; ++i) {
+                                fft_real[i] = samples[i] - mean;
+                                fft_imag[i] = 0.0;
+                            }
+                            arduinoFFT fft(fft_real, fft_imag, DRIFT_SAMPLE_COUNT, 1000.0 / 22.0);
+                            fft.Windowing(FFT_WIN_TYP_HAMMING, FFT_FORWARD);
+                            fft.Compute(FFT_FORWARD);
+                            fft.ComplexToMagnitude();
+                            screen->setAnalysisResults(fft_real);
+                        }
+                    }
                     break;
                 }
                 default: break;
@@ -302,7 +388,10 @@ void dataTask(void* pvParameters) {
 
         if (currentState == ScreenState::LIVE_FILTER_TUNING ||
             currentState == ScreenState::PARAMETER_EDIT ||
-            currentState == ScreenState::PROBE_MEASUREMENT) {
+            currentState == ScreenState::PROBE_MEASUREMENT ||
+            currentState == ScreenState::NOISE_ANALYSIS ||
+            currentState == ScreenState::DRIFT_TRENDING ||
+            currentState == ScreenState::PROBE_PROFILING ) {
             vTaskDelay(pdMS_TO_TICKS(22));
         } else {
             vTaskDelay(pdMS_TO_TICKS(50));

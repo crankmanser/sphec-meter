@@ -18,7 +18,6 @@ public:
     ProbeProfilingScreen();
     void handleInput(const InputEvent& event) override;
     void getRenderProps(UIRenderProps* props_to_fill) override;
-    // --- DEFINITIVE FIX: Update signature to match the base class ---
     void onEnter(StateManager* stateManager, int context = 0) override;
 
     // Methods for the data task to interact with the screen
@@ -27,6 +26,9 @@ public:
     uint8_t getSelectedAdcInput() const;
     const std::string& getSelectedFilterName() const;
     void setAnalysisResults(double live_r_std, const PI_Filter& hfFilter, const PI_Filter& lfFilter, double zero_point_drift, double cal_quality_score, const std::string& last_cal_timestamp);
+
+    // --- NEW: Public method to update the progress bar ---
+    void setProgress(int percent);
 
 private:
     enum class ProfilingState {
@@ -41,6 +43,9 @@ private:
     ProfilingState _current_state;
     std::vector<std::string> _menu_items;
     int _selected_index;
+
+    // --- NEW: Member to hold progress percentage ---
+    int _progress_percent;
 
     // --- Data for the report card ---
     double _live_r_std;

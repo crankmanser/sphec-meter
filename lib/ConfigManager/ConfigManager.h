@@ -12,7 +12,13 @@
 class ConfigManager {
 public:
     ConfigManager();
-    
+
+    /**
+     * @brief --- DEFINITIVE REFACTOR: Initializes the ConfigManager without file I/O. ---
+     * This simplified function's only responsibility is to ensure the /config
+     * directory exists on the SD card. It no longer attempts to load any files,
+     * which resolves the critical initialization race condition.
+     */
     bool begin(FaultHandler& faultHandler, SdManager& sdManager);
 
     /**
@@ -28,6 +34,11 @@ public:
      */
     bool saveFilterSettings(FilterManager& filter, const char* filterName, const char* sessionTimestamp, bool is_saved_state = false);
 
+    /**
+     * @brief --- DEFINITIVE REFACTOR: Now includes is_saved_state parameter. ---
+     * This allows the "Restore Tune" feature to correctly load the "_saved"
+     * version of the configuration file.
+     */
     bool loadFilterSettings(FilterManager& filter, const char* filterName, bool is_saved_state = false);
 
 private:

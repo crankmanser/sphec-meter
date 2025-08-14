@@ -9,6 +9,7 @@
 ProbeProfilingScreen::ProbeProfilingScreen() :
     _current_state(ProfilingState::SELECT_PROBE),
     _selected_index(0),
+    _progress_percent(0), // Initialize progress
     _live_r_std(0.0),
     _zero_point_drift(0.0),
     _cal_quality_score(0.0)
@@ -17,12 +18,10 @@ ProbeProfilingScreen::ProbeProfilingScreen() :
     _menu_items.push_back("EC Probe");
 }
 
-/**
- * @brief --- DEFINITIVE FIX: Update signature to match the base class ---
- */
 void ProbeProfilingScreen::onEnter(StateManager* stateManager, int context) {
     Screen::onEnter(stateManager);
     _current_state = ProfilingState::SELECT_PROBE;
+    _progress_percent = 0; // Reset progress on enter
 }
 
 void ProbeProfilingScreen::handleInput(const InputEvent& event) {
@@ -53,10 +52,13 @@ void ProbeProfilingScreen::getRenderProps(UIRenderProps* props_to_fill) {
             props_to_fill->button_props.down_text = "Analyze";
             break;
 
+        // --- NEW: Render a progress bar during analysis ---
         case ProfilingState::ANALYZING:
             props_to_fill->oled_top_props.line1 = "Probe Profiling";
-            props_to_fill->oled_middle_props.line1 = "Analyzing signal...";
-            props_to_fill->oled_middle_props.line2 = "Please wait.";
+            props_to_fill->oled_middle_props.progress_bar_props.is_enabled = true;
+            props_to_fill->oled_middle_props.progress_bar_props.label = "Analyzing Signal...";
+            props_to_fill->oled_middle_props.progress_bar_props.progress_percent = _progress_percent;
+            props_to_fill->oled_bottom_props.line1 = "Please wait.";
             break;
 
         case ProfilingState::VIEW_REPORT:
@@ -73,14 +75,14 @@ void ProbeProfilingScreen::getRenderProps(UIRenderProps* props_to_fill) {
             props_to_fill->oled_middle_props.line2 = buffer;
             snprintf(buffer, sizeof(buffer), "HF Smooth: %.2f | LF: %.3f", _hf_params_snapshot.lockSmoothing, _lf_params_snapshot.lockSmoothing);
             props_to_fill->oled_middle_props.line3 = buffer;
-            
+
             props_to_fill->oled_bottom_props.line1 = "--- History ---";
             std::string date_part = _last_cal_timestamp.substr(0, 8);
             snprintf(buffer, sizeof(buffer), "Last Cal: %s", date_part.c_str());
             props_to_fill->oled_bottom_props.line2 = buffer;
             snprintf(buffer, sizeof(buffer), "Cal Quality: %.1f %%", _cal_quality_score);
             props_to_fill->oled_bottom_props.line3 = buffer;
-            
+
             props_to_fill->button_props.back_text = "Done";
             props_to_fill->button_props.down_text = "Done";
             break;
@@ -113,6 +115,13 @@ void ProbeProfilingScreen::setAnalysisResults(double live_r_std, const PI_Filter
     _cal_quality_score = cal_quality_score;
     _last_cal_timestamp = last_cal_timestamp;
     _current_state = ProfilingState::VIEW_REPORT;
+}
+
+// --- NEW: Implementation of the progress setter ---
+void ProbeProfilingScreen::setProgress(int percent) {
+    _progress_percent = percent;
+    if (_progress_percent < 0) _progress_percent = 0;
+    if (_progress_percent > 100) _progress_percent = 100;
 }
 
 void ProbeProfilingScreen::handleSelectProbeInput(const InputEvent& event) {

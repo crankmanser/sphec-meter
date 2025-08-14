@@ -3,6 +3,7 @@
 
 #include "SdManager.h"
 #include <SPI.h>
+#include "DebugConfig.h" // Include for logging macros
 
 SdManager::SdManager() : _faultHandler(nullptr), _isInitialized(false), _csPin(0), _spiMutex(nullptr), _adc1CsPin(0), _adc2CsPin(0) {}
 
@@ -13,18 +14,25 @@ bool SdManager::begin(FaultHandler& faultHandler, SPIClass* spiBus, SemaphoreHan
     _adc1CsPin = adc1CsPin;
     _adc2CsPin = adc2CsPin;
 
+    LOG_STORAGE("SdManager::begin() - Attempting to take SPI mutex...");
     if (xSemaphoreTake(_spiMutex, portMAX_DELAY) == pdTRUE) {
+        LOG_STORAGE("SdManager::begin() - Mutex taken. Deselecting other slaves.");
         deselectOtherSlaves();
         SdSpiConfig sdConfig(_csPin, SHARED_SPI, SD_SCK_MHZ(4), spiBus);
+
+        LOG_STORAGE("SdManager::begin() - Calling sd.begin()...");
         if (!sd.begin(sdConfig)) {
+            LOG_STORAGE("SdManager::begin() - ERROR: sd.begin() failed.");
             _isInitialized = false;
             xSemaphoreGive(_spiMutex);
             return false;
         }
         _isInitialized = true;
+        LOG_STORAGE("SdManager::begin() - SUCCESS: sd.begin() successful.");
         xSemaphoreGive(_spiMutex);
         return true;
     }
+    LOG_STORAGE("SdManager::begin() - ERROR: Could not take SPI mutex.");
     return false;
 }
 
@@ -34,13 +42,29 @@ void SdManager::deselectOtherSlaves() {
 }
 
 bool SdManager::mkdir(const char* path) {
-    if (!_isInitialized || _spiMutex == nullptr) return false;
+    if (!_isInitialized) {
+        LOG_STORAGE("SdManager::mkdir('%s') - ERROR: Not initialized.", path);
+        return false;
+    }
+     if (_spiMutex == nullptr) {
+        LOG_STORAGE("SdManager::mkdir('%s') - ERROR: SPI mutex is null.", path);
+        return false;
+    }
 
     bool success = false;
+    LOG_STORAGE("SdManager::mkdir('%s') - Attempting to take SPI mutex...", path);
     if (xSemaphoreTake(_spiMutex, portMAX_DELAY) == pdTRUE) {
+        LOG_STORAGE("SdManager::mkdir('%s') - Mutex taken.", path);
         deselectOtherSlaves();
         success = sd.mkdir(path);
+        if(success) {
+            LOG_STORAGE("SdManager::mkdir('%s') - SUCCESS.", path);
+        } else {
+            LOG_STORAGE("SdManager::mkdir('%s') - ERROR: sd.mkdir() failed.", path);
+        }
         xSemaphoreGive(_spiMutex);
+    } else {
+        LOG_STORAGE("SdManager::mkdir('%s') - ERROR: Could not take SPI mutex.", path);
     }
     return success;
 }
@@ -81,55 +105,94 @@ void SdManager::giveMutex() {
  * file before any rename operations are attempted. This resolves the empty file bug.
  */
 bool SdManager::saveJson(const char* path, const JsonDocument& doc) {
-    if (!_isInitialized || _spiMutex == nullptr) return false;
+    if (!_isInitialized) {
+         LOG_STORAGE("SdManager::saveJson('%s') - ERROR: Not initialized.", path);
+        return false;
+    }
+    if (_spiMutex == nullptr) {
+        LOG_STORAGE("SdManager::saveJson('%s') - ERROR: SPI mutex is null.", path);
+        return false;
+    }
+
 
     bool success = false;
+    LOG_STORAGE("SdManager::saveJson('%s') - Attempting to take SPI mutex...", path);
     if (xSemaphoreTake(_spiMutex, portMAX_DELAY) == pdTRUE) {
+        LOG_STORAGE("SdManager::saveJson('%s') - Mutex taken.", path);
         deselectOtherSlaves();
         char tmpPath[256];
         char bakPath[256];
         snprintf(tmpPath, sizeof(tmpPath), "%s.tmp", path);
         snprintf(bakPath, sizeof(bakPath), "%s.bak", path);
 
-        // Step 1: Write data to the temporary file
+        LOG_STORAGE("SdManager::saveJson('%s') - Opening temp file '%s'...", path, tmpPath);
         FsFile tmpFile = sd.open(tmpPath, FILE_WRITE);
         if (tmpFile) {
+            LOG_STORAGE("SdManager::saveJson('%s') - Temp file opened. Writing data...", path);
             if (serializeJson(doc, tmpFile) > 0) {
-                // Step 2: Force the write to the physical card and close the file
+                LOG_STORAGE("SdManager::saveJson('%s') - Write successful. Syncing and closing...", path);
                 tmpFile.sync();
                 tmpFile.close();
+                LOG_STORAGE("SdManager::saveJson('%s') - Temp file closed. Performing atomic rename.", path);
 
-                // Step 3: Perform atomic rename operations now that data is safe
-                if (sd.exists(bakPath)) sd.remove(bakPath);
+                if (sd.exists(bakPath)) {
+                    LOG_STORAGE("SdManager::saveJson('%s') - Removing old backup '%s'.", path, bakPath);
+                    sd.remove(bakPath);
+                }
                 if (sd.exists(path)) {
+                     LOG_STORAGE("SdManager::saveJson('%s') - Renaming original to backup '%s'.", path, bakPath);
                     sd.rename(path, bakPath);
                 }
                 if (sd.rename(tmpPath, path)) {
+                    LOG_STORAGE("SdManager::saveJson('%s') - SUCCESS: Final rename successful.", path);
                     success = true;
                 } else {
-                    // Attempt to restore the backup if the final rename fails
+                    LOG_STORAGE("SdManager::saveJson('%s') - ERROR: Final rename failed. Restoring backup.", path);
                     sd.rename(bakPath, path);
                 }
             } else {
-                tmpFile.close(); // Close the file even if write failed
+                 LOG_STORAGE("SdManager::saveJson('%s') - ERROR: serializeJson() failed.", path);
+                tmpFile.close();
             }
+        } else {
+            LOG_STORAGE("SdManager::saveJson('%s') - ERROR: Could not open temp file '%s'.", path, tmpPath);
         }
         xSemaphoreGive(_spiMutex);
+         LOG_STORAGE("SdManager::saveJson('%s') - Mutex released.", path);
+    } else {
+        LOG_STORAGE("SdManager::saveJson('%s') - ERROR: Could not take mutex.", path);
     }
     return success;
 }
 
 bool SdManager::loadJson(const char* path, JsonDocument& doc) {
-    if (!_isInitialized || _spiMutex == nullptr) return false;
+    if (!_isInitialized) {
+        LOG_STORAGE("SdManager::loadJson('%s') - ERROR: Not initialized.", path);
+        return false;
+    }
+    if (_spiMutex == nullptr) {
+        LOG_STORAGE("SdManager::loadJson('%s') - ERROR: SPI mutex is null.", path);
+        return false;
+    }
 
     bool success = false;
+     LOG_STORAGE("SdManager::loadJson('%s') - Attempting to take mutex...", path);
     if (xSemaphoreTake(_spiMutex, portMAX_DELAY) == pdTRUE) {
+        LOG_STORAGE("SdManager::loadJson('%s') - Mutex taken.", path);
         deselectOtherSlaves();
         FsFile file = sd.open(path, FILE_READ);
         if (file) {
+            LOG_STORAGE("SdManager::loadJson('%s') - File opened. Deserializing...", path);
             DeserializationError error = deserializeJson(doc, file);
             file.close();
-            if (error == DeserializationError::Ok) success = true;
+            if (error == DeserializationError::Ok) {
+                LOG_STORAGE("SdManager::loadJson('%s') - SUCCESS.", path);
+                success = true;
+            } else {
+                 LOG_STORAGE("SdManager::loadJson('%s') - ERROR: deserializeJson() failed: %s", path, error.c_str());
+            }
+        } else {
+             LOG_STORAGE("SdManager::loadJson('%s') - File not found. Checking for backup...", path);
         }
 
         if (!success) {
@@ -137,12 +200,21 @@ bool SdManager::loadJson(const char* path, JsonDocument& doc) {
             snprintf(bakPath, sizeof(bakPath), "%s.bak", path);
             FsFile bakFile = sd.open(bakPath, FILE_READ);
             if (bakFile) {
+                LOG_STORAGE("SdManager::loadJson('%s') - Backup file '%s' opened. Deserializing...", path, bakPath);
                 DeserializationError error = deserializeJson(doc, bakFile);
                 bakFile.close();
-                if (error == DeserializationError::Ok) success = true;
+                if (error == DeserializationError::Ok) {
+                    LOG_STORAGE("SdManager::loadJson('%s') - SUCCESS from backup.", path);
+                    success = true;
+                } else {
+                    LOG_STORAGE("SdManager::loadJson('%s') - ERROR: deserializeJson() from backup failed: %s", path, error.c_str());
+                }
             }
         }
         xSemaphoreGive(_spiMutex);
+        LOG_STORAGE("SdManager::loadJson('%s') - Mutex released.", path);
+    } else {
+         LOG_STORAGE("SdManager::loadJson('%s') - ERROR: Could not take mutex.", path);
     }
     return success;
 }

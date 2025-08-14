@@ -1,8 +1,8 @@
-// File Path: /lib/ConfigManager/src/ConfigManager.cpp
+// File Path: /lib/ConfigManager/ConfigManager.cpp
 // MODIFIED FILE
 
 #include "ConfigManager.h"
-#include "../../src/DebugConfig.h"
+#include "DebugConfig.h"
 
 ConfigManager::ConfigManager() :
     _faultHandler(nullptr),
@@ -10,6 +10,13 @@ ConfigManager::ConfigManager() :
     _initialized(false)
 {}
 
+/**
+ * @brief --- DEFINITIVE REFACTOR: Initializes the manager without reading files. ---
+ * This function's only responsibility is now to create the configuration
+ * directory if it doesn't exist. This is the key to resolving the race
+ * condition, as it ensures the SD card is fully stable before any read
+ * operations are attempted later in the main setup() function.
+ */
 bool ConfigManager::begin(FaultHandler& faultHandler, SdManager& sdManager) {
     _faultHandler = &faultHandler;
     _sdManager = &sdManager;

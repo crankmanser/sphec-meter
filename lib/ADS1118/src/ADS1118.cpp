@@ -1,4 +1,5 @@
 // File Path: /lib/ADS1118/src/ADS1118.cpp
+// MODIFIED FILE
 
 #include "ADS1118.h"
 #include "Arduino.h"
@@ -11,7 +12,7 @@ ADS1118::ADS1118(uint8_t io_pin_cs) {
 ADS1118::ADS1118(uint8_t io_pin_cs, SPIClass *spi) {
     cs = io_pin_cs;
     pSpi = spi;
-}       
+}
 #endif
 
 #if defined(__AVR__)
@@ -28,7 +29,7 @@ void ADS1118::begin() {
     digitalWrite(cs, HIGH);
     // pSpi->begin(); // <<< CRITICAL FIX: DO NOT re-initialize the bus. The main app is responsible for this.
     configRegister.bits={RESERVED, VALID_CFG, DOUT_PULLUP, ADC_MODE, RATE_8SPS, SINGLE_SHOT, FSR_0256, DIFF_0_1, START_NOW};
-}      
+}
 
 void ADS1118::begin(uint8_t sclk, uint8_t miso, uint8_t mosi) {
     pinMode(cs, OUTPUT);
@@ -38,7 +39,7 @@ void ADS1118::begin(uint8_t sclk, uint8_t miso, uint8_t mosi) {
 }
 
 bool ADS1118::getADCValueNoWait(uint8_t pin_drdy, uint16_t &value) {
-    byte dataMSB, dataLSB;	
+    byte dataMSB, dataLSB;
 	pSpi->beginTransaction(SPISettings(SCLK, MSBFIRST, SPI_MODE1));
 	digitalWrite(cs, LOW);
 	if (digitalRead(pin_drdy)) {
@@ -81,8 +82,9 @@ uint16_t ADS1118::getADCValue(uint8_t inputs) {
 	configRegister.bits.sensorMode=ADC_MODE;
 	configRegister.bits.mux=inputs;
     do{
-        // <<< CRITICAL FIX: ALL SPI TRANSACTION CONTROL IS REMOVED >>>
-        // Our HAL driver is now responsible for this.
+        // <<< DEFINITIVE FIX: ALL SPI TRANSACTION CONTROL IS REMOVED >>>
+        // The higher-level AdcManager is now responsible for this, which
+        // prevents nested transactions and resolves the bus lock-up.
 	    digitalWrite(cs, LOW);
 
         dataMSB = pSpi->transfer(configRegister.byte.msb);
@@ -136,27 +138,15 @@ double ADS1118::getTemperature() {
     else
 	configRegister.bits.sensorMode=TEMP_MODE;
     do{
-#if defined(ESP32)
-	pSpi->beginTransaction(SPISettings(SCLK, MSBFIRST, SPI_MODE1));
-#endif
-	digitalWrite(cs, LOW);
-        
-#if defined(__AVR__)	
-        dataMSB = SPI.transfer(configRegister.byte.msb);
-        dataLSB = SPI.transfer(configRegister.byte.lsb);
-        configMSB = SPI.transfer(configRegister.byte.msb);
-        configLSB = SPI.transfer(configRegister.byte.lsb);        
-#elif defined(ESP32)
+        // <<< DEFINITIVE FIX: ALL SPI TRANSACTION CONTROL IS REMOVED >>>
+        digitalWrite(cs, LOW);
         dataMSB = pSpi->transfer(configRegister.byte.msb);
-	dataLSB = pSpi->transfer(configRegister.byte.lsb);
-	configMSB = pSpi->transfer(configRegister.byte.msb);
-	configLSB = pSpi->transfer(configRegister.byte.lsb);        
-#endif
-	digitalWrite(cs, HIGH);
-#if defined(ESP32)
-	pSpi->endTransaction();
-#endif
-	for(int i=0;i<CONV_TIME[configRegister.bits.rate];i++)
+        dataLSB = pSpi->transfer(configRegister.byte.lsb);
+        configMSB = pSpi->transfer(configRegister.byte.msb);
+        configLSB = pSpi->transfer(configRegister.byte.lsb);
+        digitalWrite(cs, HIGH);
+
+	    for(int i=0;i<CONV_TIME[configRegister.bits.rate];i++)
             delayMicroseconds(1000);
         count++;
     }while (count<=1);
