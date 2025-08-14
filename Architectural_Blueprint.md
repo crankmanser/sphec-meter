@@ -44,6 +44,15 @@ The system uses a dual-core FreeRTOS architecture to ensure UI responsiveness an
     * **R_std (Raw Standard Deviation):** A baseline measure of the hardware's inherent noise level.
     * **Stab % (Stability):** A real-time percentage (0-100%) indicating noise reduction efficiency.
 
+The "Live Snapshot" Capture Method
+
+We will use a **fast, safe, and statistically robust** capture method to acquire the signal data for tuning. This completely avoids the instability of disk-based operations and the memory risks of large RAM buffers.
+
+* **Multi-Pass RAM Capture:** The `GuidedTuningEngine` performs three separate, short, high-speed captures of the live signal directly into the ESP32's fast RAM. Each capture is only a few kilobytes, making it extremely safe and immune to heap fragmentation or stack overflow issues.
+    * **(Developer Note - Aug 2025):** The stability of this capture process is extremely sensitive to the timing of the sampling loop. The loop must include a delay (e.g., `vTaskDelay`) that is long enough to prevent the `dataTask` from starving the `uiTask` and other critical system processes. A delay of `22ms` has been found to be stable for most diagnostic tools, but the `Auto-Tuner` continues to fail, indicating a deeper hardware/RTOS conflict. The timing and methodology of this capture loop is the primary focus of the ongoing debugging effort.
+* **Statistical Averaging:** These three captures are then averaged together point-by-point to create a single, high-confidence "mean" dataset. This process ensures the resulting "noise fingerprint" is not skewed by any random anomalies and is a highly reliable representation of the probe's real-world signal.
+
+
 ### 2.2. Calibration Engine ("Smart Calibration")
 
 * **Purpose:** To create a precise mathematical model translating filtered voltage into a scientific measurement (pH/EC), while also tracking probe health. The calibration is performed on the **final, stable output of the LF filter**, ensuring any attenuation from the filter pipeline is automatically accounted for in the model.

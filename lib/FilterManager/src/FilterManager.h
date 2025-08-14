@@ -8,20 +8,30 @@
 #include "PI_Filter.h"
 #include <string>
 
+// Forward declaration to avoid circular dependency
 class ConfigManager;
 
+/**
+ * @class FilterManager
+ * @brief Manages the two-stage (HF/LF) filtering pipeline for a single signal source.
+ */
 class FilterManager {
 public:
     FilterManager();
 
     /**
-     * @brief Initializes the FilterManager and loads its settings.
+     * @brief --- DEFINITIVE REFACTOR: Initializes the FilterManager with hardcoded defaults. ---
+     * This method no longer accepts a ConfigManager and does not perform any file I/O.
+     * It simply initializes the filter parameters to a safe, default state. The responsibility
+     * of loading the configuration from the SD card is now handled by a centralized
+     * "provisioner" function in main.cpp, which runs after all hardware is stable,
+     * thus eliminating the initialization race condition.
+     *
      * @param faultHandler A reference to the global fault handler.
-     * @param configManager A reference to the ConfigManager to load/save settings.
      * @param name The unique name for this filter instance (e.g., "ph_filter").
      * @return True if initialization is successful, false otherwise.
      */
-    bool begin(FaultHandler& faultHandler, ConfigManager& configManager, const char* name);
+    bool begin(FaultHandler& faultHandler, const char* name);
 
     double process(double rawVoltage);
     PI_Filter* getFilter(int index);

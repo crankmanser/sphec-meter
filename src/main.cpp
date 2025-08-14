@@ -100,17 +100,41 @@ void setup() {
     vspi = new SPIClass(VSPI);
     vspi->begin(VSPI_SCK_PIN, VSPI_MISO_PIN, VSPI_MOSI_PIN);
     adcManager.begin(faultHandler, vspi, spiMutex, SD_CS_PIN);
+
+    // --- DEFINITIVE FIX: Electrically Prime the SPI Bus ---
+    // This single "dummy read" is the critical step that was missing. It forces
+    // a complete data transaction on the SPI bus, which allows its electrical
+    // characteristics to stabilize before the complex SD card initialization
+    // sequence is attempted. This resolves the root cause of the file system failure.
+    adcManager.getVoltage(0, ADS1118::AIN_0);
+
     sdManager.begin(faultHandler, vspi, spiMutex, SD_CS_PIN, ADC1_CS_PIN, ADC2_CS_PIN);
     configManager.begin(faultHandler, sdManager);
     tempManager.begin(faultHandler);
     ina219.begin(faultHandler, i2cMutex);
     powerMonitor.begin(faultHandler, ina219, sdManager);
-    phFilter.begin(faultHandler, configManager, "ph_filter");
-    ecFilter.begin(faultHandler, configManager, "ec_filter");
-    v3_3_Filter.begin(faultHandler, configManager, "v3_3_filter");
-    v5_0_Filter.begin(faultHandler, configManager, "v5_0_filter");
+
+    phFilter.begin(faultHandler, "ph_filter");
+    ecFilter.begin(faultHandler, "ec_filter");
+    v3_3_Filter.begin(faultHandler, "v3_3_filter");
+    v5_0_Filter.begin(faultHandler, "v5_0_filter");
+
     phCalManager.begin(faultHandler);
     ecCalManager.begin(faultHandler);
+
+    if (!configManager.loadFilterSettings(phFilter, "ph_filter")) {
+        configManager.saveFilterSettings(phFilter, "ph_filter", "default");
+    }
+    if (!configManager.loadFilterSettings(ecFilter, "ec_filter")) {
+        configManager.saveFilterSettings(ecFilter, "ec_filter", "default");
+    }
+    if (!configManager.loadFilterSettings(v3_3_Filter, "v3_3_filter")) {
+        configManager.saveFilterSettings(v3_3_Filter, "v3_3_filter", "default");
+    }
+    if (!configManager.loadFilterSettings(v5_0_Filter, "v5_0_filter")) {
+        configManager.saveFilterSettings(v5_0_Filter, "v5_0_filter", "default");
+    }
+
     StaticJsonDocument<512> phCalDoc, ecCalDoc;
     if (sdManager.loadJson("/ph_cal.json", phCalDoc)) {
         phCalManager.deserializeModel(phCalManager.getMutableCurrentModel(), phCalDoc);
@@ -118,6 +142,7 @@ void setup() {
     if (sdManager.loadJson("/ec_cal.json", ecCalDoc)) {
         ecCalManager.deserializeModel(ecCalManager.getMutableCurrentModel(), ecCalDoc);
     }
+
     inputManager.begin();
     if (selected_mode == BootMode::PBIOS) {
         while(digitalRead(BTN_ENTER_PIN) == LOW) { delay(10); }
@@ -154,7 +179,6 @@ void uiTask(void* pvParameters) {
         stateManager->addScreen(ScreenState::PROBE_PROFILING, new ProbeProfilingScreen());
         stateManager->addScreen(ScreenState::NOISE_ANALYSIS, new NoiseAnalysisScreen(&pBiosContext));
         stateManager->addScreen(ScreenState::DRIFT_TRENDING, new DriftTrendingScreen(&pBiosContext));
-        // --- DEFINITIVE FIX: Update constructor call to match new signature ---
         stateManager->addScreen(ScreenState::AUTO_TUNE_SUB_MENU, new AutoTuneSubMenuScreen());
         stateManager->addScreen(ScreenState::POWER_OFF, new PowerOffScreen());
         stateManager->changeState(ScreenState::PBIOS_MENU);

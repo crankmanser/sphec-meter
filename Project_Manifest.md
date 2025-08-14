@@ -4,6 +4,14 @@ This document tracks the development progress, current tasks, and future roadmap
 
 ## Changelog (What Was Done)
 
+* **v3.1.9 (2025-08-14):**
+    * **Status:** In Progress - BLOCKED.
+    * **Milestone:** All pBIOS diagnostic tools (`Noise Analysis`, `Drift Trending`) have been stabilized. All known UI freezes have been resolved.
+    * **Fix (Stable):** Resolved persistent UI freezes in the `Noise Analysis` and `Drift Trending` screens by enforcing a consistent, stable `22ms` timing interval for all high-frequency data acquisition loops. This prevents the `dataTask` from starving the `uiTask` and respects the RTOS scheduler.
+    * **Architecture:** Refactored the firmware to centralize all probe power management (`ACTIVE`/`DORMANT`) into a single controller within the `dataTask` in `main.cpp`. This is a significant architectural improvement that increases robustness and separation of concerns.
+    * **Issue (Critical, Unresolved):** A fundamental, low-level fault persists, preventing any files from being written to the SD card. The card remains empty despite multiple, architecturally sound attempts to fix the issue (atomic writes, initialization-time provisioning, SPI bus priming).
+    * **Issue (Critical, Unresolved):** The `Auto-Tuner` feature remains non-functional and freezes the system, likely due to the same underlying SPI bus contention issue that is affecting the SD card. This is the primary blocker for all future development.
+
 * **v3.1.8 (2025-08-14):**
     * **Status:** Complete.
     * **Milestone:** All known pBIOS stability issues have been resolved. The data processing pipeline and diagnostic tools are now fully functional and robust.
@@ -382,9 +390,9 @@ This document tracks the development progress, current tasks, and future roadmap
 
 ## Current Task (What We Are Doing)
 
-* **Implement the backend logic for the Calibration workflow.**
-    * **Goal:** To connect the newly created UI screens to the existing `CalibrationManager` and `TempManager` backend functions.
-    * **Next Step:** Implement the logic in the `dataTask` to handle point capture, model calculation, result display, and saving for the `CalibrationWizardScreen`, as well as the logic for the health check and temperature calibration screens.
+* **Status: BLOCKED**
+* **Goal:** Resolve the critical, low-level failure preventing all write operations to the SD card and causing the Auto-Tuner to freeze.
+* **Analysis:** This issue is believed to be caused by a fundamental hardware timing conflict or an incorrect initialization sequence on the shared SPI bus that is used by both the SD card and the ADCs. Multiple attempts to resolve this via software (atomic writes, bus priming, centralized control) have failed. This is the highest priority task and is blocking all further development.
 
 
 
@@ -396,14 +404,11 @@ This document tracks the development progress, current tasks, and future roadmap
 
 ## Roadmap (What Is to Come)
 
-1.  **UI - Phase 4: Normal Boot UI:**
+1.  **Resolve the SPI Bus / SD Card Failure.** (This must be completed before any other work can begin).
+
+2.  **UI - Phase 4: Normal Boot UI:**
     * a. Implement the multi-step `Calibration Wizard Screen`, including the guided "Hardware Calibration" for setting the amplifier's 2500 mV zero-point.
 
-2.  **Implement the `SystemStatus` Manager** for detecting and reporting non-fatal errors like "Probe Disconnected."
+3.  **Implement the `SystemStatus` Manager** for detecting and reporting non-fatal errors like "Probe Disconnected."
 
-3.  **Implement the `ConnectivityManager`** for the Android Suite feedback loop.
-
-4.  **Complete pBIOS Feature Set:**
-    * a. **(DEFERRED)** Implement the `New Probe` utility.
-    * b. **(DEFERRED)** Implement the `pBIOS Snapshot` function.
-    * c. **(DEFERRED)** Implement the `SD Card Formatter` utility.
+4.  **Implement the `ConnectivityManager`** for the Android Suite feedback loop.

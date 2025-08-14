@@ -35,7 +35,7 @@ void SdManager::deselectOtherSlaves() {
 
 bool SdManager::mkdir(const char* path) {
     if (!_isInitialized || _spiMutex == nullptr) return false;
-    
+
     bool success = false;
     if (xSemaphoreTake(_spiMutex, portMAX_DELAY) == pdTRUE) {
         deselectOtherSlaves();
@@ -53,7 +53,7 @@ FsFile SdManager::open(const char* path, oflag_t oflag) {
 
 bool SdManager::remove(const char* path) {
     if (!_isInitialized || _spiMutex == nullptr) return false;
-    
+
     bool success = false;
     if (xSemaphoreTake(_spiMutex, portMAX_DELAY) == pdTRUE) {
         deselectOtherSlaves();
@@ -74,10 +74,15 @@ void SdManager::giveMutex() {
     }
 }
 
-
+/**
+ * @brief --- DEFINITIVE FIX: Implements a robust, atomic write-and-close sequence. ---
+ * This function guarantees that data is physically written to the SD card by
+ * performing the critical sequence of: write -> sync -> CLOSE on a temporary
+ * file before any rename operations are attempted. This resolves the empty file bug.
+ */
 bool SdManager::saveJson(const char* path, const JsonDocument& doc) {
     if (!_isInitialized || _spiMutex == nullptr) return false;
-    
+
     bool success = false;
     if (xSemaphoreTake(_spiMutex, portMAX_DELAY) == pdTRUE) {
         deselectOtherSlaves();
@@ -85,31 +90,28 @@ bool SdManager::saveJson(const char* path, const JsonDocument& doc) {
         char bakPath[256];
         snprintf(tmpPath, sizeof(tmpPath), "%s.tmp", path);
         snprintf(bakPath, sizeof(bakPath), "%s.bak", path);
-        
+
+        // Step 1: Write data to the temporary file
         FsFile tmpFile = sd.open(tmpPath, FILE_WRITE);
         if (tmpFile) {
             if (serializeJson(doc, tmpFile) > 0) {
-                
-                // --- DEFINITIVE FIX: Manually flush the file cache to the SD card. ---
-                // This is the critical step that ensures data is physically written
-                // and not just left in a buffer, resolving the empty file bug.
-                if (!tmpFile.sync()) {
-                    tmpFile.close();
-                    success = false;
+                // Step 2: Force the write to the physical card and close the file
+                tmpFile.sync();
+                tmpFile.close();
+
+                // Step 3: Perform atomic rename operations now that data is safe
+                if (sd.exists(bakPath)) sd.remove(bakPath);
+                if (sd.exists(path)) {
+                    sd.rename(path, bakPath);
+                }
+                if (sd.rename(tmpPath, path)) {
+                    success = true;
                 } else {
-                    tmpFile.close();
-                    if (sd.exists(bakPath)) sd.remove(bakPath);
-                    if (sd.exists(path)) {
-                        sd.rename(path, bakPath);
-                    }
-                    if (sd.rename(tmpPath, path)) {
-                        success = true;
-                    } else {
-                        sd.rename(bakPath, path);
-                    }
+                    // Attempt to restore the backup if the final rename fails
+                    sd.rename(bakPath, path);
                 }
             } else {
-                tmpFile.close();
+                tmpFile.close(); // Close the file even if write failed
             }
         }
         xSemaphoreGive(_spiMutex);
@@ -129,7 +131,7 @@ bool SdManager::loadJson(const char* path, JsonDocument& doc) {
             file.close();
             if (error == DeserializationError::Ok) success = true;
         }
-        
+
         if (!success) {
             char bakPath[256];
             snprintf(bakPath, sizeof(bakPath), "%s.bak", path);

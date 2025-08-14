@@ -9,17 +9,13 @@
 #include "TempManager.h"
 #include <stdio.h>
 #include <Arduino.h>
+#include <algorithm> // For std::min/max
 
 extern ConfigManager configManager;
 extern FilterManager phFilter, ecFilter;
 extern char g_sessionTimestamp[20];
 extern AdcManager adcManager;
 
-/**
- * @brief --- DEFINITIVE REFACTOR: Constructor signature updated ---
- * The AdcManager is no longer passed in, as this screen is no longer
- * responsible for managing the probe's power state.
- */
 LiveFilterTuningScreen::LiveFilterTuningScreen(PBiosContext* context, CalibrationManager* phCal, CalibrationManager* ecCal, TempManager* tempManager) :
     _context(context),
     _phCalManager(phCal),
@@ -42,11 +38,6 @@ LiveFilterTuningScreen::LiveFilterTuningScreen(PBiosContext* context, Calibratio
     _hub_menu_items.push_back("Exit");
 }
 
-/**
- * @brief Called when the screen becomes active.
- * --- DEFINITIVE REFACTOR: This method no longer activates the probe. ---
- * The centralized controller in main.cpp is now responsible for this.
- */
 void LiveFilterTuningScreen::onEnter(StateManager* stateManager, int context) {
     Screen::onEnter(stateManager);
     _is_in_manual_tune_mode = false;
@@ -124,8 +115,10 @@ void LiveFilterTuningScreen::update() {
 }
 
 /**
- * @brief Handles input for the main hub menu.
- * --- DEFINITIVE REFACTOR: This method no longer deactivates the probe. ---
+ * @brief --- DEFINITIVE FIX: Implements the full "dual-save" strategy. ---
+ * This function now correctly saves the user's tuned setpoints to all three
+ * required locations: the primary operational file, the "_saved" backup for
+ * the Restore function, and a timestamped log file for historical analysis.
  */
 void LiveFilterTuningScreen::handleHubMenuInput(const InputEvent& event) {
     if (event.type == InputEventType::ENCODER_INCREMENT) {
@@ -141,24 +134,32 @@ void LiveFilterTuningScreen::handleHubMenuInput(const InputEvent& event) {
         }
         else if (selected_item == "Save Tune") {
             if (_context && _context->selectedFilter) {
+                const char* filter_name = _context->selectedFilterName.c_str();
+
+                // 1. Save to the primary operational file (e.g., "ph_filter.json")
+                configManager.saveFilterSettings(*_context->selectedFilter, filter_name, "default");
+
+                // 2. Save a separate backup for the "Restore Tune" feature
                 char saved_file_name[32];
-                snprintf(saved_file_name, sizeof(saved_file_name), "%s_saved", _context->selectedFilterName.c_str());
+                snprintf(saved_file_name, sizeof(saved_file_name), "%s_saved", filter_name);
                 configManager.saveFilterSettings(*_context->selectedFilter, saved_file_name, "default");
-                configManager.saveFilterSettings(*_context->selectedFilter, _context->selectedFilterName.c_str(), g_sessionTimestamp);
+
+                // 3. Save a timestamped log file for historical analysis
+                configManager.saveFilterSettings(*_context->selectedFilter, filter_name, g_sessionTimestamp);
             }
         }
         else if (selected_item == "Restore Tune") {
             if (_context && _context->selectedFilter) {
+                // Load the user's last saved tune.
                 configManager.loadFilterSettings(*_context->selectedFilter, _context->selectedFilterName.c_str(), true);
             }
         }
         else if (selected_item == "Exit") {
-            // The probe is automatically deactivated by the controller in main.cpp
-            // when the state changes away from a screen that requires it.
             if (_stateManager) _stateManager->changeState(ScreenState::FILTER_SELECTION);
         }
     }
 }
+
 
 void LiveFilterTuningScreen::getManualTuneRenderProps(UIRenderProps* props_to_fill) {
     static char hf_top[40], hf_br[20], lf_top[40], lf_br[20], r_buf[10], f_buf[10];
@@ -166,7 +167,6 @@ void LiveFilterTuningScreen::getManualTuneRenderProps(UIRenderProps* props_to_fi
     dtostrf(_hf_r_std, 4, 3, r_buf); dtostrf(_hf_f_std, 4, 3, f_buf);
     snprintf(hf_top, sizeof(hf_top), "R:%s F:%s", r_buf, f_buf);
     snprintf(hf_br, sizeof(hf_br), "Stab:%d%%", _hf_stab_percent);
-
     props_to_fill->oled_top_props.graph_props.is_enabled = true;
     props_to_fill->oled_top_props.graph_props.pre_filter_data = _hf_raw_buffer;
     props_to_fill->oled_top_props.graph_props.post_filter_data = _hf_filtered_buffer;
@@ -189,11 +189,24 @@ void LiveFilterTuningScreen::getManualTuneRenderProps(UIRenderProps* props_to_fi
     dtostrf(_lf_r_std, 4, 3, r_buf); dtostrf(_lf_f_std, 4, 3, f_buf);
     snprintf(lf_top, sizeof(lf_top), "R:%s F:%s", r_buf, f_buf);
     snprintf(lf_br, sizeof(lf_br), "Stab:%d%%", _lf_stab_percent);
-
     props_to_fill->oled_bottom_props.graph_props.is_enabled = true;
     props_to_fill->oled_bottom_props.graph_props.pre_filter_data = _hf_filtered_buffer;
     props_to_fill->oled_bottom_props.graph_props.post_filter_data = _lf_filtered_buffer;
     props_to_fill->oled_bottom_props.graph_props.top_left_label = lf_top;
     props_to_fill->oled_bottom_props.graph_props.bottom_left_label = "LF";
     props_to_fill->oled_bottom_props.graph_props.bottom_right_label = lf_br;
+
+    double min_y = _hf_raw_buffer[0];
+    double max_y = _hf_raw_buffer[0];
+    for(int i = 1; i < GRAPH_DATA_POINTS; ++i) {
+        min_y = std::min(min_y, _hf_raw_buffer[i]);
+        max_y = std::max(max_y, _hf_raw_buffer[i]);
+    }
+
+    double padding = (max_y - min_y) * 0.1;
+    if (padding < 5) padding = 5;
+    
+    props_to_fill->oled_bottom_props.graph_props.y_axis_override_enabled = true;
+    props_to_fill->oled_bottom_props.graph_props.y_min_override = min_y - padding;
+    props_to_fill->oled_bottom_props.graph_props.y_max_override = max_y + padding;
 }
