@@ -1,6 +1,3 @@
-// File Path: /Architectural_Blueprint.md
-// MODIFIED FILE
-
 # SpHEC Meter - Architectural Blueprint v3.1.3
 
 This document is the "genesis document" and official architectural summary for the SpHEC Meter firmware. It encapsulates all design decisions made during our initial planning phase and serves as the foundational context for all future development.
@@ -30,7 +27,7 @@ The system uses a dual-core FreeRTOS architecture to ensure UI responsiveness an
 
 * **SPI Bus Precedence Rule:** The `ADS_Manager` (ADC) **MUST** be initialized before the `SdManager` (SD Card) to electrically prime the bus.
 * **`sdTask` Priority Inversion Rule:** The `sdTask` **MUST** temporarily elevate its RTOS priority during critical file I/O operations to prevent deadlocks.
-* **ADC Priming Read Rule:** The ADC driver **MUST** perform two consecutive reads for any analog probe measurement, discarding the first result to ensure the reading is stable. Failure to do so results in erratic and unreliable raw voltage data.
+* **ADC Priming Read Rule:** The ADC driver **MUST** perform two consecutive reads for any analog probe measurement, discarding the first result to ensure the reading is stable. Failure to do so results in erratic and unreliable raw voltage data. An initial "dummy read" from an ADC is also required after initializing the `AdcManager` to electrically prime the shared SPI bus before other devices like the `SdManager` are initialized.
 
 ## 2. System Cabinets & Engines
 
@@ -49,7 +46,7 @@ The "Live Snapshot" Capture Method
 We will use a **fast, safe, and statistically robust** capture method to acquire the signal data for tuning. This completely avoids the instability of disk-based operations and the memory risks of large RAM buffers.
 
 * **Multi-Pass RAM Capture:** The `GuidedTuningEngine` performs three separate, short, high-speed captures of the live signal directly into the ESP32's fast RAM. Each capture is only a few kilobytes, making it extremely safe and immune to heap fragmentation or stack overflow issues.
-    * **(Developer Note - Aug 2025):** The stability of this capture process is extremely sensitive to the timing of the sampling loop. The loop must include a delay (e.g., `vTaskDelay`) that is long enough to prevent the `dataTask` from starving the `uiTask` and other critical system processes. A delay of `22ms` has been found to be stable for most diagnostic tools, but the `Auto-Tuner` continues to fail, indicating a deeper hardware/RTOS conflict. The timing and methodology of this capture loop is the primary focus of the ongoing debugging effort.
+    * **(Developer Note - Aug 2025):** The stability of this capture process is extremely sensitive to the timing of the sampling loop. The loop must include a consistent delay (e.g., `vTaskDelay`) to prevent the `dataTask` from starving the `uiTask` and other critical system processes. A delay of `22ms` has been found to be the stable, definitive solution for all diagnostic tools.
 * **Statistical Averaging:** These three captures are then averaged together point-by-point to create a single, high-confidence "mean" dataset. This process ensures the resulting "noise fingerprint" is not skewed by any random anomalies and is a highly reliable representation of the probe's real-world signal.
 
 

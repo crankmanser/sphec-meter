@@ -4,6 +4,15 @@ This document tracks the development progress, current tasks, and future roadmap
 
 ## Changelog (What Was Done)
 
+* **v3.1.10 (2025-08-14):**
+    * **Status:** Complete.
+    * **Milestone:** All critical, blocking stability issues related to the SD card and pBIOS UI have been definitively resolved. The firmware is now stable and ready for feature development.
+    * **Fix (Critical):** Resolved the total failure of the SD card system. The final root cause was a defective hardware card, but the investigation led to the implementation of several critical architectural improvements that increase firmware robustness.
+    * **Fix (Architecture):** Corrected a "nested SPI transaction" bug by removing bus control logic from the low-level `ADS1118` driver, making the `AdcManager` the sole bus authority.
+    * **Fix (Architecture):** Resolved a critical initialization race condition by refactoring the `ConfigManager` and centralizing all file loading into `main.cpp`, ensuring hardware is stable before any file I/O is attempted.
+    * **Fix (Data Integrity):** Implemented a robust `sync()`-before-`close()` file write sequence in the `SdManager` to prevent the creation of empty or corrupt files.
+    * **Fix (UI Stability):** Stabilized all pBIOS diagnostic screens (`Noise Analysis`, `Drift Trending`, `Probe Profiling`, `Live Filter Tuning`) by implementing RTOS-friendly data acquisition loops with consistent `vTaskDelay` calls, eliminating all UI freezes.
+
 * **v3.1.9 (2025-08-14):**
     * **Status:** In Progress - BLOCKED.
     * **Milestone:** All pBIOS diagnostic tools (`Noise Analysis`, `Drift Trending`) have been stabilized. All known UI freezes have been resolved.
@@ -349,7 +358,7 @@ This document tracks the development progress, current tasks, and future roadmap
     * **Issue:** The `SdManager` failed to initialize upon boot. The issue was incorrectly diagnosed as a hardware problem and then correctly identified as a software flaw.
 * **v2.1.14 (2025-07-25):**
     * **Status:** Complete.
-    * **Milestone:** All unit tests for the foundational cabinets (`FaultHandler`, `ConfigManager`, `DisplayManager`, `SdManager`) are passing. The hardware upload and communication issues have been resolved. The project is no longer roadblocked and has a stable development environment.
+    * **Milestone:** All unit tests for the foundational cabinets (`FaultHandler`, `ConfigManager`, `DisplayManager`, `SdManager`) are now passing. The hardware upload and communication issues have been resolved. The project is no longer roadblocked and has a stable development environment.
 * **v2.1.13 (2025-07-25):**
     * **Status:** Complete.
     * **Fix:** Resolved persistent hardware-level `[upload] Error 2`.
@@ -386,15 +395,11 @@ This document tracks the development progress, current tasks, and future roadmap
 
 
 
-
-
 ## Current Task (What We Are Doing)
 
-* **Status: BLOCKED**
-* **Goal:** Resolve the critical, low-level failure preventing all write operations to the SD card and causing the Auto-Tuner to freeze.
-* **Analysis:** This issue is believed to be caused by a fundamental hardware timing conflict or an incorrect initialization sequence on the shared SPI bus that is used by both the SD card and the ADCs. Multiple attempts to resolve this via software (atomic writes, bus priming, centralized control) have failed. This is the highest priority task and is blocking all further development.
-
-
+* **Status: Ready**
+* **Goal:** Implement the backend logic for the Normal Boot mode's `Calibration Wizard Screen`.
+* **Analysis:** With all pBIOS tools and the core system now stable, the next step is to make the main application's calibration feature fully functional. This involves connecting the UI to the `CalibrationManager` via the `dataTask` to handle point capture, model calculation, and saving the final calibration to the SD card.
 
 
 
@@ -404,7 +409,7 @@ This document tracks the development progress, current tasks, and future roadmap
 
 ## Roadmap (What Is to Come)
 
-1.  **Resolve the SPI Bus / SD Card Failure.** (This must be completed before any other work can begin).
+1.  **~~Resolve the SPI Bus / SD Card Failure.~~ (COMPLETE)**
 
 2.  **UI - Phase 4: Normal Boot UI:**
     * a. Implement the multi-step `Calibration Wizard Screen`, including the guided "Hardware Calibration" for setting the amplifier's 2500 mV zero-point.

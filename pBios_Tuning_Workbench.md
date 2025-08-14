@@ -1,6 +1,3 @@
-// File Path: /pBios_Tuning_Workbench.md
-// MODIFIED FILE
-
 # Architecture Blueprint: The pBIOS Tuning Workbench v3.1.3
 
 ## 1. Core Philosophy & Architecture
@@ -31,7 +28,7 @@ The system will feel instantly responsive during manual tuning by using a highly
 * **The Pipeline:** The `pBiosDataTask` (Core 0) runs continuously, processing raw ADC values through the live filter parameters. The `pBiosUiTask` (Core 1) handles all user input and screen rendering.
 * **Minimal Lock Time:** To prevent UI lag, the mutex protecting the filter parameters is held for the shortest possible duration.
     * **UI Task (Write):** Locks, writes a single parameter change, and unlocks immediately.
-    * **Data Task (Read):** Locks, makes a fast local copy of the parameters it needs for the current cycle, and unlocks immediately before starting any heavy computation.
+    * **Data Task (Read):** Locks, makes a fast local copy of the parameters it needs for the current cycle, and unlocks immediately before starting any heavy computation. The `pBiosDataTask` also includes a consistent `22ms` delay in its processing loop to yield time to the RTOS scheduler, guaranteeing a smooth and responsive user interface free of freezes.
 
 ### 2.3. The Rule of Asymmetrical UI/UX Responsiveness
 
