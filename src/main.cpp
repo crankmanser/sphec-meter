@@ -101,6 +101,7 @@ void setup() {
     vspi->begin(VSPI_SCK_PIN, VSPI_MISO_PIN, VSPI_MOSI_PIN);
     adcManager.begin(faultHandler, vspi, spiMutex, SD_CS_PIN);
     sdManager.begin(faultHandler, vspi, spiMutex, SD_CS_PIN, ADC1_CS_PIN, ADC2_CS_PIN);
+    sdManager.mkdir("/captures");
     configManager.begin(faultHandler, sdManager);
     tempManager.begin(faultHandler);
     ina219.begin(faultHandler, i2cMutex);
@@ -203,10 +204,6 @@ void uiTask(void* pvParameters) {
         
         UIRenderProps props;
         
-        // --- DEFINITIVE FIX: Ensure data is refreshed for both screens ---
-        // This block ensures that the LiveFilterTuningScreen's data buffers are
-        // updated every frame, even when the ParameterEditScreen is the active
-        // "overlay". This keeps the graphs live at all times.
         if (stateManager->getActiveScreenState() == ScreenState::LIVE_FILTER_TUNING || stateManager->getActiveScreenState() == ScreenState::PARAMETER_EDIT) {
             static_cast<LiveFilterTuningScreen*>(stateManager->getScreen(ScreenState::LIVE_FILTER_TUNING))->update();
         }
@@ -219,6 +216,10 @@ void uiTask(void* pvParameters) {
     }
 }
 
+/**
+ * @brief The main data processing task.
+ * @version 3.1.13
+ */
 void dataTask(void* pvParameters) {
     BootMode mode = static_cast<BootMode>(reinterpret_cast<intptr_t>(pvParameters));
     LOG_BOOT("Data Task started on Core %d", xPortGetCoreID());
@@ -231,13 +232,15 @@ void dataTask(void* pvParameters) {
         Screen* activeScreen = stateManager->getActiveScreen();
 
         if (currentState != lastState) {
-            // Deactivate all probes when the screen changes
             adcManager.setProbeState(0, ProbeState::DORMANT);
             adcManager.setProbeState(1, ProbeState::DORMANT);
 
-            // Activate probes based on the new screen
             if (mode == BootMode::NORMAL) {
-                if (currentState == ScreenState::PROBE_MEASUREMENT) {
+                if (currentState == ScreenState::CALIBRATION_MENU) {
+                    adcManager.setProbeState(0, ProbeState::ACTIVE);
+                    adcManager.setProbeState(1, ProbeState::ACTIVE);
+                }
+                else if (currentState == ScreenState::PROBE_MEASUREMENT) {
                     ProbeMeasurementScreen* screen = static_cast<ProbeMeasurementScreen*>(activeScreen);
                     if (screen) {
                         uint8_t probe_index = (screen->getActiveProbeType() == ProbeType::PH) ? 0 : 1;
@@ -248,6 +251,7 @@ void dataTask(void* pvParameters) {
                     if(screen) {
                         uint8_t probe_index = (screen->getProbeType() == ProbeType::PH) ? 0 : 1;
                         adcManager.setProbeState(probe_index, ProbeState::ACTIVE);
+                        adcManager.setProbeState(1 - probe_index, ProbeState::DORMANT); 
                     }
                 }
             } else if (mode == BootMode::PBIOS) {
@@ -263,8 +267,130 @@ void dataTask(void* pvParameters) {
             lastState = currentState;
         }
 
+        #if DEBUG_DIAGNOSTIC_PIPELINE == 1
+        static unsigned long lastLogTime = 0;
+        if (millis() - lastLogTime > 1000) {
+            if (currentState == ScreenState::PROBE_MEASUREMENT || (currentState == ScreenState::CALIBRATION_WIZARD && ((CalibrationWizardScreen*)activeScreen)->isMeasuring())) {
+                lastLogTime = millis();
+                FilterManager* filter = nullptr;
+                if (currentState == ScreenState::PROBE_MEASUREMENT) {
+                    filter = (((ProbeMeasurementScreen*)activeScreen)->getActiveProbeType() == ProbeType::PH) ? &phFilter : &ecFilter;
+                } else {
+                    filter = (((CalibrationWizardScreen*)activeScreen)->getProbeType() == ProbeType::PH) ? &phFilter : &ecFilter;
+                }
+                if (filter) {
+                    // --- Use the new centralized method for the diagnostic log ---
+                    int stability = filter->getNoiseReductionPercentage();
+                    LOG_DIAG("--- Normal Boot Filter Report ---");
+                    LOG_DIAG("HF Setpoints: Settle=%.3f, Smooth=%.3f", filter->getFilter(0)->settleThreshold, filter->getFilter(0)->lockSmoothing);
+                    LOG_DIAG("LF Setpoints: Settle=%.3f, Smooth=%.3f", filter->getFilter(1)->settleThreshold, filter->getFilter(1)->lockSmoothing);
+                    LOG_DIAG("Live Stats: Raw_std=%.4f, LF_out_std=%.4f", filter->getFilter(0)->getRawStandardDeviation(), filter->getFilter(1)->getFilteredStandardDeviation());
+                    LOG_DIAG("Final Noise Reduction: %d %%", stability);
+                    LOG_DIAG("---------------------------------");
+                }
+            }
+        }
+        #endif
+
         if (mode == BootMode::NORMAL) {
-            // ... (Normal mode logic will be added here) ...
+            if(currentState == ScreenState::CALIBRATION_MENU) {
+                if(adcManager.isProbeActive(0)) phFilter.process(adcManager.getVoltage(0, ADS1118::DIFF_0_1));
+                if(adcManager.isProbeActive(1)) ecFilter.process(adcManager.getVoltage(1, ADS1118::DIFF_0_1));
+            }
+            else if (currentState == ScreenState::PROBE_MEASUREMENT) {
+                ProbeMeasurementScreen* screen = static_cast<ProbeMeasurementScreen*>(activeScreen);
+                if (screen) {
+                    ProbeType type = screen->getActiveProbeType();
+                    uint8_t adc_index = (type == ProbeType::PH) ? 0 : 1;
+                    FilterManager* filter = (type == ProbeType::PH) ? &phFilter : &ecFilter;
+                    CalibrationManager* calManager = (type == ProbeType::PH) ? &phCalManager : &ecCalManager;
+                    double raw_mv = adcManager.getVoltage(adc_index, ADS1118::DIFF_0_1);
+                    double filtered_mv = filter->process(raw_mv);
+                    double cal_value = calManager->getCalibratedValue(filtered_mv);
+                    double temp = tempManager.getProbeTemp();
+                    double final_value = calManager->getCompensatedValue(cal_value, temp, type == ProbeType::EC);
+                    
+                    // --- DEFINITIVE FIX: Use the new centralized method ---
+                    int stability = filter->getNoiseReductionPercentage();
+
+                    screen->updateData(final_value, temp, stability, raw_mv, filtered_mv);
+                    if (screen->captureWasRequested()) {
+                        StaticJsonDocument<1024> doc;
+                        doc["timestamp"] = g_sessionTimestamp;
+                        JsonObject reading = doc.createNestedObject("reading");
+                        reading["probeType"] = (type == ProbeType::PH) ? "pH" : "EC";
+                        reading["value"] = final_value;
+                        reading["temperature"] = temp;
+                        reading["stability"] = stability;
+                        reading["raw_mV"] = raw_mv;
+                        reading["filtered_mV"] = filtered_mv;
+                        JsonObject system = doc.createNestedObject("system");
+                        system["soc"] = powerMonitor.getSOC();
+                        system["soh"] = powerMonitor.getSOH();
+                        JsonObject filterSettings = doc.createNestedObject("filter_settings");
+                        filterSettings["hf_settle"] = filter->getFilter(0)->settleThreshold;
+                        filterSettings["lf_settle"] = filter->getFilter(1)->settleThreshold;
+                        JsonObject calModel = doc.createNestedObject("calibration_model");
+                        calManager->serializeModel(calManager->getCurrentModel(), calModel);
+                        char filepath[64];
+                        snprintf(filepath, sizeof(filepath), "/captures/capture_%s.json", g_sessionTimestamp);
+                        sdManager.saveJson(filepath, doc);
+                        screen->clearCaptureRequest();
+                    }
+                }
+            }
+            else if (currentState == ScreenState::CALIBRATION_WIZARD) {
+                CalibrationWizardScreen* screen = static_cast<CalibrationWizardScreen*>(activeScreen);
+                if (screen && screen->isMeasuring()) {
+                    ProbeType type = screen->getProbeType();
+                    uint8_t adc_index = (type == ProbeType::PH) ? 0 : 1;
+                    FilterManager* filter = (type == ProbeType::PH) ? &phFilter : &ecFilter;
+                    CalibrationManager* calManager = (type == ProbeType::PH) ? &phCalManager : &ecCalManager;
+                    double raw_voltage = adcManager.getVoltage(adc_index, ADS1118::DIFF_0_1);
+                    filter->process(raw_voltage);
+                    
+                    // --- DEFINITIVE FIX: Use the new centralized method ---
+                    int stability = filter->getNoiseReductionPercentage();
+                    screen->setLiveStability(stability);
+
+                    if (screen->pointCaptureWasRequested()) {
+                        double filtered_voltage = filter->getFilter(1)->getFilteredValue();
+                        float temperature = tempManager.getProbeTemp();
+                        double known_value = 0.0;
+                        if(type == ProbeType::PH) {
+                            const double ph_points[] = {4.01, 6.86, 9.18};
+                            known_value = ph_points[screen->getCurrentStep() - 1];
+                        } else {
+                            const double ec_points[] = {0.084, 1.413, 12.88}; 
+                            known_value = ec_points[screen->getCurrentStep() - 1];
+                        }
+                        calManager->addCalibrationPoint(filtered_voltage, known_value, temperature);
+                        screen->clearPointCaptureRequest();
+                        screen->advanceToNextStep();
+                        if (screen->getCurrentStep() > 3) {
+                            screen->transitionToCalculating();
+                        }
+                    }
+                } else if (screen && screen->isCalculating()) {
+                    ProbeType type = screen->getProbeType();
+                    CalibrationManager* calManager = (type == ProbeType::PH) ? &phCalManager : &ecCalManager;
+                    calManager->calculateNewModel(calManager->getCurrentModel());
+                    double quality = calManager->getNewModel().qualityScore;
+                    double drift = calManager->getNewModel().sensorDrift;
+                    screen->setResults(quality, drift);
+                } else if (screen && screen->saveWasRequested()){
+                    ProbeType type = screen->getProbeType();
+                    CalibrationManager* calManager = (type == ProbeType::PH) ? &phCalManager : &ecCalManager;
+                    const char* filename = (type == ProbeType::PH) ? "/ph_cal.json" : "/ec_cal.json";
+                    calManager->acceptNewModel();
+                    StaticJsonDocument<1024> doc;
+                    JsonObject root = doc.to<JsonObject>();
+                    calManager->serializeModel(calManager->getCurrentModel(), root);
+                    sdManager.saveJson(filename, doc);
+                    screen->clearSaveRequest();
+                    stateManager->changeState(ScreenState::CALIBRATION_MENU);
+                }
+            }
         } else if (mode == BootMode::PBIOS) {
             switch (currentState) {
                 case ScreenState::LIVE_FILTER_TUNING:
@@ -278,9 +404,8 @@ void dataTask(void* pvParameters) {
                     AutoTuningScreen* tuneScreen = static_cast<AutoTuningScreen*>(activeScreen);
                     if (tuneScreen && pBiosContext.selectedFilter) {
                         adcManager.setProbeState(pBiosContext.selectedAdcIndex, ProbeState::ACTIVE);
-                        vTaskDelay(pdMS_TO_TICKS(100)); // Allow time for probe to stabilize
-                        adcManager.getVoltage(pBiosContext.selectedAdcIndex, pBiosContext.selectedAdcInput); // Priming read
-
+                        vTaskDelay(pdMS_TO_TICKS(100)); 
+                        adcManager.getVoltage(pBiosContext.selectedAdcIndex, pBiosContext.selectedAdcInput); 
                         if (guidedTuningEngine.proposeSettings(pBiosContext, adcManager, sdManager, stateManager, *tuneScreen)) {
                             configManager.saveFilterSettings(*pBiosContext.selectedFilter, pBiosContext.selectedFilterName.c_str(), g_sessionTimestamp, false);
                         }
@@ -299,18 +424,14 @@ void dataTask(void* pvParameters) {
                              screen->setProgress((i*100)/50);
                              vTaskDelay(pdMS_TO_TICKS(22));
                         }
-
                         FilterManager* filterToProfile = (screen->getSelectedAdcIndex() == 0) ? &phFilter : &ecFilter;
                         CalibrationManager* calManagerToUse = (screen->getSelectedAdcIndex() == 0) ? &phCalManager : &ecCalManager;
                         const CalibrationModel& model = calManagerToUse->getCurrentModel();
-
                         double live_r_std = filterToProfile->getFilter(0)->getRawStandardDeviation();
                         double zp_drift = model.zeroPointDrift;
                         double cal_quality = model.qualityScore;
-                        
                         char time_buf[20];
                         strftime(time_buf, sizeof(time_buf), "%Y%m%d-%H%M%S", localtime(&model.lastCalibratedTimestamp));
-
                         screen->setAnalysisResults(live_r_std,
                                                    *filterToProfile->getFilter(0),
                                                    *filterToProfile->getFilter(1),
@@ -391,10 +512,12 @@ void dataTask(void* pvParameters) {
             currentState == ScreenState::PROBE_MEASUREMENT ||
             currentState == ScreenState::NOISE_ANALYSIS ||
             currentState == ScreenState::DRIFT_TRENDING ||
-            currentState == ScreenState::PROBE_PROFILING ) {
-            vTaskDelay(pdMS_TO_TICKS(22));
+            currentState == ScreenState::PROBE_PROFILING ||
+            currentState == ScreenState::CALIBRATION_MENU ||
+            currentState == ScreenState::CALIBRATION_WIZARD) {
+            vTaskDelay(pdMS_TO_TICKS(22)); 
         } else {
-            vTaskDelay(pdMS_TO_TICKS(50));
+            vTaskDelay(pdMS_TO_TICKS(50)); 
         }
     }
 }

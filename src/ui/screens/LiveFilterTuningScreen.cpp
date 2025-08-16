@@ -7,9 +7,10 @@
 #include "AdcManager.h"
 #include "CalibrationManager.h"
 #include "TempManager.h"
+#include "DebugConfig.h"
 #include <stdio.h>
 #include <Arduino.h>
-#include <algorithm> // For std::min/max
+#include <algorithm>
 
 extern ConfigManager configManager;
 extern FilterManager phFilter, ecFilter;
@@ -79,20 +80,32 @@ void LiveFilterTuningScreen::update() {
         hfFilter->getFilteredHistory(_hf_filtered_buffer, GRAPH_DATA_POINTS);
         _hf_r_std = hfFilter->getRawStandardDeviation();
         _hf_f_std = hfFilter->getFilteredStandardDeviation();
-        _hf_stab_percent = hfFilter->getStabilityPercentage();
     }
 
     if (lfFilter) {
         lfFilter->getFilteredHistory(_lf_filtered_buffer, GRAPH_DATA_POINTS);
         _lf_r_std = hfFilter ? hfFilter->getFilteredStandardDeviation() : 0.0;
         _lf_f_std = lfFilter->getFilteredStandardDeviation();
-        if (_hf_r_std > 1e-9) {
-             double improvement = 1.0 - (_lf_f_std / _hf_r_std);
-            _lf_stab_percent = (int)constrain(improvement * 100.0, 0.0, 100.0);
-        } else {
-            _lf_stab_percent = 100;
-        }
     }
+
+    // --- KPI Calculation now uses the new centralized method ---
+    _lf_stab_percent = _context->selectedFilter->getNoiseReductionPercentage();
+    _hf_stab_percent = hfFilter->getStabilityPercentage();
+
+
+    #if DEBUG_DIAGNOSTIC_PIPELINE == 1
+    static unsigned long lastLogTime = 0;
+    if (millis() - lastLogTime > 1000) {
+        lastLogTime = millis();
+        LOG_DIAG("--- pBIOS Filter Report ---");
+        LOG_DIAG("HF Setpoints: Settle=%.3f, Smooth=%.3f", hfFilter->settleThreshold, hfFilter->lockSmoothing);
+        LOG_DIAG("LF Setpoints: Settle=%.3f, Smooth=%.3f", lfFilter->settleThreshold, lfFilter->lockSmoothing);
+        LOG_DIAG("Live Stats: Raw_std=%.4f, LF_out_std=%.4f", _hf_r_std, _lf_f_std);
+        LOG_DIAG("Final Noise Reduction: %d %%", _lf_stab_percent);
+        LOG_DIAG("----------------------------");
+    }
+    #endif
+
 
     if (lfFilter) {
         double filtered_voltage = lfFilter->getFilteredValue();
@@ -114,12 +127,6 @@ void LiveFilterTuningScreen::update() {
     }
 }
 
-/**
- * @brief --- DEFINITIVE FIX: Implements the full "dual-save" strategy. ---
- * This function now correctly saves the user's tuned setpoints to all three
- * required locations: the primary operational file, the "_saved" backup for
- * the Restore function, and a timestamped log file for historical analysis.
- */
 void LiveFilterTuningScreen::handleHubMenuInput(const InputEvent& event) {
     if (event.type == InputEventType::ENCODER_INCREMENT) {
         if (_selected_index < _hub_menu_items.size() - 1) _selected_index++;
@@ -135,22 +142,15 @@ void LiveFilterTuningScreen::handleHubMenuInput(const InputEvent& event) {
         else if (selected_item == "Save Tune") {
             if (_context && _context->selectedFilter) {
                 const char* filter_name = _context->selectedFilterName.c_str();
-
-                // 1. Save to the primary operational file (e.g., "ph_filter.json")
                 configManager.saveFilterSettings(*_context->selectedFilter, filter_name, "default");
-
-                // 2. Save a separate backup for the "Restore Tune" feature
                 char saved_file_name[32];
                 snprintf(saved_file_name, sizeof(saved_file_name), "%s_saved", filter_name);
                 configManager.saveFilterSettings(*_context->selectedFilter, saved_file_name, "default");
-
-                // 3. Save a timestamped log file for historical analysis
                 configManager.saveFilterSettings(*_context->selectedFilter, filter_name, g_sessionTimestamp);
             }
         }
         else if (selected_item == "Restore Tune") {
             if (_context && _context->selectedFilter) {
-                // Load the user's last saved tune.
                 configManager.loadFilterSettings(*_context->selectedFilter, _context->selectedFilterName.c_str(), true);
             }
         }
@@ -160,7 +160,11 @@ void LiveFilterTuningScreen::handleHubMenuInput(const InputEvent& event) {
     }
 }
 
-
+/**
+ * @brief Gets render properties for the tuning screen.
+ * @param props_to_fill Pointer to the UIRenderProps struct to populate.
+ * @version 3.1.13
+ */
 void LiveFilterTuningScreen::getManualTuneRenderProps(UIRenderProps* props_to_fill) {
     static char hf_top[40], hf_br[20], lf_top[40], lf_br[20], r_buf[10], f_buf[10];
 
@@ -188,7 +192,8 @@ void LiveFilterTuningScreen::getManualTuneRenderProps(UIRenderProps* props_to_fi
 
     dtostrf(_lf_r_std, 4, 3, r_buf); dtostrf(_lf_f_std, 4, 3, f_buf);
     snprintf(lf_top, sizeof(lf_top), "R:%s F:%s", r_buf, f_buf);
-    snprintf(lf_br, sizeof(lf_br), "Stab:%d%%", _lf_stab_percent);
+    // --- DEFINITIVE FIX: Change the label to reflect the new KPI ---
+    snprintf(lf_br, sizeof(lf_br), "NR:%d%%", _lf_stab_percent);
     props_to_fill->oled_bottom_props.graph_props.is_enabled = true;
     props_to_fill->oled_bottom_props.graph_props.pre_filter_data = _hf_filtered_buffer;
     props_to_fill->oled_bottom_props.graph_props.post_filter_data = _lf_filtered_buffer;

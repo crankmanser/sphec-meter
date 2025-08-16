@@ -26,6 +26,9 @@
 #define DEBUG_AUTO_TUNE       1 // For the GuidedTuningEngine
 #define DEBUG_FILTER_PIPELINE 0 // For tracing data flow through the HF/LF pipeline
 
+// --- NEW: A dedicated switch for the diagnostic pipeline report ---
+#define DEBUG_DIAGNOSTIC_PIPELINE 1 // Set to 1 to enable the detailed filter state report
+
 // --- HELPER MACROS ---
 // Example Usage: LOG_BOOT("Initializing %s...", "DisplayManager");
 
@@ -53,11 +56,17 @@
     #define LOG_AUTO_TUNE(x, ...)
 #endif
 
-// --- NEW: Helper macro for the new pipeline switch ---
 #if DEBUG_FILTER_PIPELINE == 1
     #define LOG_FILTER_PIPELINE(x, ...) Serial.printf("[PIPELINE] " x "\n", ##__VA_ARGS__)
 #else
     #define LOG_FILTER_PIPELINE(x, ...)
+#endif
+
+// --- NEW: Helper macro for the diagnostic report ---
+#if DEBUG_DIAGNOSTIC_PIPELINE == 1
+    #define LOG_DIAG(x, ...) Serial.printf("[DIAG] " x "\n", ##__VA_ARGS__)
+#else
+    #define LOG_DIAG(x, ...)
 #endif
 
 
